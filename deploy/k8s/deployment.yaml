@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lurus-api
+  namespace: lurus-system
+  labels:
+    app: lurus-api
+    app.kubernetes.io/name: lurus-api
+    app.kubernetes.io/part-of: lurus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lurus-api
+  template:
+    metadata:
+      labels:
+        app: lurus-api
+    spec:
+      containers:
+        - name: lurus-api
+          image: ghcr.io/hanmahong5-arch/lurus-api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: PORT
+              value: "3000"
+            - name: TZ
+              value: "Asia/Shanghai"
+            - name: SQL_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: lurus-api-secrets
+                  key: SQL_DSN
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /api/status
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /api/status
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
