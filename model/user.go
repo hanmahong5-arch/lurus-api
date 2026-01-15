@@ -37,6 +37,12 @@ type User struct {
 	UsedQuota        int            `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
 	RequestCount     int            `json:"request_count" gorm:"type:int;default:0;"`               // request number
 	Group            string         `json:"group" gorm:"type:varchar(64);default:'default'"`
+	// Subscription-based daily quota management (added for unified quota management)
+	DailyQuota       int            `json:"daily_quota" gorm:"type:int;default:0;column:daily_quota"`           // Daily quota limit (0 = unlimited)
+	DailyUsed        int            `json:"daily_used" gorm:"type:int;default:0;column:daily_used"`             // Today's used quota
+	LastDailyReset   int64          `json:"last_daily_reset" gorm:"type:bigint;default:0;column:last_daily_reset"` // Unix timestamp of last daily reset
+	BaseGroup        string         `json:"base_group" gorm:"type:varchar(64);column:base_group"`               // Original subscription group
+	FallbackGroup    string         `json:"fallback_group" gorm:"type:varchar(64);column:fallback_group"`       // Fallback group when daily quota exhausted
 	AffCode          string         `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
 	AffCount         int            `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
 	AffQuota         int            `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度
@@ -51,13 +57,18 @@ type User struct {
 
 func (user *User) ToBaseUser() *UserBase {
 	cache := &UserBase{
-		Id:       user.Id,
-		Group:    user.Group,
-		Quota:    user.Quota,
-		Status:   user.Status,
-		Username: user.Username,
-		Setting:  user.Setting,
-		Email:    user.Email,
+		Id:             user.Id,
+		Group:          user.Group,
+		Quota:          user.Quota,
+		Status:         user.Status,
+		Username:       user.Username,
+		Setting:        user.Setting,
+		Email:          user.Email,
+		DailyQuota:     user.DailyQuota,
+		DailyUsed:      user.DailyUsed,
+		LastDailyReset: user.LastDailyReset,
+		BaseGroup:      user.BaseGroup,
+		FallbackGroup:  user.FallbackGroup,
 	}
 	return cache
 }
@@ -928,4 +939,243 @@ func RootUserExists() bool {
 		return false
 	}
 	return true
+}
+
+// ===== Daily Quota Management Functions =====
+
+// DailyQuotaInfo represents daily quota status for a user
+type DailyQuotaInfo struct {
+	UserID         int    `json:"user_id"`
+	DailyQuota     int    `json:"daily_quota"`
+	DailyUsed      int    `json:"daily_used"`
+	DailyRemaining int    `json:"daily_remaining"`
+	LastDailyReset int64  `json:"last_daily_reset"`
+	BaseGroup      string `json:"base_group"`
+	FallbackGroup  string `json:"fallback_group"`
+	CurrentGroup   string `json:"current_group"`
+	IsUsingFallback bool  `json:"is_using_fallback"`
+	NeedsReset     bool   `json:"needs_reset"`
+}
+
+// GetUserDailyQuotaInfo retrieves daily quota information for a user
+func GetUserDailyQuotaInfo(userId int) (*DailyQuotaInfo, error) {
+	var user User
+	err := DB.Select("id, daily_quota, daily_used, last_daily_reset, base_group, fallback_group, \"group\"").
+		Where("id = ?", userId).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+
+	info := &DailyQuotaInfo{
+		UserID:         user.Id,
+		DailyQuota:     user.DailyQuota,
+		DailyUsed:      user.DailyUsed,
+		LastDailyReset: user.LastDailyReset,
+		BaseGroup:      user.BaseGroup,
+		FallbackGroup:  user.FallbackGroup,
+		CurrentGroup:   user.Group,
+	}
+
+	// Calculate remaining
+	if user.DailyQuota > 0 {
+		info.DailyRemaining = user.DailyQuota - user.DailyUsed
+		if info.DailyRemaining < 0 {
+			info.DailyRemaining = 0
+		}
+	} else {
+		info.DailyRemaining = -1 // -1 means unlimited
+	}
+
+	// Check if using fallback
+	info.IsUsingFallback = user.FallbackGroup != "" && user.Group == user.FallbackGroup
+
+	// Check if needs reset
+	info.NeedsReset = NeedsDailyReset(user.LastDailyReset)
+
+	return info, nil
+}
+
+// NeedsDailyReset checks if daily quota needs to be reset based on last reset timestamp
+func NeedsDailyReset(lastResetTimestamp int64) bool {
+	if lastResetTimestamp == 0 {
+		return true
+	}
+
+	now := common.GetTimestamp()
+	lastReset := lastResetTimestamp
+
+	// Get current day start (UTC)
+	nowDay := now / 86400
+	lastResetDay := lastReset / 86400
+
+	return nowDay > lastResetDay
+}
+
+// IncreaseDailyUsed increases the daily used quota for a user
+func IncreaseDailyUsed(userId int, amount int) error {
+	if amount < 0 {
+		return errors.New("amount cannot be negative")
+	}
+
+	// Update cache asynchronously
+	gopool.Go(func() {
+		if err := cacheIncrUserDailyUsed(userId, int64(amount)); err != nil {
+			common.SysLog("failed to increase user daily used cache: " + err.Error())
+		}
+	})
+
+	// Update database
+	return DB.Model(&User{}).Where("id = ?", userId).
+		Update("daily_used", gorm.Expr("daily_used + ?", amount)).Error
+}
+
+// ResetDailyQuota resets daily used quota for a user
+func ResetDailyQuota(userId int) error {
+	now := common.GetTimestamp()
+
+	// Update database
+	err := DB.Model(&User{}).Where("id = ?", userId).Updates(map[string]interface{}{
+		"daily_used":       0,
+		"last_daily_reset": now,
+	}).Error
+	if err != nil {
+		return err
+	}
+
+	// Update cache asynchronously
+	gopool.Go(func() {
+		if err := updateUserDailyUsedCache(userId, 0); err != nil {
+			common.SysLog("failed to update user daily used cache: " + err.Error())
+		}
+		if err := updateUserLastDailyResetCache(userId, now); err != nil {
+			common.SysLog("failed to update user last daily reset cache: " + err.Error())
+		}
+	})
+
+	return nil
+}
+
+// SwitchToFallbackGroup switches user to fallback group when daily quota exhausted
+func SwitchToFallbackGroup(userId int) error {
+	var user User
+	err := DB.Select("id, fallback_group, \"group\"").Where("id = ?", userId).First(&user).Error
+	if err != nil {
+		return err
+	}
+
+	if user.FallbackGroup == "" || user.Group == user.FallbackGroup {
+		return nil // No fallback configured or already using fallback
+	}
+
+	err = DB.Model(&User{}).Where("id = ?", userId).Update("group", user.FallbackGroup).Error
+	if err != nil {
+		return err
+	}
+
+	// Update cache asynchronously
+	gopool.Go(func() {
+		if err := updateUserGroupCache(userId, user.FallbackGroup); err != nil {
+			common.SysLog("failed to update user group cache: " + err.Error())
+		}
+	})
+
+	return nil
+}
+
+// RestoreToBaseGroup restores user to base group (typically after daily reset)
+func RestoreToBaseGroup(userId int) error {
+	var user User
+	err := DB.Select("id, base_group, \"group\"").Where("id = ?", userId).First(&user).Error
+	if err != nil {
+		return err
+	}
+
+	if user.BaseGroup == "" || user.Group == user.BaseGroup {
+		return nil // No base group configured or already using base group
+	}
+
+	err = DB.Model(&User{}).Where("id = ?", userId).Update("group", user.BaseGroup).Error
+	if err != nil {
+		return err
+	}
+
+	// Update cache asynchronously
+	gopool.Go(func() {
+		if err := updateUserGroupCache(userId, user.BaseGroup); err != nil {
+			common.SysLog("failed to update user group cache: " + err.Error())
+		}
+	})
+
+	return nil
+}
+
+// SubscriptionConfig represents subscription configuration for updating user
+type SubscriptionConfig struct {
+	DailyQuota    int    `json:"daily_quota"`
+	BaseGroup     string `json:"base_group"`
+	FallbackGroup string `json:"fallback_group"`
+	Quota         int    `json:"quota,omitempty"` // Optional: update total quota
+}
+
+// UpdateUserSubscriptionConfig updates user's subscription-related fields
+// This is called by subscription-service when subscription changes
+func UpdateUserSubscriptionConfig(userId int, config *SubscriptionConfig) error {
+	updates := map[string]interface{}{
+		"daily_quota":    config.DailyQuota,
+		"base_group":     config.BaseGroup,
+		"fallback_group": config.FallbackGroup,
+	}
+
+	// If quota is provided, update it too
+	if config.Quota > 0 {
+		updates["quota"] = config.Quota
+	}
+
+	// Set current group to base group
+	if config.BaseGroup != "" {
+		updates["group"] = config.BaseGroup
+	}
+
+	err := DB.Model(&User{}).Where("id = ?", userId).Updates(updates).Error
+	if err != nil {
+		return err
+	}
+
+	// Invalidate cache to force refresh
+	gopool.Go(func() {
+		if err := invalidateUserCache(userId); err != nil {
+			common.SysLog("failed to invalidate user cache: " + err.Error())
+		}
+	})
+
+	return nil
+}
+
+// GetUsersNeedingDailyReset returns users who need daily quota reset
+func GetUsersNeedingDailyReset(limit int) ([]*User, error) {
+	var users []*User
+	now := common.GetTimestamp()
+	todayStart := (now / 86400) * 86400 // Start of today in UTC
+
+	err := DB.Select("id, daily_quota, daily_used, last_daily_reset, base_group, fallback_group, \"group\"").
+		Where("daily_quota > 0 AND (last_daily_reset < ? OR last_daily_reset = 0)", todayStart).
+		Limit(limit).
+		Find(&users).Error
+
+	return users, err
+}
+
+// ProcessDailyQuotaReset resets daily quota and restores base group for a user
+func ProcessDailyQuotaReset(userId int) error {
+	// Reset daily used
+	if err := ResetDailyQuota(userId); err != nil {
+		return err
+	}
+
+	// Restore to base group
+	if err := RestoreToBaseGroup(userId); err != nil {
+		return err
+	}
+
+	return nil
 }

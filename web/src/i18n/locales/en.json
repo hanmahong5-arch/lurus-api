@@ -2582,6 +2582,21 @@
     "签到奖励的最小额度": "Minimum quota for check-in rewards",
     "签到最大额度": "Maximum check-in quota",
     "签到奖励的最大额度": "Maximum quota for check-in rewards",
-    "保存签到设置": "Save check-in settings"
+    "保存签到设置": "Save check-in settings",
+    "下载": "Download",
+    "下载中心": "Download Center",
+    "选择您的平台": "Choose Your Platform",
+    "下载对应平台的安装包": "Download the installer for your platform",
+    "安装并启动应用": "Install and launch the application",
+    "配置API Token": "Configure your API Token (from console)",
+    "开始使用": "Start using",
+    "Windows版本": "Windows",
+    "macOS版本": "macOS",
+    "Linux版本": "Linux",
+    "便携版": "Portable",
+    "安装版": "Installer",
+    "推荐下载": "Recommended",
+    "其他平台": "Other Platforms",
+    "更新日志": "Changelog"
   }
 }

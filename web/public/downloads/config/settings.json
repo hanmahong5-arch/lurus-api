@@ -1,0 +1,19 @@
+{
+  "version": "1.0.0",
+  "baseUrl": "/downloads",
+  "cdn": null,
+  "autoUpdate": {
+    "enabled": true,
+    "checkInterval": 3600
+  },
+  "analytics": {
+    "enabled": true,
+    "endpoint": "/api/analytics/download"
+  },
+  "ui": {
+    "showVersion": true,
+    "showSize": true,
+    "showChangelog": true,
+    "recommendByOS": true
+  }
+}

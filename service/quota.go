@@ -512,6 +512,14 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 		return err
 	}
 
+	// Update daily quota used (for subscription-based quota management)
+	if quota > 0 {
+		if err := model.PostConsumeDailyQuota(relayInfo.UserId, quota); err != nil {
+			// Log error but don't fail the request - daily quota is secondary to main quota
+			common.SysLog("failed to update daily quota: " + err.Error())
+		}
+	}
+
 	if !relayInfo.IsPlayground {
 		if quota > 0 {
 			err = model.DecreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, quota)

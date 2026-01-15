@@ -1,0 +1,71 @@
+{
+  "version": "0.1.0",
+  "releaseDate": "2026-01-06",
+  "channel": "stable",
+  "changelog": {
+    "zh": [
+      "首个发布版本",
+      "支持 Gemini 多模态对话",
+      "内置终端支持",
+      "CodeSwitch 集成"
+    ],
+    "en": [
+      "Initial release",
+      "Gemini multimodal chat support",
+      "Built-in terminal",
+      "CodeSwitch integration"
+    ]
+  },
+  "assets": [
+    {
+      "platform": "windows",
+      "arch": "x64",
+      "type": "installer",
+      "filename": "GeminiGUI-Setup-0.1.0.exe",
+      "size": 102287913,
+      "sha256": "",
+      "downloadUrl": "products/gemini-gui/releases/0.1.0/GeminiGUI-Setup-0.1.0.exe"
+    },
+    {
+      "platform": "windows",
+      "arch": "x64",
+      "type": "portable",
+      "filename": "GeminiGUI-Portable-0.1.0.exe",
+      "size": 102122326,
+      "sha256": "",
+      "downloadUrl": "products/gemini-gui/releases/0.1.0/GeminiGUI-Portable-0.1.0.exe"
+    },
+    {
+      "platform": "darwin",
+      "arch": "universal",
+      "type": "dmg",
+      "filename": "GeminiGUI-0.1.0.dmg",
+      "size": 0,
+      "sha256": "",
+      "downloadUrl": "products/gemini-gui/releases/0.1.0/GeminiGUI-0.1.0.dmg"
+    },
+    {
+      "platform": "linux",
+      "arch": "x64",
+      "type": "appimage",
+      "filename": "GeminiGUI-0.1.0.AppImage",
+      "size": 0,
+      "sha256": "",
+      "downloadUrl": "products/gemini-gui/releases/0.1.0/GeminiGUI-0.1.0.AppImage"
+    },
+    {
+      "platform": "linux",
+      "arch": "x64",
+      "type": "deb",
+      "filename": "GeminiGUI-0.1.0.deb",
+      "size": 0,
+      "sha256": "",
+      "downloadUrl": "products/gemini-gui/releases/0.1.0/GeminiGUI-0.1.0.deb"
+    }
+  ],
+  "minimumSystemVersion": {
+    "windows": "10.0.0",
+    "darwin": "10.15.0",
+    "linux": "Ubuntu 20.04"
+  }
+}

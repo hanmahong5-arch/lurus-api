@@ -1,0 +1,252 @@
+# Stalwart Mail Server Configuration
+# Lurus Switch Mail Infrastructure
+#
+# Documentation: https://stalw.art/docs/
+#
+# IMPORTANT: Update the following before production deployment:
+#   1. server.hostname - Your mail server FQDN
+#   2. domain.* - Your email domain settings
+#   3. admin.password - Admin account password
+#   4. certificate.* - TLS certificate paths (for production)
+
+#############################################
+# Server Configuration
+#############################################
+
+[server]
+hostname = "mail.lurus.local"
+# Max connections per listener
+max-connections = 8192
+
+[server.run-as]
+user = "stalwart-mail"
+group = "stalwart-mail"
+
+#############################################
+# Storage Configuration
+#############################################
+
+[store."rocksdb"]
+type = "rocksdb"
+path = "/opt/stalwart-mail/data"
+compression = "lz4"
+
+# Use RocksDB for all storage by default
+[storage]
+data = "rocksdb"
+fts = "rocksdb"
+blob = "rocksdb"
+lookup = "rocksdb"
+directory = "internal"
+
+# Optional: Use PostgreSQL for shared storage (uncomment to enable)
+# [store."postgresql"]
+# type = "postgresql"
+# host = "postgres"
+# port = 5432
+# database = "stalwart"
+# user = "stalwart"
+# password = "stalwart123"
+
+#############################################
+# Directory (User Management)
+#############################################
+
+[directory."internal"]
+type = "internal"
+store = "rocksdb"
+
+# Default admin account
+# IMPORTANT: Change password after first login!
+[directory."internal".options]
+catch-all = true
+subaddressing = true
+
+#############################################
+# SMTP Configuration
+#############################################
+
+[session.ehlo]
+require = true
+reject-non-fqdn = false  # Set to true in production
+
+[session.auth]
+mechanisms = ["plain", "login"]
+require = true
+
+[session.rcpt]
+max-recipients = 100
+
+[queue]
+path = "/opt/stalwart-mail/queue"
+hash = 64
+
+[queue.schedule]
+retry = ["2m", "5m", "10m", "30m", "1h", "2h", "4h"]
+notify = ["1d", "3d"]
+expire = "5d"
+
+[queue.outbound]
+hostname = "mail.lurus.local"
+next-hop = false
+
+#############################################
+# Security: SPF, DKIM, DMARC, ARC
+#############################################
+
+[auth.spf.verify]
+ehlo = "relaxed"
+mail-from = "relaxed"
+
+[auth.dkim]
+verify = "relaxed"
+sign = true
+
+[auth.dmarc]
+verify = "relaxed"
+
+[auth.arc]
+verify = "relaxed"
+seal = true
+
+[auth.iprev]
+verify = "relaxed"
+
+#############################################
+# Anti-Spam Configuration
+#############################################
+
+[spam-filter]
+enable = true
+
+[spam-filter.score]
+spam-threshold = 5.0
+discard-threshold = 10.0
+reject-threshold = -1  # Disabled, use discard instead
+
+[spam-filter.header]
+status = "X-Spam-Status"
+result = "X-Spam-Result"
+
+[spam-filter.bayes]
+enable = true
+auto-learn = true
+auto-learn-spam-threshold = 6.0
+auto-learn-ham-threshold = -2.0
+
+[spam-filter.dnsbl]
+# Common DNSBLs
+lists = [
+    "zen.spamhaus.org",
+    "bl.spamcop.net"
+]
+
+#############################################
+# IMAP Configuration
+#############################################
+
+[imap]
+max-request-size = 52428800  # 50MB
+
+[imap.timeout]
+authenticated = "30m"
+anonymous = "1m"
+idle = "30m"
+
+#############################################
+# JMAP Configuration
+#############################################
+
+[jmap]
+max-request-size = 52428800  # 50MB
+max-upload-size = 52428800   # 50MB
+
+[jmap.session]
+timeout = "1h"
+purge-frequency = "1h"
+
+#############################################
+# HTTP/Web Interface
+#############################################
+
+[server.listener."http"]
+bind = ["[::]:8080"]
+protocol = "http"
+
+[server.listener."https"]
+bind = ["[::]:443"]
+protocol = "http"
+tls.implicit = true
+
+# Web Admin UI
+[web-admin]
+enable = true
+
+#############################################
+# TLS Configuration
+#############################################
+
+# Auto-generate self-signed cert for development
+[certificate."default"]
+cert = "/opt/stalwart-mail/certs/tls.crt"
+private-key = "/opt/stalwart-mail/certs/tls.key"
+
+# ACME (Let's Encrypt) for production - uncomment to enable
+# [certificate."acme"]
+# type = "acme"
+# domains = ["mail.yourdomain.com"]
+# contact = ["admin@yourdomain.com"]
+# directory = "https://acme-v02.api.letsencrypt.org/directory"
+# challenge = "tls-alpn-01"
+
+#############################################
+# Listeners
+#############################################
+
+[server.listener."smtp"]
+bind = ["[::]:25"]
+protocol = "smtp"
+
+[server.listener."submission"]
+bind = ["[::]:587"]
+protocol = "smtp"
+tls.implicit = false
+tls.starttls = true
+
+[server.listener."submissions"]
+bind = ["[::]:465"]
+protocol = "smtp"
+tls.implicit = true
+
+[server.listener."imap"]
+bind = ["[::]:143"]
+protocol = "imap"
+tls.implicit = false
+tls.starttls = true
+
+[server.listener."imaps"]
+bind = ["[::]:993"]
+protocol = "imap"
+tls.implicit = true
+
+#############################################
+# Logging
+#############################################
+
+[tracing."stdout"]
+type = "stdout"
+level = "info"
+ansi = false
+enable = true
+
+[tracing."journal"]
+type = "journal"
+level = "info"
+enable = false
+
+#############################################
+# Metrics (Prometheus)
+#############################################
+
+[metrics]
+prometheus = true

@@ -1,0 +1,80 @@
+# Stalwart Mail Server Docker Compose Configuration
+# Lurus Switch Mail & Collaboration Infrastructure
+#
+# Features:
+#   - SMTP (25, 465, 587) / IMAP (143, 993) / POP3 (110, 995)
+#   - JMAP for modern mail clients
+#   - CalDAV / CardDAV / WebDAV for collaboration
+#   - Web Admin UI on port 8080
+#
+# Quick Start:
+#   1. Copy stalwart/config.toml.example to stalwart/config.toml
+#   2. Update domain settings in config.toml
+#   3. docker-compose -f docker-compose.mail.yml up -d
+#   4. Access admin UI at http://localhost:8080 (default: admin / changeme)
+#
+# Production Deployment:
+#   - Configure DNS records (MX, SPF, DKIM, DMARC)
+#   - Use docker-compose.mail.ssl.yml for HTTPS/TLS
+
+version: '3.8'
+
+services:
+  stalwart:
+    image: stalwartlabs/mail-server:latest
+    container_name: stalwart-mail
+    restart: always
+    hostname: mail.${MAIL_DOMAIN:-lurus.local}
+    ports:
+      # SMTP
+      - "25:25"      # SMTP (MTA)
+      - "465:465"    # SMTPS (Implicit TLS)
+      - "587:587"    # Submission (STARTTLS)
+      # IMAP
+      - "143:143"    # IMAP (STARTTLS)
+      - "993:993"    # IMAPS (Implicit TLS)
+      # POP3 (optional, uncomment if needed)
+      # - "110:110"  # POP3 (STARTTLS)
+      # - "995:995"  # POP3S (Implicit TLS)
+      # JMAP & Web Admin
+      - "8080:8080"  # HTTP (Admin UI + JMAP)
+      - "8443:443"   # HTTPS (Admin UI + JMAP with TLS)
+    volumes:
+      # Data persistence
+      - stalwart_data:/opt/stalwart-mail
+      # Custom configuration (optional, Stalwart auto-generates if not present)
+      - ./stalwart/config.toml:/opt/stalwart-mail/etc/config.toml:ro
+    environment:
+      - TZ=Asia/Shanghai
+      # Database backend (default: RocksDB, can use PostgreSQL for shared storage)
+      # - STALWART_STORE_DATABASE_URL=postgresql://stalwart:stalwart123@postgres:5432/stalwart
+    networks:
+      - mail-network
+      - default
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Optional: Use existing PostgreSQL for Stalwart storage
+  # Uncomment to share database with new-api
+  # postgres:
+  #   extends:
+  #     file: docker-compose.yml
+  #     service: postgres
+  #   networks:
+  #     - mail-network
+  #     - default
+
+networks:
+  mail-network:
+    driver: bridge
+  default:
+    external: true
+    name: new-api_default
+
+volumes:
+  stalwart_data:
+    driver: local

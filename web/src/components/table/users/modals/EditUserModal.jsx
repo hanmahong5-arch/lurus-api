@@ -42,6 +42,9 @@ import {
   Col,
   Input,
   InputNumber,
+  Progress,
+  Descriptions,
+  Popconfirm,
 } from '@douyinfe/semi-ui';
 import {
   IconUser,
@@ -50,6 +53,8 @@ import {
   IconLink,
   IconUserGroup,
   IconPlus,
+  IconRefresh,
+  IconClock,
 } from '@douyinfe/semi-icons';
 
 const { Text, Title } = Typography;
@@ -63,6 +68,8 @@ const EditUserModal = (props) => {
   const isMobile = useIsMobile();
   const [groupOptions, setGroupOptions] = useState([]);
   const formApiRef = useRef(null);
+  const [dailyQuotaStatus, setDailyQuotaStatus] = useState(null);
+  const [dailyQuotaLoading, setDailyQuotaLoading] = useState(false);
 
   const isEdit = Boolean(userId);
 
@@ -79,6 +86,9 @@ const EditUserModal = (props) => {
     quota: 0,
     group: 'default',
     remark: '',
+    daily_quota: 0,
+    base_group: '',
+    fallback_group: '',
   });
 
   const fetchGroups = async () => {
@@ -88,6 +98,38 @@ const EditUserModal = (props) => {
     } catch (e) {
       showError(e.message);
     }
+  };
+
+const fetchDailyQuotaStatus = async () => {
+    if (!userId) return;
+    setDailyQuotaLoading(true);
+    try {
+      const res = await API.get(`/api/user/${userId}/daily-quota`);
+      if (res.data.success) {
+        setDailyQuotaStatus(res.data.data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch daily quota status:', e);
+    }
+    setDailyQuotaLoading(false);
+  };
+
+  const resetDailyQuota = async () => {
+    if (!userId) return;
+    setDailyQuotaLoading(true);
+    try {
+      const res = await API.post(`/api/user/${userId}/daily-quota/reset`);
+      if (res.data.success) {
+        showSuccess(t('每日额度已重置'));
+        fetchDailyQuotaStatus();
+        loadUser();
+      } else {
+        showError(res.data.message);
+      }
+    } catch (e) {
+      showError(e.message);
+    }
+    setDailyQuotaLoading(false);
   };
 
   const handleCancel = () => props.handleClose();
@@ -108,7 +150,10 @@ const EditUserModal = (props) => {
 
   useEffect(() => {
     loadUser();
-    if (userId) fetchGroups();
+    if (userId) {
+      fetchGroups();
+      fetchDailyQuotaStatus();
+    }
   }, [props.editingUser.id]);
 
   /* ----------------------- submit ----------------------- */
@@ -117,6 +162,8 @@ const EditUserModal = (props) => {
     let payload = { ...values };
     if (typeof payload.quota === 'string')
       payload.quota = parseInt(payload.quota) || 0;
+    if (typeof payload.daily_quota === 'string')
+      payload.daily_quota = parseInt(payload.daily_quota) || 0;
     if (userId) {
       payload.id = parseInt(userId);
     }
@@ -307,6 +354,112 @@ const EditUserModal = (props) => {
                         </Form.Slot>
                       </Col>
                     </Row>
+                  </Card>
+                )}
+
+                {/* 每日额度配置 */}
+                {userId && (
+                  <Card className='!rounded-2xl shadow-sm border-0'>
+                    <div className='flex items-center mb-2'>
+                      <Avatar size='small' color='orange' className='mr-2 shadow-md'>
+                        <IconClock size={16} />
+                      </Avatar>
+                      <div>
+                        <Text className='text-lg font-medium'>
+                          {t('每日额度配置')}
+                        </Text>
+                        <div className='text-xs text-gray-600'>
+                          {t('每日使用限额和降级分组设置')}
+                        </div>
+                      </div>
+                    </div>
+
+                    <Row gutter={12}>
+                      <Col span={24}>
+                        <Form.InputNumber
+                          field='daily_quota'
+                          label={t('每日额度限制')}
+                          placeholder={t('0 表示无限制')}
+                          step={100000}
+                          min={0}
+                          extraText={
+                            values.daily_quota > 0
+                              ? renderQuotaWithPrompt(values.daily_quota)
+                              : t('当前设置：无限制')
+                          }
+                          style={{ width: '100%' }}
+                        />
+                      </Col>
+
+                      <Col span={12}>
+                        <Form.Select
+                          field='base_group'
+                          label={t('基础分组')}
+                          placeholder={t('订阅原始分组')}
+                          optionList={groupOptions}
+                          allowAdditions
+                          search
+                          showClear
+                        />
+                      </Col>
+
+                      <Col span={12}>
+                        <Form.Select
+                          field='fallback_group'
+                          label={t('降级分组')}
+                          placeholder={t('额度耗尽后使用的分组')}
+                          optionList={groupOptions}
+                          allowAdditions
+                          search
+                          showClear
+                        />
+                      </Col>
+                    </Row>
+
+                    {dailyQuotaStatus && (
+                      <div className='mt-3 p-3 bg-gray-50 rounded-lg'>
+                        <div className='flex justify-between items-center mb-2'>
+                          <Text strong>{t('今日额度状态')}</Text>
+                          <Popconfirm
+                            title={t('确认重置')}
+                            content={t('确定要重置该用户的每日额度吗？')}
+                            onConfirm={resetDailyQuota}
+                          >
+                            <Button
+                              size='small'
+                              icon={<IconRefresh />}
+                              loading={dailyQuotaLoading}
+                              type='warning'
+                            >
+                              {t('重置每日额度')}
+                            </Button>
+                          </Popconfirm>
+                        </div>
+                        <div className='text-sm'>
+                          <div>
+                            {t('已用')}: {renderQuota(dailyQuotaStatus.daily_used)} /{' '}
+                            {dailyQuotaStatus.daily_quota > 0
+                              ? renderQuota(dailyQuotaStatus.daily_quota)
+                              : t('无限制')}
+                          </div>
+                          <div>
+                            {t('当前分组')}:{' '}
+                            <Tag
+                              color={
+                                dailyQuotaStatus.is_using_fallback ? 'orange' : 'green'
+                              }
+                            >
+                              {dailyQuotaStatus.current_group || '-'}
+                            </Tag>
+                            {dailyQuotaStatus.is_using_fallback && (
+                              <Tag color='red' size='small'>
+                                {t('降级中')}
+                              </Tag>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </Card>
                 )}
 

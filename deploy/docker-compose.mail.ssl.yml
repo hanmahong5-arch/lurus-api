@@ -1,0 +1,77 @@
+# Stalwart Mail Server with Caddy HTTPS Proxy
+# Production deployment with automatic Let's Encrypt certificates
+#
+# Prerequisites:
+#   1. Configure DNS records for your mail domain:
+#      - A/AAAA record: mail.yourdomain.com -> your server IP
+#      - MX record: yourdomain.com -> mail.yourdomain.com (priority 10)
+#      - SPF record: v=spf1 mx ~all
+#      - DMARC record: _dmarc.yourdomain.com TXT "v=DMARC1; p=quarantine"
+#   2. Update MAIL_DOMAIN environment variable
+#   3. Update Caddyfile.mail with your domain
+#
+# Usage:
+#   MAIL_DOMAIN=yourdomain.com docker-compose -f docker-compose.mail.ssl.yml up -d
+
+version: '3.8'
+
+services:
+  caddy-mail:
+    image: caddy:2-alpine
+    container_name: caddy-mail
+    restart: always
+    ports:
+      - "80:80"     # HTTP (redirect to HTTPS + ACME challenge)
+      - "443:443"   # HTTPS (Web Admin + JMAP)
+    volumes:
+      - ./stalwart/Caddyfile.mail:/etc/caddy/Caddyfile:ro
+      - caddy_mail_data:/data
+      - caddy_mail_config:/config
+    environment:
+      - MAIL_DOMAIN=${MAIL_DOMAIN:-mail.lurus.local}
+    depends_on:
+      - stalwart
+    networks:
+      - mail-network
+
+  stalwart:
+    image: stalwartlabs/mail-server:latest
+    container_name: stalwart-mail
+    restart: always
+    hostname: mail.${MAIL_DOMAIN:-lurus.local}
+    ports:
+      # SMTP - Direct exposure (no proxy)
+      - "25:25"      # SMTP (MTA)
+      - "465:465"    # SMTPS (Implicit TLS)
+      - "587:587"    # Submission (STARTTLS)
+      # IMAP - Direct exposure (no proxy)
+      - "143:143"    # IMAP (STARTTLS)
+      - "993:993"    # IMAPS (Implicit TLS)
+      # POP3 (optional)
+      # - "110:110"
+      # - "995:995"
+    expose:
+      - "8080"       # Internal HTTP (proxied by Caddy)
+    volumes:
+      - stalwart_data:/opt/stalwart-mail
+      - ./stalwart/config.toml:/opt/stalwart-mail/etc/config.toml:ro
+    environment:
+      - TZ=Asia/Shanghai
+      - STALWART_ADMIN_PASSWORD=${STALWART_ADMIN_PASSWORD:-changeme}
+    networks:
+      - mail-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  mail-network:
+    driver: bridge
+
+volumes:
+  stalwart_data:
+  caddy_mail_data:
+  caddy_mail_config:

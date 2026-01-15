@@ -1,0 +1,44 @@
+{
+  "id": "gemini-gui",
+  "name": "Gemini GUI",
+  "displayName": "Gemini GUI",
+  "description": {
+    "zh": "Gemini CLI 桌面客户端，支持多模态交互",
+    "en": "Gemini CLI Desktop Client with Multimodal Support"
+  },
+  "icon": "gemini",
+  "category": "client",
+  "tags": ["ai", "gemini", "chat", "multimodal", "electron"],
+  "homepage": "https://github.com/google-gemini/gemini-cli",
+  "repository": "https://github.com/user/gemini-gui",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Ailurus Team",
+    "email": "support@lurus.cn"
+  },
+  "platforms": ["windows", "darwin", "linux"],
+  "requirements": {
+    "os": {
+      "windows": ">=10",
+      "darwin": ">=10.15",
+      "linux": "Ubuntu 20.04+"
+    }
+  },
+  "features": [
+    {
+      "icon": "message",
+      "title": { "zh": "多模态对话", "en": "Multimodal Chat" },
+      "description": { "zh": "支持文本、图片、代码等多种输入", "en": "Support text, images, code and more" }
+    },
+    {
+      "icon": "terminal",
+      "title": { "zh": "内置终端", "en": "Built-in Terminal" },
+      "description": { "zh": "集成终端，直接执行命令", "en": "Integrated terminal for direct command execution" }
+    },
+    {
+      "icon": "plug",
+      "title": { "zh": "CodeSwitch 集成", "en": "CodeSwitch Integration" },
+      "description": { "zh": "无缝对接 CodeSwitch 网关", "en": "Seamless integration with CodeSwitch gateway" }
+    }
+  ]
+}

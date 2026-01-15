@@ -1,0 +1,51 @@
+# Caddy configuration for Stalwart Mail Server
+# Provides HTTPS proxy for Web Admin UI and JMAP endpoints
+#
+# Replace {$MAIL_DOMAIN} with your actual domain or set environment variable
+
+{$MAIL_DOMAIN:mail.lurus.local} {
+    # Reverse proxy to Stalwart HTTP interface
+    reverse_proxy stalwart:8080 {
+        # Health check
+        health_uri /healthz
+        health_interval 30s
+        health_timeout 10s
+
+        # Headers
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Security headers
+    header {
+        # Enable HSTS
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        # Prevent clickjacking
+        X-Frame-Options "SAMEORIGIN"
+        # XSS protection
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        # Remove server header
+        -Server
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/mail-access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+}
+
+# Autodiscover for Outlook/Exchange clients
+autodiscover.{$MAIL_DOMAIN:lurus.local} {
+    reverse_proxy stalwart:8080
+}
+
+# Autoconfig for Thunderbird/Mozilla clients
+autoconfig.{$MAIL_DOMAIN:lurus.local} {
+    reverse_proxy stalwart:8080
+}

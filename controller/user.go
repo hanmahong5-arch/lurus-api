@@ -1294,3 +1294,109 @@ func UpdateUserSetting(c *gin.Context) {
 		"message": "设置已更新",
 	})
 }
+
+// ===== Subscription Configuration API (for subscription-service) =====
+
+// UpdateUserSubscriptionConfigRequest represents the request body for updating subscription config
+type UpdateUserSubscriptionConfigRequest struct {
+	DailyQuota    int    `json:"daily_quota"`
+	BaseGroup     string `json:"base_group"`
+	FallbackGroup string `json:"fallback_group"`
+	Quota         int    `json:"quota,omitempty"`
+}
+
+// UpdateUserSubscriptionConfig updates user's subscription-related fields
+// This API is called by subscription-service when subscription changes
+// PUT /api/user/:id/subscription
+func UpdateUserSubscriptionConfig(c *gin.Context) {
+	userId, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "无效的用户 ID",
+		})
+		return
+	}
+
+	var req UpdateUserSubscriptionConfigRequest
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "无效的请求参数",
+		})
+		return
+	}
+
+	config := &model.SubscriptionConfig{
+		DailyQuota:    req.DailyQuota,
+		BaseGroup:     req.BaseGroup,
+		FallbackGroup: req.FallbackGroup,
+		Quota:         req.Quota,
+	}
+
+	if err := model.UpdateUserSubscriptionConfig(userId, config); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "更新订阅配置失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "订阅配置已更新",
+	})
+}
+
+// GetUserDailyQuotaStatus returns user's daily quota information
+// GET /api/user/:id/daily-quota
+func GetUserDailyQuotaStatus(c *gin.Context) {
+	userId, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "无效的用户 ID",
+		})
+		return
+	}
+
+	info, err := model.GetUserDailyQuotaInfo(userId)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "获取每日额度信息失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    info,
+	})
+}
+
+// ResetUserDailyQuota manually resets a user's daily quota
+// POST /api/user/:id/daily-quota/reset
+func ResetUserDailyQuota(c *gin.Context) {
+	userId, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "无效的用户 ID",
+		})
+		return
+	}
+
+	if err := model.ProcessDailyQuotaReset(userId); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "重置每日额度失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "每日额度已重置",
+	})
+}

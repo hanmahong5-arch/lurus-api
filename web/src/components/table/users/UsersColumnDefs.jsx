@@ -140,6 +140,15 @@ const renderQuotaUsage = (text, record, t) => {
   const remain = parseInt(record.quota) || 0;
   const total = used + remain;
   const percent = total > 0 ? (remain / total) * 100 : 0;
+
+  // Daily quota info
+  const dailyQuota = parseInt(record.daily_quota) || 0;
+  const dailyUsed = parseInt(record.daily_used) || 0;
+  const dailyRemain = dailyQuota > 0 ? Math.max(0, dailyQuota - dailyUsed) : 0;
+  const dailyPercent = dailyQuota > 0 ? (dailyRemain / dailyQuota) * 100 : 100;
+  const hasDailyQuota = dailyQuota > 0;
+  const isUsingFallback = record.fallback_group && record.group === record.fallback_group && record.base_group && record.group !== record.base_group;
+
   const popoverContent = (
     <div className='text-xs p-2'>
       <Paragraph copyable={{ content: renderQuota(used) }}>
@@ -151,6 +160,29 @@ const renderQuotaUsage = (text, record, t) => {
       <Paragraph copyable={{ content: renderQuota(total) }}>
         {t('总额度')}: {renderQuota(total)}
       </Paragraph>
+      {hasDailyQuota && (
+        <>
+          <div className='border-t border-gray-200 my-2' />
+          <Paragraph copyable={{ content: renderQuota(dailyUsed) }}>
+            {t('今日已用')}: {renderQuota(dailyUsed)}
+          </Paragraph>
+          <Paragraph copyable={{ content: renderQuota(dailyRemain) }}>
+            {t('今日剩余')}: {renderQuota(dailyRemain)} ({dailyPercent.toFixed(0)}%)
+          </Paragraph>
+          <Paragraph copyable={{ content: renderQuota(dailyQuota) }}>
+            {t('每日限额')}: {renderQuota(dailyQuota)}
+          </Paragraph>
+          {record.base_group && (
+            <div>{t('基础分组')}: {record.base_group}</div>
+          )}
+          {record.fallback_group && (
+            <div>{t('降级分组')}: {record.fallback_group}</div>
+          )}
+          {isUsingFallback && (
+            <Tag color='orange' size='small' className='mt-1'>{t('降级中')}</Tag>
+          )}
+        </>
+      )}
     </div>
   );
   return (
@@ -164,6 +196,22 @@ const renderQuotaUsage = (text, record, t) => {
             format={() => `${percent.toFixed(0)}%`}
             style={{ width: '100%', marginTop: '1px', marginBottom: 0 }}
           />
+          {hasDailyQuota && (
+            <div className='flex items-center gap-1 mt-1'>
+              <span className='text-[10px] text-gray-500'>{t('今日')}</span>
+              <Progress
+                percent={dailyPercent}
+                aria-label='daily quota usage'
+                size='small'
+                showInfo={false}
+                stroke={isUsingFallback ? '#f97316' : '#3b82f6'}
+                style={{ width: 40 }}
+              />
+              {isUsingFallback && (
+                <span className='text-[10px] text-orange-500'>!</span>
+              )}
+            </div>
+          )}
         </div>
       </Tag>
     </Popover>

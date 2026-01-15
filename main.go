@@ -116,6 +116,11 @@ func main() {
 		model.InitBatchUpdater()
 	}
 
+	// Start daily quota reset cron job for subscription-based quota management
+	if os.Getenv("DAILY_QUOTA_ENABLED") != "false" {
+		model.StartDailyQuotaResetCron()
+	}
+
 	if os.Getenv("ENABLE_PPROF") == "true" {
 		gopool.Go(func() {
 			log.Println(http.ListenAndServe("0.0.0.0:8005", nil))

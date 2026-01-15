@@ -1,0 +1,78 @@
+{
+  "version": "0.1.8",
+  "releaseDate": "2026-01-05",
+  "channel": "stable",
+  "changelog": {
+    "zh": [
+      "新增运营分析面板",
+      "优化缓存策略",
+      "修复若干已知问题"
+    ],
+    "en": [
+      "Added operations analytics panel",
+      "Optimized caching strategy",
+      "Fixed known issues"
+    ]
+  },
+  "assets": [
+    {
+      "platform": "windows",
+      "arch": "x64",
+      "type": "installer",
+      "filename": "CodeSwitch-Setup-0.1.8.exe",
+      "size": 48112640,
+      "sha256": "",
+      "downloadUrl": "products/codeswitch/releases/0.1.8/CodeSwitch-Setup-0.1.8.exe"
+    },
+    {
+      "platform": "windows",
+      "arch": "x64",
+      "type": "portable",
+      "filename": "CodeSwitch-Portable-0.1.8.exe",
+      "size": 48112640,
+      "sha256": "",
+      "downloadUrl": "products/codeswitch/releases/0.1.8/CodeSwitch-Portable-0.1.8.exe"
+    },
+    {
+      "platform": "darwin",
+      "arch": "universal",
+      "type": "dmg",
+      "filename": "CodeSwitch-0.1.8.dmg",
+      "size": 0,
+      "sha256": "",
+      "downloadUrl": "products/codeswitch/releases/0.1.8/CodeSwitch-0.1.8.dmg"
+    },
+    {
+      "platform": "darwin",
+      "arch": "universal",
+      "type": "zip",
+      "filename": "CodeSwitch-0.1.8-mac.zip",
+      "size": 0,
+      "sha256": "",
+      "downloadUrl": "products/codeswitch/releases/0.1.8/CodeSwitch-0.1.8-mac.zip"
+    },
+    {
+      "platform": "linux",
+      "arch": "x64",
+      "type": "appimage",
+      "filename": "CodeSwitch-0.1.8.AppImage",
+      "size": 0,
+      "sha256": "",
+      "downloadUrl": "products/codeswitch/releases/0.1.8/CodeSwitch-0.1.8.AppImage"
+    },
+    {
+      "platform": "linux",
+      "arch": "x64",
+      "type": "deb",
+      "filename": "CodeSwitch-0.1.8.deb",
+      "size": 0,
+      "sha256": "",
+      "downloadUrl": "products/codeswitch/releases/0.1.8/CodeSwitch-0.1.8.deb"
+    }
+  ],
+  "minimumSystemVersion": {
+    "windows": "10.0.0",
+    "darwin": "10.15.0",
+    "linux": "Ubuntu 20.04"
+  }
+}

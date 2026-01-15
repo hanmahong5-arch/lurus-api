@@ -1,0 +1,17 @@
+{
+  "version": "1.0.0",
+  "products": [
+    {
+      "id": "codeswitch",
+      "enabled": true,
+      "featured": true,
+      "order": 1
+    },
+    {
+      "id": "gemini-gui",
+      "enabled": true,
+      "featured": true,
+      "order": 2
+    }
+  ]
+}
