@@ -17,6 +17,8 @@ spec:
       labels:
         app: lurus-api
     spec:
+      nodeSelector:
+        lurus.cn/vpn: "true"
       containers:
         - name: lurus-api
           image: ghcr.io/hanmahong5-arch/lurus-api:latest
