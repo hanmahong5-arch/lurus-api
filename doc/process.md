@@ -408,6 +408,307 @@ meilisearch-go v0.35.1 API 发生重大变更。
 
 ---
 
-**文档版本 / Document Version:** v1.0
-**最后更新 / Last Updated:** 2026-01-20
-**状态 / Status:** ✅ 核心功能完成 / Core features completed
+---
+
+### 阶段 8: 项目重命名与部署 / Phase 8: Rebranding & Deployment
+
+**用户需求 / User Requirements:**
+将项目从 "new-api" 重命名为 "lurus-api"，并部署到 K3s 生产集群。
+
+**实施方法 / Implementation Method:**
+1. 修改 go.mod 模块路径
+2. 批量替换所有 Go 文件的 import 语句
+3. 更新配置文件和文档
+4. 提交到 GitHub 并触发 CI/CD
+5. 部署到 K3s 集群并验证
+
+**修改/新增/删除的内容 / Changes Made:**
+
+| 文件/目录 / File/Directory | 操作 / Operation | 描述 / Description |
+|---------------------------|-----------------|-------------------|
+| `go.mod` | 修改 / Modified | 模块路径: `github.com/QuantumNous/new-api` → `github.com/QuantumNous/lurus-api` |
+| `scripts/migrate/go.mod` | 修改 / Modified | 同步更新子模块路径 |
+| **277 个 Go 文件** | 修改 / Modified | 批量更新所有 import 语句 |
+| `Dockerfile` | 修改 / Modified | 更新构建路径和二进制文件名 |
+| `new-api.service` | 删除 / Deleted | 删除旧服务文件 |
+| `lurus-api.service` | 新增 / Created | 新建 systemd 服务配置 |
+| `.gitignore` | 修改 / Modified | 更新忽略规则 |
+| **43+ 配置/文档文件** | 修改 / Modified | Markdown、YAML、JSON、SQL、Shell 等文件 |
+| `DEPLOYMENT.md` | 新增 / Created | 部署指南文档 |
+| `DEPLOYMENT-REPORT.md` | 新增 / Created | 详细部署报告 |
+| `Deploy-To-K3s.ps1` | 新增 / Created | PowerShell 自动部署脚本 |
+| `deploy-to-k3s.sh` | 新增 / Created | Bash 自动部署脚本 |
+
+**Git 提交记录 / Git Commit:**
+```
+Commit: e1e1b7cf
+Author: uu114 <marvin.uu@gmail.com>
+Date: 2026-01-20 22:24 CST
+Message: Rebrand from new-api to lurus-api and integrate Meilisearch
+Files Changed: 332
+Insertions: +5,278
+Deletions: -3,530
+```
+
+**实现的功能 / Implemented Features:**
+- ✅ 完整的项目重命名（327+ 文件）
+- ✅ Git 仓库推送到 GitHub
+- ✅ GitHub Actions 自动构建 Docker 镜像
+- ✅ 镜像推送到 GHCR (ghcr.io/hanmahong5-arch/lurus-api:latest)
+- ✅ K3s 集群自动部署
+- ✅ 服务健康检查通过
+- ✅ 完整的部署文档
+
+**部署详情 / Deployment Details:**
+
+| 项目 / Item | 值 / Value |
+|-------------|-----------|
+| **K3s 集群** | cloud-ubuntu-1-16c32g (master) |
+| **命名空间** | lurus-system |
+| **Deployment** | lurus-api (1/1 Running) |
+| **镜像** | ghcr.io/hanmahong5-arch/lurus-api:latest |
+| **容器端口** | 3000 |
+| **服务端口** | 8850 |
+| **运行节点** | cloud-ubuntu-3-2c2g |
+| **Pod IP** | 10.42.4.63 |
+| **域名** | https://api.lurus.cn |
+| **健康状态** | ✅ HTTP 200 OK |
+| **启动时间** | 9.4 秒 |
+
+**技术亮点 / Technical Highlights:**
+1. 使用 PowerShell 脚本批量替换（Windows 环境）
+2. GitHub Actions 自动化 CI/CD 流程
+3. 自动等待构建完成并部署
+4. K3s 滚动更新无缝切换
+5. 健康检查确保服务可用
+
+**故障处理 / Troubleshooting:**
+- ⚠️ Git 推送权限问题：切换到 SSH 方式解决
+- ⚠️ PowerShell 命令语法：创建脚本文件执行
+- ⚠️ GitHub Actions 构建等待：自动监控状态
+- ⚠️ 本地 Docker/kubectl 不可用：远程 SSH 执行
+
+**部署验证 / Deployment Verification:**
+```bash
+# API 健康检查
+$ curl https://api.lurus.cn/api/status
+HTTP/2 200 ✅
+
+# Pod 状态
+$ kubectl get pods -n lurus-system -l app=lurus-api
+NAME                        READY   STATUS    RESTARTS   AGE
+lurus-api-5f9477cb5-w662t   1/1     Running   0          63s ✅
+
+# 日志验证
+[SYS] AIlurus ready in 9369 ms ✅
+[GIN] 200 | GET /api/status ✅
+```
+
+**注意事项 / Notes:**
+- ⚠️ Meilisearch 功能已集成但未启用（需要配置环境变量）
+- ⚠️ 日志显示 "Meilisearch integration is disabled"
+- ℹ️ 需要部署 Meilisearch 服务并配置环境变量才能启用搜索功能
+- ℹ️ 详见 `DEPLOYMENT-REPORT.md` 中的启用指南
+
+---
+
+## 项目状态更新 / Updated Project Status
+
+### 已完成功能 / Completed Features
+
+✅ **核心功能 / Core Features**
+1. Meilisearch 客户端集成
+2. 日志、用户、通道索引配置
+3. 全文搜索和高级过滤
+4. 异步索引同步机制
+5. 日志搜索 API 集成
+6. 用户搜索 API 集成 ⭐ NEW
+7. 通道搜索 API 集成 ⭐ NEW
+8. 自动降级到数据库
+
+✅ **质量保证 / Quality Assurance**
+1. 编译通过（无错误）
+2. 循环导入问题解决
+3. API 兼容性修复
+4. 完整的中英双语文档
+5. 项目重命名完成 ⭐ NEW
+6. 生产环境部署成功 ⭐ NEW
+
+✅ **部署与运维 / Deployment & Operations**
+1. Git 仓库管理
+2. GitHub Actions CI/CD
+3. Docker 镜像构建
+4. K3s 集群部署
+5. 自动化部署脚本
+6. 健康检查和监控
+
+### 待完成功能 / Pending Features
+
+⏸️ **功能增强 / Feature Enhancement**
+1. 启用 Meilisearch 搜索引擎（需配置环境变量）
+2. 配置 Redis 缓存（可选）
+
+⏸️ **测试 / Testing**
+1. 单元测试编写
+2. 集成测试
+3. 性能测试
+
+---
+
+## 最终统计 / Final Statistics
+
+**总代码变更 / Total Code Changes:**
+- 修改文件：332 个
+- 新增代码：+5,278 行
+- 删除代码：-3,530 行
+- 净增加：+1,748 行
+
+**项目文件统计 / Project File Statistics:**
+- Go 源文件：277 个（已全部更新）
+- 配置文件：43+ 个
+- 文档文件：3 个新增
+- 脚本文件：2 个新增
+
+**开发周期 / Development Cycle:**
+- 开始时间：2026-01-20 上午
+- 完成时间：2026-01-20 22:31 CST
+- **总耗时：约 12 小时**
+
+**版本信息 / Version Info:**
+- **当前版本**：v1.1.0
+- **提交哈希**：e1e1b7cf
+- **部署状态**：✅ 生产环境运行中
+
+---
+
+### 阶段 9: Meilisearch 搜索引擎启用 / Phase 9: Enable Meilisearch Search Engine
+
+**时间 / Date:** 2026-01-20 22:50 CST
+
+**需求 / Requirements:**
+- 启用已集成的 Meilisearch 搜索引擎功能
+- 配置 lurus-api 连接到 Meilisearch 服务
+- 验证搜索性能提升
+
+**实施方法 / Implementation Method:**
+
+1. **部署 Meilisearch 服务到 K3s 集群**
+   - 创建 `deploy/k8s/meilisearch.yaml` 配置文件
+   - 配置 Secret (MEILI_MASTER_KEY)
+   - 配置 PVC (10Gi 持久化存储)
+   - 配置 Deployment (资源限制: 512Mi-2Gi 内存, 250m-1000m CPU)
+   - 配置 Service (ClusterIP, 端口 7700)
+
+2. **更新 lurus-api Deployment 配置**
+   - 添加环境变量到 `deploy/k8s/deployment.yaml`:
+     - `MEILISEARCH_ENABLED=true`
+     - `MEILISEARCH_HOST=http://meilisearch:7700`
+     - `MEILISEARCH_API_KEY` (从 Secret 获取)
+     - `MEILISEARCH_SYNC_ENABLED=true`
+     - `MEILISEARCH_SYNC_BATCH_SIZE=1000`
+     - `MEILISEARCH_WORKER_COUNT=2`
+
+3. **部署和验证**
+   - 提交代码到 GitHub (commit: 433f52a7)
+   - 使用 `kubectl set env` 和 `kubectl patch` 应用配置
+   - 执行 rolling update
+   - 验证服务连接和索引初始化
+
+**修改/新增内容 / Modified/Added Content:**
+
+**新增文件 / New Files:**
+```
+deploy/k8s/meilisearch.yaml      # Meilisearch 部署配置
+```
+
+**修改文件 / Modified Files:**
+```
+deploy/k8s/deployment.yaml       # 添加 Meilisearch 环境变量配置 (lines 39-53)
+```
+
+**环境变量配置 / Environment Variables:**
+```yaml
+- name: MEILISEARCH_ENABLED
+  value: "true"
+- name: MEILISEARCH_HOST
+  value: "http://meilisearch:7700"
+- name: MEILISEARCH_API_KEY
+  valueFrom:
+    secretKeyRef:
+      name: meilisearch-secrets
+      key: MEILI_MASTER_KEY
+- name: MEILISEARCH_SYNC_ENABLED
+  value: "true"
+- name: MEILISEARCH_SYNC_BATCH_SIZE
+  value: "1000"
+- name: MEILISEARCH_WORKER_COUNT
+  value: "2"
+```
+
+**实现的功能 / Implemented Features:**
+
+✅ **Meilisearch 服务部署成功**
+- Pod: `meilisearch-5779d44c59-xrd66` (Running)
+- Service: `meilisearch` (ClusterIP: 10.43.189.165:7700)
+- 持久化存储: PVC `meilisearch-data` (10Gi)
+- 版本: Meilisearch v1.10.3
+
+✅ **lurus-api 集成成功**
+- Pod: `lurus-api-86cdcdd7b4-mbzzf` (Running)
+- 启动时间: 10.4 秒
+- Meilisearch 连接状态: available
+
+✅ **功能启用验证**
+从启动日志确认：
+```
+[SYS] Connected to Meilisearch at http://meilisearch:7700, status: available
+[SYS] Meilisearch version: 1.10.3
+[SYS] Initializing Meilisearch indexes...
+[SYS] All Meilisearch indexes initialized successfully
+[SYS] Meilisearch client initialized successfully
+[SYS] Meilisearch sync initialized with 2 workers
+[SYS] Scheduled sync started with interval 60 seconds
+```
+
+**性能指标 / Performance Metrics:**
+- 索引类型: logs, users, channels, tasks
+- 同步机制: 实时同步 + 定时批量同步（60秒间隔）
+- 同步工作线程: 2 workers
+- 批量同步大小: 1000 条/批次
+- 预期搜索性能: < 50ms 响应时间
+- 预期性能提升: 10-50 倍（相比数据库查询）
+
+**部署详情 / Deployment Details:**
+
+| 项目 / Item | Meilisearch | lurus-api |
+|-------------|-------------|-----------|
+| **Pod名称** | meilisearch-5779d44c59-xrd66 | lurus-api-86cdcdd7b4-mbzzf |
+| **状态** | Running | Running |
+| **镜像** | getmeili/meilisearch:v1.10 | ghcr.io/hanmahong5-arch/lurus-api:latest |
+| **端口** | 7700 | 3000 |
+| **内存请求/限制** | 512Mi / 2Gi | 256Mi / 1Gi |
+| **CPU请求/限制** | 250m / 1000m | 100m / 500m |
+| **存储** | 10Gi PVC | emptyDir |
+
+**下一步计划 / Next Steps:**
+- [ ] 性能测试：验证搜索速度提升
+- [ ] 监控配置：添加 Meilisearch 指标到 Prometheus
+- [ ] 用户培训：使用新搜索功能
+- [ ] 数据迁移：历史数据索引（如需要）
+- [ ] 优化调整：根据使用情况调整资源配置
+
+**Git提交 / Git Commits:**
+- `433f52a7` - Enable Meilisearch search engine integration
+
+**部署状态 / Deployment Status:**
+- ✅ Meilisearch 服务运行中
+- ✅ lurus-api 已连接 Meilisearch
+- ✅ 索引初始化完成
+- ✅ 同步机制运行中
+- ✅ 生产环境可用
+
+---
+
+**文档版本 / Document Version:** v1.2
+**最后更新 / Last Updated:** 2026-01-20 22:52 CST
+**状态 / Status:** ✅ Meilisearch 已启用并运行 / Meilisearch Enabled and Running
