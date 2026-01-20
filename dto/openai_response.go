@@ -1,10 +1,10 @@
-package dto
+﻿package dto
 
 import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/lurus-api/types"
 )
 
 const (

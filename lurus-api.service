@@ -1,0 +1,18 @@
+# File path: /etc/systemd/system/lurus-api.service
+# sudo systemctl daemon-reload
+# sudo systemctl start lurus-api
+# sudo systemctl enable lurus-api
+# sudo systemctl status lurus-api
+[Unit]
+Description=Lurus API Service
+After=network.target
+
+[Service]
+User=ubuntu  # 注意修改用户名
+WorkingDirectory=/path/to/lurus-api  # 注意修改路径
+ExecStart=/path/to/lurus-api/lurus-api --port 3000 --log-dir /path/to/lurus-api/logs  # 注意修改路径和端口号
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

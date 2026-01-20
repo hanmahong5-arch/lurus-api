@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"bytes"
@@ -11,15 +11,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/controller"
-	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/middleware"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/router"
-	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/constant"
+	"github.com/QuantumNous/lurus-api/controller"
+	"github.com/QuantumNous/lurus-api/logger"
+	"github.com/QuantumNous/lurus-api/middleware"
+	"github.com/QuantumNous/lurus-api/model"
+	"github.com/QuantumNous/lurus-api/router"
+	"github.com/QuantumNous/lurus-api/search"
+	"github.com/QuantumNous/lurus-api/service"
+	"github.com/QuantumNous/lurus-api/setting/ratio_setting"
 
 	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/gin-contrib/sessions"
@@ -268,5 +269,22 @@ func InitResources() error {
 	if err != nil {
 		return err
 	}
+
+	// Initialize Meilisearch
+	// 初始化 Meilisearch
+	err = search.InitMeilisearch()
+	if err != nil {
+		common.SysError(fmt.Sprintf("Failed to initialize Meilisearch: %v", err))
+		// Don't return error - Meilisearch is optional
+		// 不返回错误 - Meilisearch 是可选的
+	} else if search.IsEnabled() {
+		// Initialize search sync mechanism
+		// 初始化搜索同步机制
+		err = search.InitSync()
+		if err != nil {
+			common.SysError(fmt.Sprintf("Failed to initialize Meilisearch sync: %v", err))
+		}
+	}
+
 	return nil
 }

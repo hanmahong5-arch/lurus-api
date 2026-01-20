@@ -1,4 +1,4 @@
-package controller
+﻿package controller
 
 import (
 	"encoding/json"
@@ -9,14 +9,15 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/dto"
+	"github.com/QuantumNous/lurus-api/logger"
+	"github.com/QuantumNous/lurus-api/model"
+	"github.com/QuantumNous/lurus-api/service"
+	"github.com/QuantumNous/lurus-api/search"
+	"github.com/QuantumNous/lurus-api/setting"
 
-	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/lurus-api/constant"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -291,6 +292,78 @@ func SearchUsers(c *gin.Context) {
 	keyword := c.Query("keyword")
 	group := c.Query("group")
 	pageInfo := common.GetPageQuery(c)
+
+	// Parse status parameter
+	// 解析状态参数
+	status := 0
+	if statusStr := c.Query("status"); statusStr != "" {
+		if s, err := strconv.Atoi(statusStr); err == nil {
+			status = s
+		}
+	}
+
+	// Try Meilisearch first if enabled
+	// 如果启用了 Meilisearch，优先使用
+	if search.IsEnabled() {
+		// Calculate page number (pageInfo uses 0-based index, Meilisearch uses 1-based page)
+		// 计算页码（pageInfo 使用 0 基索引，Meilisearch 使用 1 基页码）
+		page := (pageInfo.GetStartIdx() / pageInfo.GetPageSize()) + 1
+		if page < 1 {
+			page = 1
+		}
+
+		results, total, err := search.SearchUsers(keyword, group, status, page, pageInfo.GetPageSize())
+		if err == nil {
+			// Convert map results to model.User for consistency
+			// 将 map 结果转换为 model.User 以保持一致性
+			users := make([]*model.User, 0, len(results))
+			for _, result := range results {
+				user := &model.User{}
+				// Convert map to user struct
+				// 将 map 转换为用户结构
+				if id, ok := result["id"].(float64); ok {
+					user.Id = int(id)
+				}
+				if username, ok := result["username"].(string); ok {
+					user.Username = username
+				}
+				if email, ok := result["email"].(string); ok {
+					user.Email = email
+				}
+				if displayName, ok := result["display_name"].(string); ok {
+					user.DisplayName = displayName
+				}
+				if role, ok := result["role"].(float64); ok {
+					user.Role = int(role)
+				}
+				if statusVal, ok := result["status"].(float64); ok {
+					user.Status = int(statusVal)
+				}
+				if quota, ok := result["quota"].(float64); ok {
+					user.Quota = int(quota)
+				}
+				if usedQuota, ok := result["used_quota"].(float64); ok {
+					user.UsedQuota = int(usedQuota)
+				}
+				if groupVal, ok := result["group"].(string); ok {
+					user.Group = groupVal
+				}
+				users = append(users, user)
+			}
+
+			pageInfo.SetTotal(int(total))
+			pageInfo.SetItems(users)
+			common.ApiSuccess(c, pageInfo)
+			return
+		}
+
+		// Log error and fallback to database
+		// 记录错误并降级到数据库
+		common.SysLog(fmt.Sprintf("Meilisearch search failed, falling back to database: %v", err))
+	}
+
+	// Fallback to database search
+	// 降级到数据库搜索
 	users, total, err := model.SearchUsers(keyword, group, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)

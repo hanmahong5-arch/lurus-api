@@ -1,4 +1,4 @@
-package controller
+﻿package controller
 
 import (
 	"encoding/json"
@@ -7,12 +7,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/relay/channel/ollama"
-	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/constant"
+	"github.com/QuantumNous/lurus-api/dto"
+	"github.com/QuantumNous/lurus-api/model"
+	"github.com/QuantumNous/lurus-api/relay/channel/ollama"
+	"github.com/QuantumNous/lurus-api/search"
+	"github.com/QuantumNous/lurus-api/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -380,15 +381,101 @@ func SearchChannels(c *gin.Context) {
 			}
 		}
 	} else {
-		channels, err := model.SearchChannels(keyword, group, modelKeyword, idSort)
-		if err != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": err.Error(),
-			})
-			return
+		// Try Meilisearch first if enabled and simple search
+		// 如果启用了 Meilisearch 且是简单搜索，优先使用
+		if search.IsEnabled() && statusFilter != 0 {
+			// Parse status for Meilisearch
+			// 为 Meilisearch 解析状态
+			status := 0
+			if statusFilter == common.ChannelStatusEnabled {
+				status = common.ChannelStatusEnabled
+			}
+
+			// Get all results first (Meilisearch handles pagination better)
+			// 先获取所有结果（Meilisearch 更好地处理分页）
+			page := 1
+			pageSize := 10000 // Large page size to get all results for filtering
+			results, _, err := search.SearchChannels(keyword, group, status, page, pageSize)
+			if err == nil {
+				// Convert map results to model.Channel
+				// 将 map 结果转换为 model.Channel
+				channels := make([]*model.Channel, 0, len(results))
+				for _, result := range results {
+					channel := &model.Channel{}
+					if id, ok := result["id"].(float64); ok {
+						channel.Id = int(id)
+					}
+					if typeVal, ok := result["type"].(float64); ok {
+						channel.Type = int(typeVal)
+					}
+					if name, ok := result["name"].(string); ok {
+						channel.Name = name
+					}
+					if baseURL, ok := result["base_url"].(string); ok {
+						channel.BaseURL = &baseURL
+					}
+					if models, ok := result["models"].(string); ok {
+						channel.Models = models
+					}
+					if groupVal, ok := result["group"].(string); ok {
+						channel.Group = groupVal
+					}
+					if tag, ok := result["tag"].(string); ok {
+						channel.Tag = &tag
+					}
+					if statusVal, ok := result["status"].(float64); ok {
+						channel.Status = int(statusVal)
+					}
+					if priority, ok := result["priority"].(float64); ok {
+						priorityVal := int64(priority)
+						channel.Priority = &priorityVal
+					}
+					if balance, ok := result["balance"].(float64); ok {
+						channel.Balance = balance
+					}
+					if testTime, ok := result["test_time"].(float64); ok {
+						channel.TestTime = int64(testTime)
+					}
+					channels = append(channels, channel)
+				}
+
+				// Apply id_sort if needed
+				// 如果需要，应用 id_sort
+				if idSort {
+					// Note: Meilisearch results are already sorted by relevance
+					// We could add custom sorting here if needed
+					// 注意：Meilisearch 结果已按相关性排序
+					// 如果需要，可以在这里添加自定义排序
+				}
+
+				channelData = channels
+			} else {
+				// Log error and fallback to database
+				// 记录错误并降级到数据库
+				common.SysLog(fmt.Sprintf("Meilisearch search failed, falling back to database: %v", err))
+				channels, err := model.SearchChannels(keyword, group, modelKeyword, idSort)
+				if err != nil {
+					c.JSON(http.StatusOK, gin.H{
+						"success": false,
+						"message": err.Error(),
+					})
+					return
+				}
+				channelData = channels
+			}
+		} else {
+			// Fallback to database search
+			// 降级到数据库搜索
+			channels, err := model.SearchChannels(keyword, group, modelKeyword, idSort)
+			if err != nil {
+				c.JSON(http.StatusOK, gin.H{
+					"success": false,
+					"message": err.Error(),
+				})
+				return
+			}
+			channelData = channels
 		}
-		channelData = channels
 	}
 
 	if statusFilter == common.ChannelStatusEnabled || statusFilter == 0 {

@@ -1,10 +1,10 @@
-package model
+﻿package model
 
 import (
 	"strconv"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/lurus-api/common"
 )
 
 const (

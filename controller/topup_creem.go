@@ -1,4 +1,4 @@
-package controller
+﻿package controller
 
 import (
 	"bytes"
@@ -7,9 +7,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/model"
+	"github.com/QuantumNous/lurus-api/setting"
 	"io"
 	"log"
 	"net/http"

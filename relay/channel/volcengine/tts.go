@@ -1,4 +1,4 @@
-package volcengine
+﻿package volcengine
 
 import (
 	"context"
@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/QuantumNous/new-api/dto"
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/lurus-api/dto"
+	relaycommon "github.com/QuantumNous/lurus-api/relay/common"
+	"github.com/QuantumNous/lurus-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"

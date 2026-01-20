@@ -1,4 +1,4 @@
-package controller
+﻿package controller
 
 import (
 	"context"
@@ -8,10 +8,10 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/lurus-api/constant"
+	"github.com/QuantumNous/lurus-api/logger"
+	"github.com/QuantumNous/lurus-api/model"
+	"github.com/QuantumNous/lurus-api/service"
 
 	"github.com/gin-gonic/gin"
 )

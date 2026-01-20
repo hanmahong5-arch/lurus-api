@@ -1,10 +1,10 @@
-package dto
+﻿package dto
 
 import (
 	"fmt"
 	"strings"
 
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/lurus-api/types"
 	"github.com/gin-gonic/gin"
 )
 

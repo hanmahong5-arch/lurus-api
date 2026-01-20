@@ -1,4 +1,4 @@
-/*
+﻿/*
 Copyright (C) 2025 QuantumNous
 
 This program is free software: you can redistribute it and/or modify
@@ -231,7 +231,7 @@ const Home = () => {
                       icon={<IconGithubLogo />}
                       onClick={() =>
                         window.open(
-                          'https://github.com/QuantumNous/new-api',
+                          'https://github.com/QuantumNous/lurus-api',
                           '_blank',
                         )
                       }

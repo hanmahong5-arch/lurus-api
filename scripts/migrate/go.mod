@@ -1,4 +1,4 @@
-module github.com/QuantumNous/new-api/scripts/migrate
+module github.com/QuantumNous/lurus-api/scripts/migrate
 
 go 1.21
 

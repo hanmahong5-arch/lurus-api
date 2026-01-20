@@ -1,10 +1,10 @@
-package model
+﻿package model
 
 import (
 	"database/sql/driver"
 	"encoding/json"
 
-	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/lurus-api/common"
 
 	"gorm.io/gorm"
 )

@@ -1,4 +1,4 @@
-package aws
+﻿package aws
 
 import (
 	"context"
@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/dto"
+	"github.com/QuantumNous/lurus-api/logger"
 )
 
 type AwsClaudeRequest struct {

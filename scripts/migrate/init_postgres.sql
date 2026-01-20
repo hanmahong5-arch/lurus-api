@@ -1,4 +1,4 @@
--- PostgreSQL Database Initialization Script for new-api
+﻿-- PostgreSQL Database Initialization Script for lurus-api
 -- PostgreSQL 数据库初始化脚本
 
 -- 1. Create database (run as superuser / 以超级用户身份运行)

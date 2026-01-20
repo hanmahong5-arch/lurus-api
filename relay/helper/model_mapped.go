@@ -1,12 +1,12 @@
-package helper
+﻿package helper
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
 
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/lurus-api/dto"
+	"github.com/QuantumNous/lurus-api/relay/common"
 	"github.com/gin-gonic/gin"
 )
 

@@ -1,4 +1,4 @@
-package openai
+﻿package openai
 
 import (
 	"bytes"
@@ -12,23 +12,23 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/relay/channel"
-	"github.com/QuantumNous/new-api/relay/channel/ai360"
-	"github.com/QuantumNous/new-api/relay/channel/lingyiwanwu"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/constant"
+	"github.com/QuantumNous/lurus-api/dto"
+	"github.com/QuantumNous/lurus-api/logger"
+	"github.com/QuantumNous/lurus-api/relay/channel"
+	"github.com/QuantumNous/lurus-api/relay/channel/ai360"
+	"github.com/QuantumNous/lurus-api/relay/channel/lingyiwanwu"
 
-	//"github.com/QuantumNous/new-api/relay/channel/minimax"
-	"github.com/QuantumNous/new-api/relay/channel/openrouter"
-	"github.com/QuantumNous/new-api/relay/channel/xinference"
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/relay/common_handler"
-	relayconstant "github.com/QuantumNous/new-api/relay/constant"
-	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting/model_setting"
-	"github.com/QuantumNous/new-api/types"
+	//"github.com/QuantumNous/lurus-api/relay/channel/minimax"
+	"github.com/QuantumNous/lurus-api/relay/channel/openrouter"
+	"github.com/QuantumNous/lurus-api/relay/channel/xinference"
+	relaycommon "github.com/QuantumNous/lurus-api/relay/common"
+	"github.com/QuantumNous/lurus-api/relay/common_handler"
+	relayconstant "github.com/QuantumNous/lurus-api/relay/constant"
+	"github.com/QuantumNous/lurus-api/service"
+	"github.com/QuantumNous/lurus-api/setting/model_setting"
+	"github.com/QuantumNous/lurus-api/types"
 
 	"github.com/gin-gonic/gin"
 )

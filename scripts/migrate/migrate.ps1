@@ -1,4 +1,4 @@
-# MySQL to PostgreSQL Migration Script for new-api
+﻿# MySQL to PostgreSQL Migration Script for lurus-api
 # Windows PowerShell Script
 
 param(
@@ -84,8 +84,8 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "2. Reset sequences (run init_postgres.sql):" -ForegroundColor White
     Write-Host "   psql `"$PostgresDsn`" -f init_postgres.sql" -ForegroundColor Gray
     Write-Host ""
-    Write-Host "3. Start new-api and verify:" -ForegroundColor White
-    Write-Host "   ./new-api" -ForegroundColor Gray
+    Write-Host "3. Start lurus-api and verify:" -ForegroundColor White
+    Write-Host "   ./lurus-api" -ForegroundColor Gray
 } else {
     Write-Host ""
     Write-Host "Migration failed with errors" -ForegroundColor Red

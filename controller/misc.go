@@ -1,4 +1,4 @@
-package controller
+﻿package controller
 
 import (
 	"encoding/json"
@@ -6,14 +6,14 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/middleware"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/setting"
-	"github.com/QuantumNous/new-api/setting/console_setting"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
-	"github.com/QuantumNous/new-api/setting/system_setting"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/constant"
+	"github.com/QuantumNous/lurus-api/middleware"
+	"github.com/QuantumNous/lurus-api/model"
+	"github.com/QuantumNous/lurus-api/setting"
+	"github.com/QuantumNous/lurus-api/setting/console_setting"
+	"github.com/QuantumNous/lurus-api/setting/operation_setting"
+	"github.com/QuantumNous/lurus-api/setting/system_setting"
 
 	"github.com/gin-gonic/gin"
 )

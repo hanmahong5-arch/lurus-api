@@ -1,4 +1,4 @@
-package model
+﻿package model
 
 import (
 	"encoding/json"
@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/setting/ratio_setting"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/constant"
+	"github.com/QuantumNous/lurus-api/setting/ratio_setting"
+	"github.com/QuantumNous/lurus-api/types"
 )
 
 type Pricing struct {

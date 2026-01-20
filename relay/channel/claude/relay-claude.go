@@ -1,4 +1,4 @@
-package claude
+﻿package claude
 
 import (
 	"encoding/json"
@@ -7,15 +7,15 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/relay/channel/openrouter"
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/relay/helper"
-	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting/model_setting"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/dto"
+	"github.com/QuantumNous/lurus-api/logger"
+	"github.com/QuantumNous/lurus-api/relay/channel/openrouter"
+	relaycommon "github.com/QuantumNous/lurus-api/relay/common"
+	"github.com/QuantumNous/lurus-api/relay/helper"
+	"github.com/QuantumNous/lurus-api/service"
+	"github.com/QuantumNous/lurus-api/setting/model_setting"
+	"github.com/QuantumNous/lurus-api/types"
 
 	"github.com/gin-gonic/gin"
 )

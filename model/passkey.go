@@ -1,4 +1,4 @@
-package model
+﻿package model
 
 import (
 	"encoding/base64"
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/lurus-api/common"
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"

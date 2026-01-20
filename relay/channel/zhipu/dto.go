@@ -1,9 +1,9 @@
-package zhipu
+﻿package zhipu
 
 import (
 	"time"
 
-	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/lurus-api/dto"
 )
 
 type ZhipuMessage struct {

@@ -1,4 +1,4 @@
-package model
+﻿package model
 
 import (
 	"encoding/json"
@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/dto"
+	"github.com/QuantumNous/lurus-api/logger"
 
 	"github.com/bytedance/gopkg/util/gopool"
 	"gorm.io/gorm"

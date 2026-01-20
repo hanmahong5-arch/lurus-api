@@ -1,4 +1,4 @@
-package volcengine
+﻿package volcengine
 
 import (
 	"bytes"
@@ -10,15 +10,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	channelconstant "github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/relay/channel"
-	"github.com/QuantumNous/new-api/relay/channel/claude"
-	"github.com/QuantumNous/new-api/relay/channel/openai"
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/relay/constant"
-	"github.com/QuantumNous/new-api/setting/model_setting"
-	"github.com/QuantumNous/new-api/types"
+	channelconstant "github.com/QuantumNous/lurus-api/constant"
+	"github.com/QuantumNous/lurus-api/dto"
+	"github.com/QuantumNous/lurus-api/relay/channel"
+	"github.com/QuantumNous/lurus-api/relay/channel/claude"
+	"github.com/QuantumNous/lurus-api/relay/channel/openai"
+	relaycommon "github.com/QuantumNous/lurus-api/relay/common"
+	"github.com/QuantumNous/lurus-api/relay/constant"
+	"github.com/QuantumNous/lurus-api/setting/model_setting"
+	"github.com/QuantumNous/lurus-api/types"
 
 	"github.com/gin-gonic/gin"
 )

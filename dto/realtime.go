@@ -1,6 +1,6 @@
-package dto
+﻿package dto
 
-import "github.com/QuantumNous/new-api/types"
+import "github.com/QuantumNous/lurus-api/types"
 
 const (
 	RealtimeEventTypeError              = "error"

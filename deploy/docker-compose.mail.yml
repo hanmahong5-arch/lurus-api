@@ -1,4 +1,4 @@
-# Stalwart Mail Server Docker Compose Configuration
+﻿# Stalwart Mail Server Docker Compose Configuration
 # Lurus Switch Mail & Collaboration Infrastructure
 #
 # Features:
@@ -59,7 +59,7 @@ services:
       start_period: 30s
 
   # Optional: Use existing PostgreSQL for Stalwart storage
-  # Uncomment to share database with new-api
+  # Uncomment to share database with lurus-api
   # postgres:
   #   extends:
   #     file: docker-compose.yml
@@ -73,7 +73,7 @@ networks:
     driver: bridge
   default:
     external: true
-    name: new-api_default
+    name: lurus-api_default
 
 volumes:
   stalwart_data:

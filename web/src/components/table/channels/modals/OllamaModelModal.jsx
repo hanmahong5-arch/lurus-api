@@ -1,4 +1,4 @@
-/*
+﻿/*
 Copyright (C) 2025 QuantumNous
 
 This program is free software: you can redistribute it and/or modify
@@ -335,7 +335,7 @@ const OllamaModelModal = ({
       const fetchHeaders = {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
-        'New-API-User': String(userId),
+        'lurus-api-User': String(userId),
         ...authHeaders,
       };
 

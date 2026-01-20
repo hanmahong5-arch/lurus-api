@@ -1,16 +1,16 @@
-package model
+﻿package model
 
 import (
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/setting"
-	"github.com/QuantumNous/new-api/setting/config"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
-	"github.com/QuantumNous/new-api/setting/ratio_setting"
-	"github.com/QuantumNous/new-api/setting/system_setting"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/setting"
+	"github.com/QuantumNous/lurus-api/setting/config"
+	"github.com/QuantumNous/lurus-api/setting/operation_setting"
+	"github.com/QuantumNous/lurus-api/setting/ratio_setting"
+	"github.com/QuantumNous/lurus-api/setting/system_setting"
 )
 
 type Option struct {

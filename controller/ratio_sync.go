@@ -1,4 +1,4 @@
-package controller
+﻿package controller
 
 import (
 	"context"
@@ -11,11 +11,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/lurus-api/logger"
 
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"github.com/QuantumNous/lurus-api/dto"
+	"github.com/QuantumNous/lurus-api/model"
+	"github.com/QuantumNous/lurus-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
 )

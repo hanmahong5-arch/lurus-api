@@ -1,4 +1,4 @@
-package controller
+﻿package controller
 
 import (
 	"encoding/json"
@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/setting/system_setting"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/model"
+	"github.com/QuantumNous/lurus-api/setting/system_setting"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"

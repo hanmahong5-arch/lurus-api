@@ -1,4 +1,4 @@
-package limiter
+﻿package limiter
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/lurus-api/common"
 	"github.com/go-redis/redis/v8"
 )
 

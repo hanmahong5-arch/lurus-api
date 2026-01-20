@@ -1,4 +1,4 @@
-/*
+﻿/*
 Copyright (C) 2025 QuantumNous
 
 This program is free software: you can redistribute it and/or modify
@@ -740,13 +740,13 @@ const SystemSetting = () => {
                   <Text>
                     {t('仅支持')}{' '}
                     <a
-                      href='https://github.com/Calcium-Ion/new-api-worker'
+                      href='https://github.com/Calcium-Ion/lurus-api-worker'
                       target='_blank'
                       rel='noreferrer'
                     >
-                      new-api-worker
+                      lurus-api-worker
                     </a>
-                    {' '}{t('或其兼容new-api-worker格式的其他版本')}
+                    {' '}{t('或其兼容lurus-api-worker格式的其他版本')}
                   </Text>
                   <Row
                     gutter={{ xs: 8, sm: 16, md: 24, lg: 24, xl: 24, xxl: 24 }}

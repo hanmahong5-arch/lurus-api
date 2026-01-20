@@ -1,4 +1,4 @@
-/*
+﻿/*
 Copyright (C) 2025 QuantumNous
 
 This program is free software: you can redistribute it and/or modify
@@ -48,7 +48,7 @@ export function isRoot() {
 
 export function getSystemName() {
   let system_name = localStorage.getItem('system_name');
-  if (!system_name) return 'New API';
+  if (!system_name) return 'Lurus API';
   return system_name;
 }
 

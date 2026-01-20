@@ -1,9 +1,9 @@
-package controller
+﻿package controller
 
 import (
 	"net/http"
 
-	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/lurus-api/model"
 
 	"github.com/gin-gonic/gin"
 )

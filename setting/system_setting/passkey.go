@@ -1,11 +1,11 @@
-package system_setting
+﻿package system_setting
 
 import (
 	"net/url"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/setting/config"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/setting/config"
 )
 
 type PasskeySettings struct {

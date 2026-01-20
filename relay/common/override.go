@@ -1,4 +1,4 @@
-package common
+﻿package common
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/lurus-api/common"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )

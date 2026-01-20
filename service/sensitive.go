@@ -1,11 +1,11 @@
-package service
+﻿package service
 
 import (
 	"errors"
 	"strings"
 
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/lurus-api/dto"
+	"github.com/QuantumNous/lurus-api/setting"
 )
 
 func CheckSensitiveMessages(messages []dto.Message) ([]string, error) {

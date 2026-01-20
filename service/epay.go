@@ -1,8 +1,8 @@
-package service
+﻿package service
 
 import (
-	"github.com/QuantumNous/new-api/setting/operation_setting"
-	"github.com/QuantumNous/new-api/setting/system_setting"
+	"github.com/QuantumNous/lurus-api/setting/operation_setting"
+	"github.com/QuantumNous/lurus-api/setting/system_setting"
 )
 
 func GetCallbackAddress() string {

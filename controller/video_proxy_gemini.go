@@ -1,4 +1,4 @@
-package controller
+﻿package controller
 
 import (
 	"encoding/json"
@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/relay"
+	"github.com/QuantumNous/lurus-api/constant"
+	"github.com/QuantumNous/lurus-api/model"
+	"github.com/QuantumNous/lurus-api/relay"
 )
 
 func getGeminiVideoURL(channel *model.Channel, task *model.Task, apiKey string) (string, error) {

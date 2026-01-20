@@ -1,4 +1,4 @@
-{
+﻿{
   "openapi": "3.0.1",
   "info": {
     "title": "AI模型接口",
@@ -4465,7 +4465,7 @@
       "NewApiUser": {
         "type": "apiKey",
         "in": "header",
-        "name": "New-Api-User",
+        "name": "lurus-api-User",
         "description": "用户ID请求头，必须与当前登录用户ID匹配，使用Session或AccessToken认证时必须提供"
       },
       "Combination": {

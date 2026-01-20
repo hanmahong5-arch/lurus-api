@@ -1,4 +1,4 @@
-package jimeng
+﻿package jimeng
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/lurus-api/logger"
 	"github.com/gin-gonic/gin"
 )
 

@@ -1,4 +1,4 @@
-package controller
+﻿package controller
 
 import (
 	"bytes"
@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/pkg/ionet"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/pkg/ionet"
 	"github.com/gin-gonic/gin"
 )
 

@@ -1,12 +1,12 @@
-package model
+﻿package model
 
 import (
 	"errors"
 	"fmt"
 	"strconv"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/logger"
 
 	"gorm.io/gorm"
 )

@@ -1,11 +1,11 @@
-package model
+﻿package model
 
 import (
 	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/lurus-api/common"
 	"github.com/bytedance/gopkg/util/gopool"
 	"gorm.io/gorm"
 )

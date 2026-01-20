@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 import (
 	"bytes"
@@ -8,10 +8,10 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/setting/system_setting"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/dto"
+	"github.com/QuantumNous/lurus-api/model"
+	"github.com/QuantumNous/lurus-api/setting/system_setting"
 )
 
 func NotifyRootUser(t string, subject string, content string) {

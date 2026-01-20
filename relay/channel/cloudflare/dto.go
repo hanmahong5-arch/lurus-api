@@ -1,6 +1,6 @@
-package cloudflare
+﻿package cloudflare
 
-import "github.com/QuantumNous/new-api/dto"
+import "github.com/QuantumNous/lurus-api/dto"
 
 type CfRequest struct {
 	Messages    []dto.Message `json:"messages,omitempty"`

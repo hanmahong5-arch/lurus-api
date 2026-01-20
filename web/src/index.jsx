@@ -1,4 +1,4 @@
-/*
+﻿/*
 Copyright (C) 2025 QuantumNous
 
 This program is free software: you can redistribute it and/or modify
@@ -37,7 +37,7 @@ import en_GB from '@douyinfe/semi-ui/lib/es/locale/source/en_GB';
 // Welcome message (Do not remove this without permission from the original developer)
 if (typeof window !== 'undefined') {
   console.log(
-    '%cWE ❤ NEWAPI%c Github: https://github.com/QuantumNous/new-api',
+    '%cWE ❤ NEWAPI%c Github: https://github.com/QuantumNous/lurus-api',
     'color: #10b981; font-weight: bold; font-size: 24px;',
     'color: inherit; font-size: 14px;',
   );

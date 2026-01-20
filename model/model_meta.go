@@ -1,9 +1,9 @@
-package model
+﻿package model
 
 import (
 	"strconv"
 
-	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/lurus-api/common"
 
 	"gorm.io/gorm"
 )

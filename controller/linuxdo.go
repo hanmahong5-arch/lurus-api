@@ -1,4 +1,4 @@
-package controller
+﻿package controller
 
 import (
 	"encoding/base64"
@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/model"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"

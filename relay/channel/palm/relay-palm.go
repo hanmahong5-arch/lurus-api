@@ -1,17 +1,17 @@
-package palm
+﻿package palm
 
 import (
 	"encoding/json"
 	"io"
 	"net/http"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/relay/helper"
-	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/constant"
+	"github.com/QuantumNous/lurus-api/dto"
+	relaycommon "github.com/QuantumNous/lurus-api/relay/common"
+	"github.com/QuantumNous/lurus-api/relay/helper"
+	"github.com/QuantumNous/lurus-api/service"
+	"github.com/QuantumNous/lurus-api/types"
 
 	"github.com/gin-gonic/gin"
 )

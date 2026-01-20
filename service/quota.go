@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 import (
 	"errors"
@@ -8,15 +8,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/model"
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/setting/ratio_setting"
-	"github.com/QuantumNous/new-api/setting/system_setting"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/constant"
+	"github.com/QuantumNous/lurus-api/dto"
+	"github.com/QuantumNous/lurus-api/logger"
+	"github.com/QuantumNous/lurus-api/model"
+	relaycommon "github.com/QuantumNous/lurus-api/relay/common"
+	"github.com/QuantumNous/lurus-api/setting/ratio_setting"
+	"github.com/QuantumNous/lurus-api/setting/system_setting"
+	"github.com/QuantumNous/lurus-api/types"
 
 	"github.com/bytedance/gopkg/util/gopool"
 

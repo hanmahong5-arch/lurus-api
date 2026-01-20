@@ -1,4 +1,4 @@
-package controller
+﻿package controller
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/new-api/setting/console_setting"
+	"github.com/QuantumNous/lurus-api/setting/console_setting"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/sync/errgroup"

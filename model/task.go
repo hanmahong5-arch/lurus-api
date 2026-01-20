@@ -1,13 +1,13 @@
-package model
+﻿package model
 
 import (
 	"database/sql/driver"
 	"encoding/json"
 	"time"
 
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
-	commonRelay "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/lurus-api/constant"
+	"github.com/QuantumNous/lurus-api/dto"
+	commonRelay "github.com/QuantumNous/lurus-api/relay/common"
 )
 
 type TaskStatus string

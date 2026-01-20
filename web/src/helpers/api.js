@@ -1,4 +1,4 @@
-/*
+﻿/*
 Copyright (C) 2025 QuantumNous
 
 This program is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ export let API = axios.create({
     ? import.meta.env.VITE_REACT_APP_SERVER_URL
     : '',
   headers: {
-    'New-API-User': getUserIdFromLocalStorage(),
+    'lurus-api-User': getUserIdFromLocalStorage(),
     'Cache-Control': 'no-store',
   },
 });
@@ -72,7 +72,7 @@ export function updateAPI() {
       ? import.meta.env.VITE_REACT_APP_SERVER_URL
       : '',
     headers: {
-      'New-API-User': getUserIdFromLocalStorage(),
+      'lurus-api-User': getUserIdFromLocalStorage(),
       'Cache-Control': 'no-store',
     },
   });

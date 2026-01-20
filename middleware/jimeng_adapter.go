@@ -1,4 +1,4 @@
-package middleware
+﻿package middleware
 
 import (
 	"bytes"
@@ -6,9 +6,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	relayconstant "github.com/QuantumNous/new-api/relay/constant"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/constant"
+	relayconstant "github.com/QuantumNous/lurus-api/relay/constant"
 	"github.com/gin-gonic/gin"
 )
 

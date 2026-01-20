@@ -1,11 +1,11 @@
-package passkey
+﻿package passkey
 
 import (
 	"fmt"
 	"strconv"
 	"strings"
 
-	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/lurus-api/model"
 
 	webauthn "github.com/go-webauthn/webauthn/webauthn"
 )

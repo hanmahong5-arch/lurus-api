@@ -1,4 +1,4 @@
-package model
+﻿package model
 
 import (
 	"fmt"
@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/constant"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/driver/mysql"

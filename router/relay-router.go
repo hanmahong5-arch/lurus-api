@@ -1,11 +1,11 @@
-package router
+﻿package router
 
 import (
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/controller"
-	"github.com/QuantumNous/new-api/middleware"
-	"github.com/QuantumNous/new-api/relay"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/lurus-api/constant"
+	"github.com/QuantumNous/lurus-api/controller"
+	"github.com/QuantumNous/lurus-api/middleware"
+	"github.com/QuantumNous/lurus-api/relay"
+	"github.com/QuantumNous/lurus-api/types"
 
 	"github.com/gin-gonic/gin"
 )

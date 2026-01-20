@@ -1,4 +1,4 @@
-package minimax
+﻿package minimax
 
 import (
 	"encoding/hex"
@@ -9,9 +9,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/QuantumNous/new-api/dto"
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/lurus-api/dto"
+	relaycommon "github.com/QuantumNous/lurus-api/relay/common"
+	"github.com/QuantumNous/lurus-api/types"
 	"github.com/gin-gonic/gin"
 )
 

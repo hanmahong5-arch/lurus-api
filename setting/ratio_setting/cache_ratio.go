@@ -1,10 +1,10 @@
-package ratio_setting
+﻿package ratio_setting
 
 import (
 	"encoding/json"
 	"sync"
 
-	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/lurus-api/common"
 )
 
 var defaultCacheRatio = map[string]float64{

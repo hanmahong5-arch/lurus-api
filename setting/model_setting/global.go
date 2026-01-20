@@ -1,9 +1,9 @@
-package model_setting
+﻿package model_setting
 
 import (
 	"strings"
 
-	"github.com/QuantumNous/new-api/setting/config"
+	"github.com/QuantumNous/lurus-api/setting/config"
 )
 
 type GlobalSettings struct {

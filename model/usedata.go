@@ -1,11 +1,11 @@
-package model
+﻿package model
 
 import (
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/lurus-api/common"
 	"gorm.io/gorm"
 )
 

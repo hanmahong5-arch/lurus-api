@@ -1,11 +1,11 @@
-package middleware
+﻿package middleware
 
 import (
 	"compress/gzip"
 	"io"
 	"net/http"
 
-	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/lurus-api/constant"
 	"github.com/andybalholm/brotli"
 	"github.com/gin-gonic/gin"
 )

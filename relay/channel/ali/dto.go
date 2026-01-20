@@ -1,11 +1,11 @@
-package ali
+﻿package ali
 
 import (
 	"strings"
 
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/lurus-api/dto"
+	"github.com/QuantumNous/lurus-api/logger"
+	"github.com/QuantumNous/lurus-api/service"
 	"github.com/gin-gonic/gin"
 )
 

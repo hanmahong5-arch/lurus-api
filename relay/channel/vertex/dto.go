@@ -1,7 +1,7 @@
-package vertex
+﻿package vertex
 
 import (
-	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/lurus-api/dto"
 )
 
 type VertexAIClaudeRequest struct {

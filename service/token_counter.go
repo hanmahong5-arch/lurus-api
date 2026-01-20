@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 import (
 	"errors"
@@ -13,12 +13,12 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	constant2 "github.com/QuantumNous/new-api/relay/constant"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/constant"
+	"github.com/QuantumNous/lurus-api/dto"
+	relaycommon "github.com/QuantumNous/lurus-api/relay/common"
+	constant2 "github.com/QuantumNous/lurus-api/relay/constant"
+	"github.com/QuantumNous/lurus-api/types"
 
 	"github.com/gin-gonic/gin"
 )

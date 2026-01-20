@@ -1,10 +1,10 @@
-# MySQL to PostgreSQL Migration Guide / MySQL 迁移到 PostgreSQL 指南
+﻿# MySQL to PostgreSQL Migration Guide / MySQL 迁移到 PostgreSQL 指南
 
 ## Overview / 概述
 
-This guide helps you migrate your new-api database from MySQL to PostgreSQL.
+This guide helps you migrate your lurus-api database from MySQL to PostgreSQL.
 
-本指南帮助你将 new-api 数据库从 MySQL 迁移到 PostgreSQL。
+本指南帮助你将 lurus-api 数据库从 MySQL 迁移到 PostgreSQL。
 
 ## Prerequisites / 前提条件
 
@@ -33,18 +33,18 @@ GRANT ALL ON SCHEMA public TO new_api_user;
 
 ## Step 2: Initialize PostgreSQL Schema / 初始化 PostgreSQL Schema
 
-The easiest way is to let GORM auto-migrate the schema. Start new-api with PostgreSQL DSN once:
+The easiest way is to let GORM auto-migrate the schema. Start lurus-api with PostgreSQL DSN once:
 
-最简单的方式是让 GORM 自动迁移 schema。使用 PostgreSQL DSN 启动 new-api 一次：
+最简单的方式是让 GORM 自动迁移 schema。使用 PostgreSQL DSN 启动 lurus-api 一次：
 
 ```bash
 # Set PostgreSQL DSN temporarily
 # 临时设置 PostgreSQL DSN
 export SQL_DSN="postgres://new_api_user:your_password@localhost:5432/new_api"
 
-# Start new-api to auto-create tables
-# 启动 new-api 自动创建表
-./new-api
+# Start lurus-api to auto-create tables
+# 启动 lurus-api 自动创建表
+./lurus-api
 
 # Stop after tables are created (Ctrl+C)
 # 表创建后停止（Ctrl+C）
@@ -111,9 +111,9 @@ SQL_DSN=postgres://new_api_user:password@localhost:5432/new_api
 ## Step 5: Verify Migration / 验证迁移
 
 ```bash
-# Start new-api with new PostgreSQL configuration
-# 使用新的 PostgreSQL 配置启动 new-api
-./new-api
+# Start lurus-api with new PostgreSQL configuration
+# 使用新的 PostgreSQL 配置启动 lurus-api
+./lurus-api
 
 # Check logs for any errors
 # 检查日志是否有错误
@@ -129,9 +129,9 @@ SQL_DSN=postgres://new_api_user:password@localhost:5432/new_api
 | JSON type | JSON | JSONB (more features) |
 | AUTO_INCREMENT | AUTO_INCREMENT | SERIAL or IDENTITY |
 
-The new-api codebase already handles these differences automatically.
+The lurus-api codebase already handles these differences automatically.
 
-new-api 代码库已经自动处理了这些差异。
+lurus-api 代码库已经自动处理了这些差异。
 
 ## Troubleshooting / 故障排除
 
@@ -179,9 +179,9 @@ If you need to rollback to MySQL:
 
 如果需要回滚到 MySQL：
 
-1. Stop new-api / 停止 new-api
+1. Stop lurus-api / 停止 lurus-api
 2. Change `SQL_DSN` back to MySQL DSN / 将 `SQL_DSN` 改回 MySQL DSN
-3. Start new-api / 启动 new-api
+3. Start lurus-api / 启动 lurus-api
 
 Your MySQL database should still have all the original data (if you didn't modify it).
 

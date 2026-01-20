@@ -1,0 +1,79 @@
+# Meilisearch Docker Compose Configuration / Meilisearch Docker Compose 配置
+# This file provides a standalone Meilisearch service for lurus-api
+# 本文件为 lurus-api 提供独立的 Meilisearch 服务
+
+version: '3.8'
+
+services:
+  meilisearch:
+    image: getmeili/meilisearch:v1.10
+    container_name: lurus-meilisearch
+    restart: always
+    ports:
+      - "7700:7700"
+    environment:
+      # Master key for authentication - CHANGE THIS IN PRODUCTION!
+      # 认证主密钥 - 生产环境请务必修改!
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-your-secure-master-key-change-me}
+
+      # Environment: development or production
+      # 环境: development 或 production
+      - MEILI_ENV=${MEILI_ENV:-production}
+
+      # Disable analytics and telemetry
+      # 禁用分析和遥测
+      - MEILI_NO_ANALYTICS=true
+
+      # HTTP address binding
+      # HTTP 地址绑定
+      - MEILI_HTTP_ADDR=0.0.0.0:7700
+
+      # Maximum payload size (100MB)
+      # 最大负载大小 (100MB)
+      - MEILI_HTTP_PAYLOAD_SIZE_LIMIT=104857600
+
+      # Log level: ERROR, WARN, INFO, DEBUG, TRACE
+      # 日志级别
+      - MEILI_LOG_LEVEL=${MEILI_LOG_LEVEL:-INFO}
+
+    volumes:
+      # Persistent data storage
+      # 持久化数据存储
+      - ./meili_data:/meili_data
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    networks:
+      - lurus-network
+
+networks:
+  lurus-network:
+    driver: bridge
+
+# Usage / 使用方法:
+# 1. Set MEILI_MASTER_KEY in .env file
+#    在 .env 文件中设置 MEILI_MASTER_KEY
+#
+# 2. Start Meilisearch service:
+#    启动 Meilisearch 服务:
+#    docker-compose -f docker-compose.meilisearch.yml up -d
+#
+# 3. Check service status:
+#    检查服务状态:
+#    docker-compose -f docker-compose.meilisearch.yml ps
+#
+# 4. View logs:
+#    查看日志:
+#    docker-compose -f docker-compose.meilisearch.yml logs -f
+#
+# 5. Stop service:
+#    停止服务:
+#    docker-compose -f docker-compose.meilisearch.yml down
+#
+# Access Meilisearch: http://localhost:7700
+# 访问 Meilisearch: http://localhost:7700

@@ -1,4 +1,4 @@
-package types
+﻿package types
 
 import (
 	"encoding/json"
@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/lurus-api/common"
 )
 
 type OpenAIError struct {

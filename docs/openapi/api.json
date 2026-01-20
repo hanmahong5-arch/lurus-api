@@ -1,4 +1,4 @@
-{
+﻿{
   "openapi": "3.0.1",
   "info": {
     "title": "后台管理接口",
@@ -5139,7 +5139,7 @@
       "NewApiUser1": {
         "type": "apiKey",
         "in": "header",
-        "name": "New-Api-User",
+        "name": "lurus-api-User",
         "description": "用户ID请求头，必须与当前登录用户ID匹配，使用Session或AccessToken认证时必须提供"
       },
       "Combination222": {

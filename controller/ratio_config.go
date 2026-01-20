@@ -1,9 +1,9 @@
-package controller
+﻿package controller
 
 import (
 	"net/http"
 
-	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"github.com/QuantumNous/lurus-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
 )

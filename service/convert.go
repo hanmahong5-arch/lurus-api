@@ -1,15 +1,15 @@
-package service
+﻿package service
 
 import (
 	"encoding/json"
 	"fmt"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/relay/channel/openrouter"
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/constant"
+	"github.com/QuantumNous/lurus-api/dto"
+	"github.com/QuantumNous/lurus-api/relay/channel/openrouter"
+	relaycommon "github.com/QuantumNous/lurus-api/relay/common"
 )
 
 func ClaudeToOpenAIRequest(claudeRequest dto.ClaudeRequest, info *relaycommon.RelayInfo) (*dto.GeneralOpenAIRequest, error) {

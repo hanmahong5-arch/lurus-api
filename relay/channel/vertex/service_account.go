@@ -1,4 +1,4 @@
-package vertex
+﻿package vertex
 
 import (
 	"crypto/rsa"
@@ -10,8 +10,8 @@ import (
 	"net/url"
 	"strings"
 
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/service"
+	relaycommon "github.com/QuantumNous/lurus-api/relay/common"
+	"github.com/QuantumNous/lurus-api/service"
 
 	"github.com/bytedance/gopkg/cache/asynccache"
 	"github.com/golang-jwt/jwt/v5"

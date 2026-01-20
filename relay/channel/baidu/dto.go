@@ -1,9 +1,9 @@
-package baidu
+﻿package baidu
 
 import (
 	"time"
 
-	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/lurus-api/dto"
 )
 
 type BaiduMessage struct {

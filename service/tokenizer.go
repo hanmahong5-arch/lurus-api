@@ -1,9 +1,9 @@
-package service
+﻿package service
 
 import (
 	"sync"
 
-	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/lurus-api/common"
 	"github.com/tiktoken-go/tokenizer"
 	"github.com/tiktoken-go/tokenizer/codec"
 )

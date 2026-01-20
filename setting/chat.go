@@ -1,9 +1,9 @@
-package setting
+﻿package setting
 
 import (
 	"encoding/json"
 
-	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/lurus-api/common"
 )
 
 var Chats = []map[string]string{

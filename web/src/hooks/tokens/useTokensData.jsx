@@ -1,4 +1,4 @@
-/*
+﻿/*
 Copyright (C) 2025 QuantumNous
 
 This program is free software: you can redistribute it and/or modify
@@ -137,7 +137,7 @@ export const useTokensData = (openFluentNotification) => {
     }
     if (url.includes('{cherryConfig}') === true) {
       let cherryConfig = {
-        id: 'new-api',
+        id: 'lurus-api',
         baseUrl: serverAddress,
         apiKey: 'sk-' + record.key,
       };

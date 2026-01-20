@@ -1,4 +1,4 @@
-package controller
+﻿package controller
 
 import (
 	"fmt"
@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/model"
 
 	"github.com/gin-gonic/gin"
 )

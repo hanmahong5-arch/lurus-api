@@ -1,4 +1,4 @@
-package middleware
+﻿package middleware
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/lurus-api/common"
 
 	"github.com/gin-gonic/gin"
 )

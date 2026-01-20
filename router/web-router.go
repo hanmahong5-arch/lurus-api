@@ -1,13 +1,13 @@
-package router
+﻿package router
 
 import (
 	"embed"
 	"net/http"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/controller"
-	"github.com/QuantumNous/new-api/middleware"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/controller"
+	"github.com/QuantumNous/lurus-api/middleware"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"

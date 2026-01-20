@@ -1,4 +1,4 @@
-package model
+﻿package model
 
 import (
 	"context"
@@ -7,9 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/logger"
+	"github.com/QuantumNous/lurus-api/search"
+	"github.com/QuantumNous/lurus-api/types"
 
 	"github.com/gin-gonic/gin"
 
@@ -93,6 +94,36 @@ func RecordLog(userId int, logType int, content string) {
 	err := LOG_DB.Create(log).Error
 	if err != nil {
 		common.SysLog("failed to record log: " + err.Error())
+	} else {
+		// Async sync to Meilisearch
+		// 异步同步到 Meilisearch
+		search.SyncLogAsync(convertLogToSearchLog(log))
+	}
+}
+
+// convertLogToSearchLog converts model.Log to search.Log
+// 将 model.Log 转换为 search.Log
+func convertLogToSearchLog(log *Log) *search.Log {
+	return &search.Log{
+		Id:               log.Id,
+		CreatedAt:        log.CreatedAt,
+		Type:             log.Type,
+		UserId:           log.UserId,
+		Username:         log.Username,
+		TokenId:          log.TokenId,
+		TokenName:        log.TokenName,
+		ModelName:        log.ModelName,
+		Content:          log.Content,
+		Quota:            log.Quota,
+		PromptTokens:     log.PromptTokens,
+		CompletionTokens: log.CompletionTokens,
+		UseTime:          log.UseTime,
+		IsStream:         log.IsStream,
+		ChannelId:        log.ChannelId,
+		ChannelName:      log.ChannelName,
+		Group:            log.Group,
+		Ip:               log.Ip,
+		Other:            log.Other,
 	}
 }
 
@@ -135,6 +166,10 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	err := LOG_DB.Create(log).Error
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
+	} else {
+		// Async sync to Meilisearch
+		// 异步同步到 Meilisearch
+		search.SyncLogAsync(convertLogToSearchLog(log))
 	}
 }
 
@@ -194,6 +229,10 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	err := LOG_DB.Create(log).Error
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
+	} else {
+		// Async sync to Meilisearch
+		// 异步同步到 Meilisearch
+		search.SyncLogAsync(convertLogToSearchLog(log))
 	}
 	if common.DataExportEnabled {
 		gopool.Go(func() {

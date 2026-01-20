@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 import (
 	"bytes"
@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/setting/system_setting"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/dto"
+	"github.com/QuantumNous/lurus-api/setting/system_setting"
 )
 
 // WebhookPayload webhook 通知的负载数据

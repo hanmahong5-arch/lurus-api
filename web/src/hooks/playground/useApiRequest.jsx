@@ -1,4 +1,4 @@
-/*
+﻿/*
 Copyright (C) 2025 QuantumNous
 
 This program is free software: you can redistribute it and/or modify
@@ -189,7 +189,7 @@ export const useApiRequest = (
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'New-Api-User': getUserIdFromLocalStorage(),
+            'lurus-api-User': getUserIdFromLocalStorage(),
           },
           body: JSON.stringify(payload),
         });
@@ -301,7 +301,7 @@ export const useApiRequest = (
       const source = new SSE(API_ENDPOINTS.CHAT_COMPLETIONS, {
         headers: {
           'Content-Type': 'application/json',
-          'New-Api-User': getUserIdFromLocalStorage(),
+          'lurus-api-User': getUserIdFromLocalStorage(),
         },
         method: 'POST',
         payload: JSON.stringify(payload),

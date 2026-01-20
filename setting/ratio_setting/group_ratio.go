@@ -1,13 +1,13 @@
-package ratio_setting
+﻿package ratio_setting
 
 import (
 	"encoding/json"
 	"errors"
 	"sync"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/setting/config"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/setting/config"
+	"github.com/QuantumNous/lurus-api/types"
 )
 
 var groupRatio = map[string]float64{

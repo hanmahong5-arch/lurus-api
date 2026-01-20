@@ -1,4 +1,4 @@
-# Stalwart Mail Server Integration
+﻿# Stalwart Mail Server Integration
 
 ## Overview / 概述
 
@@ -217,15 +217,15 @@ docker ps --filter "name=stalwart"
 docker logs stalwart-mail
 ```
 
-## Integration with New-API / 与 New-API 集成
+## Integration with lurus-api / 与 lurus-api 集成
 
-Stalwart runs as a separate service stack. To share the network with New-API:
+Stalwart runs as a separate service stack. To share the network with lurus-api:
 
 ```bash
-# Start New-API first
+# Start lurus-api first
 docker-compose up -d
 
-# Then start Stalwart (auto-joins new-api_default network)
+# Then start Stalwart (auto-joins lurus-api_default network)
 cd deploy && docker-compose -f docker-compose.mail.yml up -d
 ```
 

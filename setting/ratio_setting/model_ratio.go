@@ -1,12 +1,12 @@
-package ratio_setting
+﻿package ratio_setting
 
 import (
 	"encoding/json"
 	"strings"
 	"sync"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/lurus-api/common"
+	"github.com/QuantumNous/lurus-api/setting/operation_setting"
 )
 
 // from songquanpeng/one-api

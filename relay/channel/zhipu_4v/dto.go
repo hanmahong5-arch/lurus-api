@@ -1,10 +1,10 @@
-package zhipu_4v
+﻿package zhipu_4v
 
 import (
 	"time"
 
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/lurus-api/dto"
+	"github.com/QuantumNous/lurus-api/types"
 )
 
 //	type ZhipuMessage struct {
