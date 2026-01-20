@@ -36,6 +36,21 @@ spec:
                 secretKeyRef:
                   name: lurus-api-secrets
                   key: SQL_DSN
+            - name: MEILISEARCH_ENABLED
+              value: "true"
+            - name: MEILISEARCH_HOST
+              value: "http://meilisearch:7700"
+            - name: MEILISEARCH_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: meilisearch-secrets
+                  key: MEILI_MASTER_KEY
+            - name: MEILISEARCH_SYNC_ENABLED
+              value: "true"
+            - name: MEILISEARCH_SYNC_BATCH_SIZE
+              value: "1000"
+            - name: MEILISEARCH_WORKER_COUNT
+              value: "2"
           resources:
             requests:
               memory: "256Mi"
