@@ -308,6 +308,16 @@ func SetApiRouter(router *gin.Engine) {
 			subscriptionRoute.POST("/create", middleware.UserAuth(), middleware.CriticalRateLimit(), controller.CreateSubscription)
 			subscriptionRoute.POST("/cancel", middleware.UserAuth(), controller.CancelSubscriptionRenewal)
 
+			// Payment routes
+			subscriptionRoute.POST("/pay", middleware.UserAuth(), middleware.CriticalRateLimit(), controller.InitiateSubscriptionPayment)
+			subscriptionRoute.GET("/:id/payment-status", middleware.UserAuth(), controller.GetSubscriptionPaymentStatus)
+			subscriptionRoute.POST("/:id/retry-payment", middleware.UserAuth(), middleware.CriticalRateLimit(), controller.RetrySubscriptionPayment)
+
+			// Payment webhooks (public, no auth - verified by signature)
+			subscriptionRoute.POST("/stripe/webhook", controller.StripeSubscriptionWebhook)
+			subscriptionRoute.POST("/creem/webhook", controller.CreemSubscriptionWebhook)
+			subscriptionRoute.GET("/epay/notify", controller.EpaySubscriptionNotify)
+
 			// Admin routes
 			adminSubRoute := subscriptionRoute.Group("/admin")
 			adminSubRoute.Use(middleware.AdminAuth())

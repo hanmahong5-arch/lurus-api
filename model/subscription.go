@@ -232,3 +232,127 @@ func RenewSubscription(sub *Subscription, days int) error {
 		"status":     SubscriptionStatusActive,
 	}).Error
 }
+
+// UpdateSubscriptionPaymentInfo updates payment-related fields
+func UpdateSubscriptionPaymentInfo(id int, paymentId string, paymentMethod string) error {
+	return DB.Model(&Subscription{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"payment_id":     paymentId,
+		"payment_method": paymentMethod,
+	}).Error
+}
+
+// GormDB is a type alias for gorm.DB to use in transactions
+type GormDB = gorm.DB
+
+// ActivateSubscriptionTx activates subscription within an existing transaction
+func ActivateSubscriptionTx(tx *gorm.DB, sub *Subscription) error {
+	// Update subscription status
+	if err := tx.Model(sub).Updates(map[string]interface{}{
+		"status":     SubscriptionStatusActive,
+		"started_at": time.Now(),
+	}).Error; err != nil {
+		return err
+	}
+
+	// Sync config to user
+	updates := map[string]interface{}{
+		"daily_quota":      sub.DailyQuota,
+		"base_group":       sub.BaseGroup,
+		"fallback_group":   sub.FallbackGroup,
+		"daily_used":       0, // Reset daily used on new subscription
+		"last_daily_reset": common.GetTimestamp(),
+	}
+	if sub.BaseGroup != "" {
+		updates["group"] = sub.BaseGroup
+	}
+	if sub.TotalQuota > 0 {
+		updates["quota"] = gorm.Expr("quota + ?", sub.TotalQuota)
+	}
+
+	return tx.Model(&User{}).Where("id = ?", sub.UserId).Updates(updates).Error
+}
+
+// RefundSubscription handles subscription refund - reverts user benefits
+func RefundSubscription(sub *Subscription) error {
+	tx := DB.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Update subscription status to cancelled
+	if err := tx.Model(sub).Updates(map[string]interface{}{
+		"status":     SubscriptionStatusCancelled,
+		"auto_renew": false,
+	}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// Revert user quota if subscription was active
+	if sub.Status == SubscriptionStatusActive {
+		// Check if user has other active subscriptions
+		var activeCount int64
+		if err := tx.Model(&Subscription{}).Where(
+			"user_id = ? AND status = ? AND expires_at > ? AND id != ?",
+			sub.UserId, SubscriptionStatusActive, time.Now(), sub.Id,
+		).Count(&activeCount).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+
+		// If no other active subscription, reset user group
+		if activeCount == 0 {
+			updates := map[string]interface{}{
+				"daily_quota":    0,
+				"base_group":     "",
+				"fallback_group": "",
+				"group":          "default",
+			}
+			if err := tx.Model(&User{}).Where("id = ?", sub.UserId).Updates(updates).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+
+		// Deduct quota if was granted
+		if sub.TotalQuota > 0 {
+			if err := tx.Model(&User{}).Where("id = ?", sub.UserId).
+				Update("quota", gorm.Expr("GREATEST(quota - ?, 0)", sub.TotalQuota)).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+	}
+
+	common.SysLog("Subscription refunded: id=" + string(rune(sub.Id)) + " user_id=" + string(rune(sub.UserId)))
+	return tx.Commit().Error
+}
+
+// GetPendingSubscriptionsOlderThan retrieves pending subscriptions older than specified duration
+func GetPendingSubscriptionsOlderThan(duration time.Duration, limit int) ([]*Subscription, error) {
+	var subs []*Subscription
+	cutoffTime := time.Now().Add(-duration)
+	err := DB.Where("status = ? AND created_at < ?", SubscriptionStatusPending, cutoffTime).
+		Limit(limit).
+		Find(&subs).Error
+	return subs, err
+}
+
+// GetUserPendingSubscriptionCount returns count of pending subscriptions for a user
+func GetUserPendingSubscriptionCount(userId int) (int64, error) {
+	var count int64
+	err := DB.Model(&Subscription{}).Where("user_id = ? AND status = ?", userId, SubscriptionStatusPending).Count(&count).Error
+	return count, err
+}
+
+// CleanupStalePendingSubscription marks old pending subscription as expired
+func CleanupStalePendingSubscription(sub *Subscription) error {
+	return DB.Model(sub).Updates(map[string]interface{}{
+		"status": SubscriptionStatusExpired,
+	}).Error
+}

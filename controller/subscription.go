@@ -136,6 +136,16 @@ func CreateSubscription(c *gin.Context) {
 		return
 	}
 
+	// Validate payment method
+	validMethods := map[string]bool{"stripe": true, "creem": true, "epay": true}
+	if !validMethods[req.PaymentMethod] {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid payment method. Supported: stripe, creem, epay",
+		})
+		return
+	}
+
 	// Get plan
 	plan := model.GetSubscriptionPlanByCode(req.PlanCode)
 	if plan == nil {
@@ -150,6 +160,24 @@ func CreateSubscription(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "This plan is currently unavailable",
+		})
+		return
+	}
+
+	// Edge case: Check if user already has a pending subscription
+	// Limit to 1 pending subscription per user to prevent abuse
+	pendingCount, err := model.GetUserPendingSubscriptionCount(userId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to check pending subscriptions",
+		})
+		return
+	}
+	if pendingCount > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "You already have a pending subscription. Please complete or cancel it first.",
 		})
 		return
 	}
