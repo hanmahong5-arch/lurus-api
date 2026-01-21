@@ -28,8 +28,9 @@ import {
   copy,
   getQuotaPerUnit,
 } from '../../helpers';
-import { Modal, Toast } from '@douyinfe/semi-ui';
+import { Modal, Toast, Tabs, TabPane } from '@douyinfe/semi-ui';
 import { useTranslation } from 'react-i18next';
+import SubscriptionPurchase from './SubscriptionPurchase';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
 
@@ -662,62 +663,69 @@ const TopUp = () => {
         )}
       </Modal>
 
-      {/* 用户信息头部 */}
-      <div className='space-y-6'>
-        <div className='grid grid-cols-1 lg:grid-cols-12 gap-6'>
-          {/* 左侧充值区域 */}
-          <div className='lg:col-span-7 space-y-6 w-full'>
-            <RechargeCard
-              t={t}
-              enableOnlineTopUp={enableOnlineTopUp}
-              enableStripeTopUp={enableStripeTopUp}
-              enableCreemTopUp={enableCreemTopUp}
-              creemProducts={creemProducts}
-              creemPreTopUp={creemPreTopUp}
-              presetAmounts={presetAmounts}
-              selectedPreset={selectedPreset}
-              selectPresetAmount={selectPresetAmount}
-              formatLargeNumber={formatLargeNumber}
-              priceRatio={priceRatio}
-              topUpCount={topUpCount}
-              minTopUp={minTopUp}
-              renderQuotaWithAmount={renderQuotaWithAmount}
-              getAmount={getAmount}
-              setTopUpCount={setTopUpCount}
-              setSelectedPreset={setSelectedPreset}
-              renderAmount={renderAmount}
-              amountLoading={amountLoading}
-              payMethods={payMethods}
-              preTopUp={preTopUp}
-              paymentLoading={paymentLoading}
-              payWay={payWay}
-              redemptionCode={redemptionCode}
-              setRedemptionCode={setRedemptionCode}
-              topUp={topUp}
-              isSubmitting={isSubmitting}
-              topUpLink={topUpLink}
-              openTopUpLink={openTopUpLink}
-              userState={userState}
-              renderQuota={renderQuota}
-              statusLoading={statusLoading}
-              topupInfo={topupInfo}
-              onOpenHistory={handleOpenHistory}
-            />
-          </div>
+      {/* Tab 切换：余额充值 / 订阅套餐 */}
+      <Tabs type='card' defaultActiveKey='balance'>
+        <TabPane tab={t('余额充值')} itemKey='balance'>
+          <div className='space-y-6'>
+            <div className='grid grid-cols-1 lg:grid-cols-12 gap-6'>
+              {/* 左侧充值区域 */}
+              <div className='lg:col-span-7 space-y-6 w-full'>
+                <RechargeCard
+                  t={t}
+                  enableOnlineTopUp={enableOnlineTopUp}
+                  enableStripeTopUp={enableStripeTopUp}
+                  enableCreemTopUp={enableCreemTopUp}
+                  creemProducts={creemProducts}
+                  creemPreTopUp={creemPreTopUp}
+                  presetAmounts={presetAmounts}
+                  selectedPreset={selectedPreset}
+                  selectPresetAmount={selectPresetAmount}
+                  formatLargeNumber={formatLargeNumber}
+                  priceRatio={priceRatio}
+                  topUpCount={topUpCount}
+                  minTopUp={minTopUp}
+                  renderQuotaWithAmount={renderQuotaWithAmount}
+                  getAmount={getAmount}
+                  setTopUpCount={setTopUpCount}
+                  setSelectedPreset={setSelectedPreset}
+                  renderAmount={renderAmount}
+                  amountLoading={amountLoading}
+                  payMethods={payMethods}
+                  preTopUp={preTopUp}
+                  paymentLoading={paymentLoading}
+                  payWay={payWay}
+                  redemptionCode={redemptionCode}
+                  setRedemptionCode={setRedemptionCode}
+                  topUp={topUp}
+                  isSubmitting={isSubmitting}
+                  topUpLink={topUpLink}
+                  openTopUpLink={openTopUpLink}
+                  userState={userState}
+                  renderQuota={renderQuota}
+                  statusLoading={statusLoading}
+                  topupInfo={topupInfo}
+                  onOpenHistory={handleOpenHistory}
+                />
+              </div>
 
-          {/* 右侧信息区域 */}
-          <div className='lg:col-span-5'>
-            <InvitationCard
-              t={t}
-              userState={userState}
-              renderQuota={renderQuota}
-              setOpenTransfer={setOpenTransfer}
-              affLink={affLink}
-              handleAffLinkClick={handleAffLinkClick}
-            />
+              {/* 右侧信息区域 */}
+              <div className='lg:col-span-5'>
+                <InvitationCard
+                  t={t}
+                  userState={userState}
+                  renderQuota={renderQuota}
+                  setOpenTransfer={setOpenTransfer}
+                  affLink={affLink}
+                  handleAffLinkClick={handleAffLinkClick}
+                />
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </TabPane>
+        <TabPane tab={t('订阅套餐')} itemKey='subscription'>
+          <SubscriptionPurchase />
+        </TabPane>
+      </Tabs>
     </div>
   );
 };
