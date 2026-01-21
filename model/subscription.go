@@ -131,6 +131,7 @@ func ActivateSubscription(sub *Subscription) error {
 		"fallback_group":   userConfig.FallbackGroup,
 		"daily_used":       0, // Reset daily used on new subscription
 		"last_daily_reset": common.GetTimestamp(),
+		"role":             common.RoleSubscriberUser, // Upgrade to Subscriber role
 	}
 	if userConfig.BaseGroup != "" {
 		updates["group"] = userConfig.BaseGroup
@@ -175,14 +176,27 @@ func ExpireSubscription(sub *Subscription) error {
 		return err
 	}
 
-	// If no other active subscription, reset user to default group
+	// If no other active subscription, reset user to default state
 	if activeCount == 0 {
+		// Get user's current role to decide if we should downgrade
+		var user User
+		if err := tx.Select("role").Where("id = ?", sub.UserId).First(&user).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+
 		updates := map[string]interface{}{
 			"daily_quota":    0,
 			"base_group":     "",
 			"fallback_group": "",
 			"group":          "default",
 		}
+
+		// Only downgrade Subscriber to Common; keep Admin/Root roles unchanged
+		if user.Role == common.RoleSubscriberUser {
+			updates["role"] = common.RoleCommonUser
+		}
+
 		if err := tx.Model(&User{}).Where("id = ?", sub.UserId).Updates(updates).Error; err != nil {
 			tx.Rollback()
 			return err
@@ -261,6 +275,7 @@ func ActivateSubscriptionTx(tx *gorm.DB, sub *Subscription) error {
 		"fallback_group":   sub.FallbackGroup,
 		"daily_used":       0, // Reset daily used on new subscription
 		"last_daily_reset": common.GetTimestamp(),
+		"role":             common.RoleSubscriberUser, // Upgrade to Subscriber role
 	}
 	if sub.BaseGroup != "" {
 		updates["group"] = sub.BaseGroup
@@ -305,14 +320,27 @@ func RefundSubscription(sub *Subscription) error {
 			return err
 		}
 
-		// If no other active subscription, reset user group
+		// If no other active subscription, reset user group and role
 		if activeCount == 0 {
+			// Get user's current role to decide if we should downgrade
+			var user User
+			if err := tx.Select("role").Where("id = ?", sub.UserId).First(&user).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
+
 			updates := map[string]interface{}{
 				"daily_quota":    0,
 				"base_group":     "",
 				"fallback_group": "",
 				"group":          "default",
 			}
+
+			// Only downgrade Subscriber to Common; keep Admin/Root roles unchanged
+			if user.Role == common.RoleSubscriberUser {
+				updates["role"] = common.RoleCommonUser
+			}
+
 			if err := tx.Model(&User{}).Where("id = ?", sub.UserId).Updates(updates).Error; err != nil {
 				tx.Rollback()
 				return err

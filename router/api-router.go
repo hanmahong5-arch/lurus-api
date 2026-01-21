@@ -327,6 +327,9 @@ func SetApiRouter(router *gin.Engine) {
 				adminSubRoute.POST("/grant", controller.AdminCreateSubscription)
 				adminSubRoute.POST("/:id/activate", controller.AdminActivateSubscription)
 				adminSubRoute.POST("/:id/expire", controller.AdminExpireSubscription)
+				// User subscription info and role management
+				adminSubRoute.GET("/user/:id", controller.AdminGetUserSubscriptionInfo)
+				adminSubRoute.POST("/user/:id/role", controller.AdminUpdateUserRole)
 			}
 		}
 	}

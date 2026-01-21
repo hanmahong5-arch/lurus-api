@@ -1179,3 +1179,23 @@ func ProcessDailyQuotaReset(userId int) error {
 
 	return nil
 }
+
+// IsSubscriber checks if user has subscriber role or higher
+func (user *User) IsSubscriber() bool {
+	return user.Role >= common.RoleSubscriberUser
+}
+
+// GetUserRole returns user role by ID
+func GetUserRole(id int) (int, error) {
+	var role int
+	err := DB.Model(&User{}).Where("id = ?", id).Select("role").Scan(&role).Error
+	return role, err
+}
+
+// UpdateUserRole updates user role
+func UpdateUserRole(id int, role int) error {
+	if !common.IsValidateRole(role) {
+		return errors.New("invalid role")
+	}
+	return DB.Model(&User{}).Where("id = ?", id).Update("role", role).Error
+}

@@ -46,6 +46,31 @@ export function isRoot() {
   return user.role >= 100;
 }
 
+export function isSubscriber() {
+  let user = localStorage.getItem('user');
+  if (!user) return false;
+  user = JSON.parse(user);
+  return user.role >= 5;
+}
+
+export function getUserRole() {
+  let user = localStorage.getItem('user');
+  if (!user) return 0;
+  user = JSON.parse(user);
+  return user.role || 0;
+}
+
+export function getRoleName(role) {
+  const names = {
+    0: 'Guest',
+    1: 'User',
+    5: 'Subscriber',
+    10: 'Admin',
+    100: 'Root',
+  };
+  return names[role] || 'Unknown';
+}
+
 export function getSystemName() {
   let system_name = localStorage.getItem('system_name');
   if (!system_name) return 'Lurus API';
