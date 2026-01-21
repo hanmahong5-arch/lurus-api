@@ -709,6 +709,130 @@ deploy/k8s/deployment.yaml       # 添加 Meilisearch 环境变量配置 (lines 
 
 ---
 
-**文档版本 / Document Version:** v1.2
-**最后更新 / Last Updated:** 2026-01-20 22:52 CST
-**状态 / Status:** ✅ Meilisearch 已启用并运行 / Meilisearch Enabled and Running
+---
+
+### 阶段 10: 订阅系统与统一身份集成 / Phase 10: Subscription System & Unified Identity Integration
+
+**时间 / Date:** 2026-01-21
+
+**需求 / Requirements:**
+1. 实现完整的订阅管理系统，支持周卡/月卡/季卡/年卡
+2. 集成 Zitadel OIDC 进行统一身份认证
+3. 与 identity-service 同步用户信息
+
+**实施方法 / Implementation Method:**
+
+#### A. 订阅系统 / Subscription System
+
+**新增文件 / New Files:**
+
+| 文件 / File | 功能 / Function |
+|-------------|-----------------|
+| `model/subscription.go` | 订阅数据模型，包含 CRUD 操作、激活/过期处理 |
+| `model/subscription_plan.go` | 订阅计划配置，支持从 Option 动态加载 |
+| `model/subscription_cron.go` | 定时任务：每 5 分钟检查过期订阅 |
+| `controller/subscription.go` | 完整的 REST API（用户端 + 管理端） |
+
+**修改文件 / Modified Files:**
+
+| 文件 / File | 修改内容 / Changes |
+|-------------|-------------------|
+| `model/main.go` | 添加 `Subscription` 表到数据库迁移 |
+| `router/api-router.go` | 添加订阅相关路由 (`/api/subscription/*`) |
+| `main.go` | 添加订阅计划初始化和定时任务启动 |
+
+**订阅计划配置 / Subscription Plans:**
+
+| Plan Code | Name | Days | Daily Quota | Total Quota | Price (CNY) |
+|-----------|------|------|-------------|-------------|-------------|
+| weekly | Weekly Plan | 7 | 500K | 5M | 19.9 |
+| monthly | Monthly Plan | 30 | 1M | 50M | 59.9 |
+| quarterly | Quarterly Plan | 90 | 2M | 200M | 149.9 |
+| yearly | Yearly Plan | 365 | 5M | Unlimited | 499.9 |
+
+**API 路由 / API Routes:**
+
+```
+# Public
+GET  /api/subscription/plans              # 获取订阅计划列表
+
+# User (需要登录)
+GET  /api/subscription/current            # 获取当前订阅状态
+GET  /api/subscription/history            # 获取订阅历史
+POST /api/subscription/create             # 创建订阅订单
+POST /api/subscription/cancel             # 取消自动续费
+
+# Admin
+GET  /api/subscription/admin/all          # 获取所有订阅
+PUT  /api/subscription/admin/plans        # 更新订阅计划
+POST /api/subscription/admin/grant        # 管理员赠送订阅
+POST /api/subscription/admin/:id/activate # 手动激活订阅
+POST /api/subscription/admin/:id/expire   # 手动过期订阅
+```
+
+#### B. Zitadel OIDC 集成 / Zitadel OIDC Integration
+
+**新增文件 / New Files:**
+
+| 文件 / File | 功能 / Function |
+|-------------|-----------------|
+| `common/identity_client.go` | Identity Service 客户端，用于用户同步 |
+
+**修改文件 / Modified Files:**
+
+| 文件 / File | 修改内容 / Changes |
+|-------------|-------------------|
+| `controller/oidc.go` | OIDC 登录后异步同步用户到 identity-service |
+| `deploy/k8s/deployment.yaml` | 添加 OIDC 和 Identity Service 环境变量 |
+
+**环境变量配置 / Environment Variables:**
+
+```yaml
+# Zitadel OIDC Configuration
+OIDC_ENABLED: "true"
+OIDC_CLIENT_ID: (from secret)
+OIDC_CLIENT_SECRET: (from secret)
+OIDC_WELL_KNOWN: "https://auth.lurus.cn/.well-known/openid-configuration"
+OIDC_AUTHORIZATION_ENDPOINT: "https://auth.lurus.cn/oauth/v2/authorize"
+OIDC_TOKEN_ENDPOINT: "https://auth.lurus.cn/oauth/v2/token"
+OIDC_USERINFO_ENDPOINT: "https://auth.lurus.cn/oidc/v1/userinfo"
+
+# Identity Service
+IDENTITY_SERVICE_URL: "http://identity-service.lurus-identity.svc.cluster.local:18104"
+```
+
+**实现的功能 / Implemented Features:**
+
+✅ **订阅系统 / Subscription System**
+- 完整的订阅数据模型（Subscription 表）
+- 4 种默认订阅计划（周/月/季/年）
+- 订阅创建、激活、过期、取消流程
+- 自动过期检查定时任务（每 5 分钟）
+- 用户配额自动同步（激活时更新 User 表）
+- 组降级机制（订阅过期后自动降级）
+- 管理员赠送订阅功能
+- 完整的 REST API
+
+✅ **OIDC 集成 / OIDC Integration**
+- Zitadel OIDC 登录支持
+- 登录后异步同步用户到 identity-service
+- 统一身份映射管理
+
+**技术亮点 / Technical Highlights:**
+1. 订阅激活使用事务保证数据一致性
+2. 定时任务使用批量处理避免内存溢出
+3. OIDC 同步使用 goroutine 异步执行，不阻塞登录流程
+4. 支持从 Option 表动态加载订阅计划配置
+
+**下一步计划 / Next Steps:**
+- [ ] 集成支付网关（Stripe/Epay/Creem）
+- [ ] 添加订阅 Webhook 回调
+- [ ] 实现自动续费逻辑
+- [ ] 前端订阅页面开发
+- [ ] 部署到 K3s 集群验证
+
+---
+
+**文档版本 / Document Version:** v1.3
+**最后更新 / Last Updated:** 2026-01-21
+**状态 / Status:** 🚧 订阅系统开发中 / Subscription System In Progress

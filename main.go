@@ -286,5 +286,13 @@ func InitResources() error {
 		}
 	}
 
+	// Initialize subscription plans
+	// 初始化订阅计划
+	model.InitSubscriptionPlans()
+
+	// Start subscription cron jobs
+	// 启动订阅定时任务
+	model.StartSubscriptionCronJobs()
+
 	return nil
 }

@@ -295,5 +295,29 @@ func SetApiRouter(router *gin.Engine) {
 			deploymentsRoute.POST("/:id/extend", controller.ExtendDeployment)
 			deploymentsRoute.DELETE("/:id", controller.DeleteDeployment)
 		}
+
+		// Subscription management
+		subscriptionRoute := apiRouter.Group("/subscription")
+		{
+			// Public routes
+			subscriptionRoute.GET("/plans", controller.GetSubscriptionPlans)
+
+			// User routes
+			subscriptionRoute.GET("/current", middleware.UserAuth(), controller.GetCurrentSubscription)
+			subscriptionRoute.GET("/history", middleware.UserAuth(), controller.GetSubscriptionHistory)
+			subscriptionRoute.POST("/create", middleware.UserAuth(), middleware.CriticalRateLimit(), controller.CreateSubscription)
+			subscriptionRoute.POST("/cancel", middleware.UserAuth(), controller.CancelSubscriptionRenewal)
+
+			// Admin routes
+			adminSubRoute := subscriptionRoute.Group("/admin")
+			adminSubRoute.Use(middleware.AdminAuth())
+			{
+				adminSubRoute.GET("/all", controller.AdminGetAllSubscriptions)
+				adminSubRoute.PUT("/plans", controller.AdminUpdateSubscriptionPlans)
+				adminSubRoute.POST("/grant", controller.AdminCreateSubscription)
+				adminSubRoute.POST("/:id/activate", controller.AdminActivateSubscription)
+				adminSubRoute.POST("/:id/expire", controller.AdminExpireSubscription)
+			}
+		}
 	}
 }

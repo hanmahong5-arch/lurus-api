@@ -36,6 +36,7 @@ spec:
                 secretKeyRef:
                   name: lurus-api-secrets
                   key: SQL_DSN
+            # MeiliSearch Configuration
             - name: MEILISEARCH_ENABLED
               value: "true"
             - name: MEILISEARCH_HOST
@@ -51,6 +52,32 @@ spec:
               value: "1000"
             - name: MEILISEARCH_WORKER_COUNT
               value: "2"
+            # Zitadel OIDC Configuration (Unified Identity)
+            - name: OIDC_ENABLED
+              value: "true"
+            - name: OIDC_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: lurus-api-secrets
+                  key: ZITADEL_CLIENT_ID
+                  optional: true
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: lurus-api-secrets
+                  key: ZITADEL_CLIENT_SECRET
+                  optional: true
+            - name: OIDC_WELL_KNOWN
+              value: "https://auth.lurus.cn/.well-known/openid-configuration"
+            - name: OIDC_AUTHORIZATION_ENDPOINT
+              value: "https://auth.lurus.cn/oauth/v2/authorize"
+            - name: OIDC_TOKEN_ENDPOINT
+              value: "https://auth.lurus.cn/oauth/v2/token"
+            - name: OIDC_USERINFO_ENDPOINT
+              value: "https://auth.lurus.cn/oidc/v1/userinfo"
+            # Identity Service for user sync
+            - name: IDENTITY_SERVICE_URL
+              value: "http://identity-service.lurus-identity.svc.cluster.local:18104"
           resources:
             requests:
               memory: "256Mi"
