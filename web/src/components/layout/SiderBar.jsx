@@ -37,6 +37,7 @@ const routerMap = {
   redemption: '/console/redemption',
   topup: '/console/topup',
   user: '/console/user',
+  subscription: '/console/subscription',
   log: '/console/log',
   midjourney: '/console/midjourney',
   setting: '/console/setting',
