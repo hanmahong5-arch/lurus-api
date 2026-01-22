@@ -16,6 +16,10 @@ type verificationValue struct {
 const (
 	EmailVerificationPurpose = "v"
 	PasswordResetPurpose     = "r"
+	PhoneLoginPurpose        = "pl"
+	PhoneRegisterPurpose     = "pr"
+	PhoneBindPurpose         = "pb"
+	PhoneResetPurpose        = "prs"
 )
 
 var verificationMutex sync.Mutex
@@ -75,4 +79,42 @@ func init() {
 	verificationMutex.Lock()
 	defer verificationMutex.Unlock()
 	verificationMap = make(map[string]verificationValue)
+}
+
+// Phone verification helper functions
+
+// GeneratePhoneVerificationCode generates a 6-digit numeric code for phone verification
+func GeneratePhoneVerificationCode() string {
+	return GenerateSmsCode()
+}
+
+// RegisterPhoneVerificationCode stores a verification code for a phone number
+func RegisterPhoneVerificationCode(phone string, code string, purpose string) {
+	RegisterVerificationCodeWithKey(phone, code, purpose)
+}
+
+// VerifyPhoneCode verifies and deletes the code if correct
+func VerifyPhoneCode(phone string, code string, purpose string) bool {
+	if !VerifyCodeWithKey(phone, code, purpose) {
+		return false
+	}
+	// Delete the code after successful verification (one-time use)
+	DeleteKey(phone, purpose)
+	return true
+}
+
+// GetPhonePurpose converts purpose string to constant
+func GetPhonePurpose(purpose string) string {
+	switch purpose {
+	case "login":
+		return PhoneLoginPurpose
+	case "register":
+		return PhoneRegisterPurpose
+	case "bind":
+		return PhoneBindPurpose
+	case "reset":
+		return PhoneResetPurpose
+	default:
+		return PhoneLoginPurpose
+	}
 }

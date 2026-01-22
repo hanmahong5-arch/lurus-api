@@ -48,11 +48,22 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.POST("/verify", middleware.UserAuth(), middleware.CriticalRateLimit(), controller.UniversalVerify)
 		apiRouter.GET("/verify/status", middleware.UserAuth(), controller.GetVerificationStatus)
 
+		// SMS verification routes
+		smsRoute := apiRouter.Group("/sms")
+		{
+			smsRoute.GET("/status", controller.GetSMSStatus)
+			smsRoute.POST("/send", middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.SendSmsVerification)
+		}
+
+		// Invitation code validation (public)
+		apiRouter.GET("/invitation/validate", controller.ValidateInviteCode)
+
 		userRoute := apiRouter.Group("/user")
 		{
 			userRoute.POST("/register", middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.Register)
 			userRoute.POST("/login", middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.Login)
 			userRoute.POST("/login/2fa", middleware.CriticalRateLimit(), controller.Verify2FALogin)
+			userRoute.POST("/login_sms", middleware.CriticalRateLimit(), controller.LoginWithSms)
 			userRoute.POST("/passkey/login/begin", middleware.CriticalRateLimit(), controller.PasskeyLoginBegin)
 			userRoute.POST("/passkey/login/finish", middleware.CriticalRateLimit(), controller.PasskeyLoginFinish)
 			//userRoute.POST("/tokenlog", middleware.CriticalRateLimit(), controller.TokenLog)
@@ -65,6 +76,7 @@ func SetApiRouter(router *gin.Engine) {
 			{
 				selfRoute.GET("/self/groups", controller.GetUserGroups)
 				selfRoute.GET("/self", controller.GetSelf)
+				selfRoute.POST("/bind_phone", middleware.CriticalRateLimit(), controller.BindPhone)
 				selfRoute.GET("/models", controller.GetUserModels)
 				selfRoute.PUT("/self", controller.UpdateSelf)
 				selfRoute.DELETE("/self", controller.DeleteSelf)
@@ -97,6 +109,9 @@ func SetApiRouter(router *gin.Engine) {
 				// Check-in routes
 				selfRoute.GET("/checkin", controller.GetCheckinStatus)
 				selfRoute.POST("/checkin", middleware.TurnstileCheck(), controller.DoCheckin)
+
+				// User verification status
+				selfRoute.GET("/verification-status", middleware.GetUserVerificationStatus)
 			}
 
 			adminRoute := userRoute.Group("/")
@@ -130,6 +145,27 @@ func SetApiRouter(router *gin.Engine) {
 			optionRoute.PUT("/", controller.UpdateOption)
 			optionRoute.POST("/rest_model_ratio", controller.ResetModelRatio)
 			optionRoute.POST("/migrate_console_setting", controller.MigrateConsoleSetting) // 用于迁移检测的旧键，下个版本会删除
+		}
+
+		// Login configuration management (Root only)
+		loginConfigRoute := apiRouter.Group("/admin/login-config")
+		loginConfigRoute.Use(middleware.RootAuth())
+		{
+			loginConfigRoute.GET("/", controller.AdminGetLoginConfig)
+			loginConfigRoute.PUT("/", controller.AdminUpdateLoginConfig)
+			loginConfigRoute.GET("/modes", controller.AdminGetConfigModes)
+		}
+
+		// Invitation code management (Admin)
+		invitationRoute := apiRouter.Group("/admin/invitation-codes")
+		invitationRoute.Use(middleware.AdminAuth())
+		{
+			invitationRoute.GET("/", controller.AdminListInviteCodes)
+			invitationRoute.GET("/search", controller.AdminSearchInviteCodes)
+			invitationRoute.GET("/stats", controller.AdminGetInviteCodeStats)
+			invitationRoute.POST("/", controller.AdminCreateInviteCodes)
+			invitationRoute.DELETE("/cleanup", controller.AdminCleanupExpiredInviteCodes)
+			invitationRoute.DELETE("/:id", controller.AdminDeleteInviteCode)
 		}
 		ratioSyncRoute := apiRouter.Group("/ratio_sync")
 		ratioSyncRoute.Use(middleware.RootAuth())
@@ -331,6 +367,18 @@ func SetApiRouter(router *gin.Engine) {
 				adminSubRoute.GET("/user/:id", controller.AdminGetUserSubscriptionInfo)
 				adminSubRoute.POST("/user/:id/role", controller.AdminUpdateUserRole)
 			}
+		}
+
+		// Internal API Key management (admin only)
+		apiKeyRoute := apiRouter.Group("/api-keys")
+		apiKeyRoute.Use(middleware.AdminAuth())
+		{
+			apiKeyRoute.GET("/", controller.AdminListApiKeys)
+			apiKeyRoute.GET("/scopes", controller.AdminGetApiKeyScopes)
+			apiKeyRoute.POST("/", controller.AdminCreateApiKey)
+			apiKeyRoute.PUT("/:id", controller.AdminUpdateApiKey)
+			apiKeyRoute.DELETE("/:id", controller.AdminDeleteApiKey)
+			apiKeyRoute.PUT("/:id/toggle", controller.AdminToggleApiKey)
 		}
 	}
 }

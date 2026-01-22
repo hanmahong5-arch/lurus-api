@@ -145,6 +145,40 @@ func InitOptionMap() {
 	common.OptionMap["AutomaticDisableKeywords"] = operation_setting.AutomaticDisableKeywordsToString()
 	common.OptionMap["ExposeRatioEnabled"] = strconv.FormatBool(ratio_setting.IsExposeRatioEnabled())
 
+	// SMS Configuration
+	common.OptionMap["SMSEnabled"] = strconv.FormatBool(common.SMSEnabled)
+	common.OptionMap["SMSAccessKeyId"] = common.SMSAccessKeyId
+	common.OptionMap["SMSAccessKeySecret"] = common.SMSAccessKeySecret
+	common.OptionMap["SMSSignName"] = common.SMSSignName
+	common.OptionMap["SMSRegionId"] = common.SMSRegionId
+	common.OptionMap["SMSTemplateLogin"] = ""
+	common.OptionMap["SMSTemplateRegister"] = ""
+	common.OptionMap["SMSTemplateReset"] = ""
+	common.OptionMap["SMSTemplateBind"] = ""
+	common.OptionMap["SMSTemplateDefault"] = ""
+
+	// Phone Verification Configuration
+	common.OptionMap["PhoneVerificationMode"] = common.PhoneVerificationMode
+	common.OptionMap["PhoneRequiredForLogin"] = strconv.FormatBool(common.PhoneRequiredForLogin)
+	common.OptionMap["PhoneRequiredForPasswordReset"] = strconv.FormatBool(common.PhoneRequiredForPasswordReset)
+	common.OptionMap["PhoneRequiredFor2FAChange"] = strconv.FormatBool(common.PhoneRequiredFor2FAChange)
+	common.OptionMap["PhoneRequiredForPayment"] = strconv.FormatBool(common.PhoneRequiredForPayment)
+	common.OptionMap["PhoneRequiredForWithdrawal"] = strconv.FormatBool(common.PhoneRequiredForWithdrawal)
+	common.OptionMap["PhoneRequiredForPhoneBind"] = strconv.FormatBool(common.PhoneRequiredForPhoneBind)
+	common.OptionMap["PhoneRequiredForAccountDelete"] = strconv.FormatBool(common.PhoneRequiredForAccountDelete)
+	common.OptionMap["PhoneRequiredForTokenGenerate"] = strconv.FormatBool(common.PhoneRequiredForTokenGenerate)
+	common.OptionMap["PhoneRequiredForOAuthBind"] = strconv.FormatBool(common.PhoneRequiredForOAuthBind)
+
+	// Registration Configuration
+	common.OptionMap["RegistrationMode"] = common.RegistrationMode
+	common.OptionMap["SMSAutoRegister"] = strconv.FormatBool(common.SMSAutoRegister)
+	common.OptionMap["InviteCodeRequired"] = strconv.FormatBool(common.InviteCodeRequired)
+
+	// Security Configuration
+	common.OptionMap["SensitiveActionRequirePassword"] = strconv.FormatBool(common.SensitiveActionRequirePassword)
+	common.OptionMap["SensitiveActionRequire2FA"] = strconv.FormatBool(common.SensitiveActionRequire2FA)
+	common.OptionMap["SessionTimeoutMinutes"] = strconv.Itoa(common.SessionTimeoutMinutes)
+
 	// 自动添加所有注册的模型配置
 	modelConfigs := config.GlobalConfig.ExportAllConfigs()
 	for k, v := range modelConfigs {
@@ -448,6 +482,86 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.StreamCacheQueueLength, _ = strconv.Atoi(value)
 	case "PayMethods":
 		err = operation_setting.UpdatePayMethodsByJsonString(value)
+	// SMS Configuration
+	case "SMSEnabled":
+		common.SMSEnabled = value == "true"
+		if common.SMSEnabled {
+			// Re-initialize SMS client when enabled
+			if initErr := common.InitSmsClient(); initErr != nil {
+				common.SysLog("Failed to initialize SMS client: " + initErr.Error())
+			}
+		}
+	case "SMSAccessKeyId":
+		common.SMSAccessKeyId = value
+	case "SMSAccessKeySecret":
+		common.SMSAccessKeySecret = value
+	case "SMSSignName":
+		common.SMSSignName = value
+	case "SMSRegionId":
+		common.SMSRegionId = value
+		if common.SMSRegionId == "" {
+			common.SMSRegionId = "cn-hangzhou"
+		}
+
+	// Phone Verification Configuration
+	case "PhoneVerificationMode":
+		// Validate mode value
+		switch value {
+		case common.PhoneVerificationDisabled,
+			common.PhoneVerificationOptional,
+			common.PhoneVerificationRequiredLogin,
+			common.PhoneVerificationRequiredSensitive:
+			common.PhoneVerificationMode = value
+		default:
+			common.PhoneVerificationMode = common.PhoneVerificationOptional
+		}
+	case "PhoneRequiredForLogin":
+		common.PhoneRequiredForLogin = value == "true"
+	case "PhoneRequiredForPasswordReset":
+		common.PhoneRequiredForPasswordReset = value == "true"
+	case "PhoneRequiredFor2FAChange":
+		common.PhoneRequiredFor2FAChange = value == "true"
+	case "PhoneRequiredForPayment":
+		common.PhoneRequiredForPayment = value == "true"
+	case "PhoneRequiredForWithdrawal":
+		common.PhoneRequiredForWithdrawal = value == "true"
+	case "PhoneRequiredForPhoneBind":
+		common.PhoneRequiredForPhoneBind = value == "true"
+	case "PhoneRequiredForAccountDelete":
+		common.PhoneRequiredForAccountDelete = value == "true"
+	case "PhoneRequiredForTokenGenerate":
+		common.PhoneRequiredForTokenGenerate = value == "true"
+	case "PhoneRequiredForOAuthBind":
+		common.PhoneRequiredForOAuthBind = value == "true"
+
+	// Registration Configuration
+	case "RegistrationMode":
+		// Validate mode value
+		switch value {
+		case common.RegistrationModeOpen,
+			common.RegistrationModeInviteOnly,
+			common.RegistrationModeOAuthOnly,
+			common.RegistrationModePhoneVerified,
+			common.RegistrationModeClosed:
+			common.RegistrationMode = value
+		default:
+			common.RegistrationMode = common.RegistrationModeOpen
+		}
+	case "SMSAutoRegister":
+		common.SMSAutoRegister = value == "true"
+	case "InviteCodeRequired":
+		common.InviteCodeRequired = value == "true"
+
+	// Security Configuration
+	case "SensitiveActionRequirePassword":
+		common.SensitiveActionRequirePassword = value == "true"
+	case "SensitiveActionRequire2FA":
+		common.SensitiveActionRequire2FA = value == "true"
+	case "SessionTimeoutMinutes":
+		common.SessionTimeoutMinutes, _ = strconv.Atoi(value)
+		if common.SessionTimeoutMinutes <= 0 {
+			common.SessionTimeoutMinutes = 10080 // Default to 7 days
+		}
 	}
 	return err
 }

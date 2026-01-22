@@ -2,6 +2,7 @@
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/QuantumNous/lurus-api/common"
@@ -383,4 +384,84 @@ func CleanupStalePendingSubscription(sub *Subscription) error {
 	return DB.Model(sub).Updates(map[string]interface{}{
 		"status": SubscriptionStatusExpired,
 	}).Error
+}
+
+// GetActiveSubscriptionByUserId is an alias for GetActiveSubscription (for internal API compatibility)
+func GetActiveSubscriptionByUserId(userId int) (*Subscription, error) {
+	return GetActiveSubscription(userId)
+}
+
+// CreateInternalSubscription creates a subscription granted via internal API
+// This is used for admin grants, promotions, or external system integrations
+func CreateInternalSubscription(userId int, plan *SubscriptionPlan, days int, reason string) (*Subscription, error) {
+	if plan == nil {
+		return nil, errors.New("subscription plan is required")
+	}
+
+	// Calculate expiry time
+	startTime := time.Now()
+	expiresAt := startTime.AddDate(0, 0, days)
+
+	sub := &Subscription{
+		UserId:        userId,
+		PlanCode:      plan.Code,
+		PlanName:      plan.Name,
+		Status:        SubscriptionStatusActive,
+		DailyQuota:    plan.DailyQuota,
+		TotalQuota:    plan.TotalQuota,
+		BaseGroup:     plan.BaseGroup,
+		FallbackGroup: plan.FallbackGroup,
+		StartedAt:     startTime,
+		ExpiresAt:     expiresAt,
+		PaymentMethod: "internal",
+		PaymentId:     "internal_" + common.GetRandomString(16),
+		Amount:        0,
+		Currency:      "CNY",
+		AutoRenew:     false,
+	}
+
+	// Create subscription and activate in a transaction
+	tx := DB.Begin()
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Create the subscription record
+	if err := tx.Create(sub).Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	// Sync config to user (same as ActivateSubscription)
+	updates := map[string]interface{}{
+		"daily_quota":      sub.DailyQuota,
+		"base_group":       sub.BaseGroup,
+		"fallback_group":   sub.FallbackGroup,
+		"daily_used":       0,
+		"last_daily_reset": common.GetTimestamp(),
+		"role":             common.RoleSubscriberUser,
+	}
+	if sub.BaseGroup != "" {
+		updates["group"] = sub.BaseGroup
+	}
+	if sub.TotalQuota > 0 {
+		updates["quota"] = gorm.Expr("quota + ?", sub.TotalQuota)
+	}
+
+	if err := tx.Model(&User{}).Where("id = ?", sub.UserId).Updates(updates).Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, err
+	}
+
+	common.SysLog("Internal subscription created: user_id=" + fmt.Sprintf("%d", userId) + " plan=" + plan.Code + " days=" + fmt.Sprintf("%d", days) + " reason=" + reason)
+	return sub, nil
 }

@@ -150,6 +150,23 @@ func Register(c *gin.Context) {
 		})
 		return
 	}
+
+	// Check registration mode
+	switch common.RegistrationMode {
+	case common.RegistrationModeClosed:
+		c.JSON(http.StatusOK, gin.H{
+			"message": "注册已关闭",
+			"success": false,
+		})
+		return
+	case common.RegistrationModeOAuthOnly:
+		c.JSON(http.StatusOK, gin.H{
+			"message": "请使用第三方账户登录注册",
+			"success": false,
+		})
+		return
+	}
+
 	if !common.PasswordRegisterEnabled {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "管理员关闭了通过密码进行注册，请使用第三方账户验证的形式进行注册",
@@ -157,8 +174,14 @@ func Register(c *gin.Context) {
 		})
 		return
 	}
-	var user model.User
-	err := json.NewDecoder(c.Request.Body).Decode(&user)
+
+	// Parse request with extended fields
+	var req struct {
+		model.User
+		InviteCode string `json:"invite_code"` // Invitation code for invite-only registration
+		PhoneCode  string `json:"phone_code"`  // Phone verification code for phone-verified registration
+	}
+	err := json.NewDecoder(c.Request.Body).Decode(&req)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -166,6 +189,8 @@ func Register(c *gin.Context) {
 		})
 		return
 	}
+
+	user := req.User
 	if err := common.Validate.Struct(&user); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -173,6 +198,60 @@ func Register(c *gin.Context) {
 		})
 		return
 	}
+
+	// Check registration mode-specific requirements
+	switch common.RegistrationMode {
+	case common.RegistrationModeInviteOnly:
+		if req.InviteCode == "" {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "需要邀请码才能注册",
+			})
+			return
+		}
+		if !model.ValidateInvitationCode(req.InviteCode) {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "邀请码无效或已被使用",
+			})
+			return
+		}
+	case common.RegistrationModePhoneVerified:
+		if user.Phone == "" || req.PhoneCode == "" {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "需要验证手机号才能注册",
+			})
+			return
+		}
+		purpose := common.GetPhonePurpose("register")
+		if !common.VerifyPhoneCode(user.Phone, req.PhoneCode, purpose) {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "手机验证码错误或已过期",
+			})
+			return
+		}
+	}
+
+	// Check if invite code is required (independent of registration mode)
+	if common.InviteCodeRequired && common.RegistrationMode != common.RegistrationModeInviteOnly {
+		if req.InviteCode == "" {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "需要邀请码才能注册",
+			})
+			return
+		}
+		if !model.ValidateInvitationCode(req.InviteCode) {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "邀请码无效或已被使用",
+			})
+			return
+		}
+	}
+
 	if common.EmailVerificationEnabled {
 		if user.Email == "" || user.VerificationCode == "" {
 			c.JSON(http.StatusOK, gin.H{
@@ -231,6 +310,15 @@ func Register(c *gin.Context) {
 		})
 		return
 	}
+
+	// Use invitation code if provided (mark as used)
+	if req.InviteCode != "" {
+		if err := model.UseInvitationCode(req.InviteCode, insertedUser.Id); err != nil {
+			// Log error but don't fail registration - code was validated earlier
+			common.SysLog(fmt.Sprintf("Failed to mark invitation code as used: %v", err))
+		}
+	}
+
 	// 生成默认令牌
 	if constant.GenerateDefaultToken {
 		key, err := common.GenerateKey()

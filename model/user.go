@@ -50,6 +50,8 @@ type User struct {
 	InviterId        int            `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
 	DeletedAt        gorm.DeletedAt `gorm:"index"`
 	LinuxDOId        string         `json:"linux_do_id" gorm:"column:linux_do_id;index"`
+	Phone            string         `json:"phone" gorm:"column:phone;index"`
+	PhoneVerified    bool           `json:"phone_verified" gorm:"column:phone_verified;default:false"`
 	Setting          string         `json:"setting" gorm:"type:text;column:setting"`
 	Remark           string         `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
 	StripeCustomer   string         `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
@@ -1198,4 +1200,62 @@ func UpdateUserRole(id int, role int) error {
 		return errors.New("invalid role")
 	}
 	return DB.Model(&User{}).Where("id = ?", id).Update("role", role).Error
+}
+
+// ===== Phone Related Functions =====
+
+// GetUserByPhone retrieves a user by phone number
+func GetUserByPhone(phone string) (*User, error) {
+	if phone == "" {
+		return nil, errors.New("phone is empty")
+	}
+	var user User
+	err := DB.Where("phone = ?", phone).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// IsPhoneAlreadyTaken checks if a phone number is already registered
+func IsPhoneAlreadyTaken(phone string) bool {
+	return DB.Unscoped().Where("phone = ?", phone).Find(&User{}).RowsAffected == 1
+}
+
+// UpdateUserPhone updates user's phone number
+func UpdateUserPhone(id int, phone string) error {
+	return DB.Model(&User{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"phone":          phone,
+		"phone_verified": true,
+	}).Error
+}
+
+// CreateUserByPhone creates a new user with phone number
+func CreateUserByPhone(phone string) (*User, error) {
+	// Generate a unique username based on phone
+	username := "user_" + phone[len(phone)-4:] + "_" + common.GetRandomString(4)
+
+	user := &User{
+		Username:      username,
+		Phone:         phone,
+		PhoneVerified: true,
+		Status:        common.UserStatusEnabled,
+		Role:          common.RoleCommonUser,
+		Password:      "", // No password for phone-only registration
+	}
+
+	err := user.Insert(0)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+// FillUserByPhone fills user by phone number
+func (user *User) FillUserByPhone() error {
+	if user.Phone == "" {
+		return errors.New("phone is empty")
+	}
+	return DB.Where("phone = ?", user.Phone).First(user).Error
 }

@@ -46,6 +46,73 @@ func GetStatus(c *gin.Context) {
 	passkeySetting := system_setting.GetPasskeySettings()
 	legalSetting := system_setting.GetLegalSettings()
 
+	// Build login methods configuration for frontend
+	loginMethods := gin.H{
+		"password": gin.H{
+			"enabled":              common.PasswordLoginEnabled,
+			"registration_enabled": common.PasswordRegisterEnabled,
+		},
+		"sms": gin.H{
+			"enabled":       common.SMSEnabled,
+			"auto_register": common.SMSAutoRegister,
+			"bind_enabled":  common.SMSEnabled,
+		},
+		"github": gin.H{
+			"enabled":   common.GitHubOAuthEnabled,
+			"client_id": common.GitHubClientId,
+		},
+		"discord": gin.H{
+			"enabled":   system_setting.GetDiscordSettings().Enabled,
+			"client_id": system_setting.GetDiscordSettings().ClientId,
+		},
+		"linuxdo": gin.H{
+			"enabled":             common.LinuxDOOAuthEnabled,
+			"client_id":           common.LinuxDOClientId,
+			"minimum_trust_level": common.LinuxDOMinimumTrustLevel,
+		},
+		"telegram": gin.H{
+			"enabled":  common.TelegramOAuthEnabled,
+			"bot_name": common.TelegramBotName,
+		},
+		"wechat": gin.H{
+			"enabled": common.WeChatAuthEnabled,
+			"qrcode":  common.WeChatAccountQRCodeImageURL,
+		},
+		"oidc": gin.H{
+			"enabled":                system_setting.GetOIDCSettings().Enabled,
+			"client_id":              system_setting.GetOIDCSettings().ClientId,
+			"authorization_endpoint": system_setting.GetOIDCSettings().AuthorizationEndpoint,
+		},
+		"passkey": gin.H{
+			"enabled":           passkeySetting.Enabled,
+			"display_name":      passkeySetting.RPDisplayName,
+			"rp_id":             passkeySetting.RPID,
+			"user_verification": passkeySetting.UserVerification,
+		},
+	}
+
+	// Build phone verification configuration
+	phoneVerification := gin.H{
+		"mode":         common.PhoneVerificationMode,
+		"required_for": GetPhoneRequiredActions(),
+	}
+
+	// Build registration configuration
+	registration := gin.H{
+		"mode":                        common.RegistrationMode,
+		"enabled":                     common.RegisterEnabled,
+		"email_verification_required": common.EmailVerificationEnabled,
+		"phone_verification_required": common.RegistrationMode == common.RegistrationModePhoneVerified,
+		"invite_code_required":        common.InviteCodeRequired || common.RegistrationMode == common.RegistrationModeInviteOnly,
+		"turnstile_required":          common.TurnstileCheckEnabled,
+	}
+
+	// Build security configuration
+	security := gin.H{
+		"2fa_available":     true,
+		"passkey_available": passkeySetting.Enabled,
+	}
+
 	data := gin.H{
 		"version":                     common.Version,
 		"start_time":                  common.StartTime,
@@ -115,6 +182,13 @@ func GetStatus(c *gin.Context) {
 		"user_agreement_enabled":      legalSetting.UserAgreement != "",
 		"privacy_policy_enabled":      legalSetting.PrivacyPolicy != "",
 		"checkin_enabled":             operation_setting.GetCheckinSetting().Enabled,
+
+		// New: Frontend login configuration
+		"login_methods":      loginMethods,
+		"phone_verification": phoneVerification,
+		"registration":       registration,
+		"security":           security,
+		"sms_enabled":        common.SMSEnabled,
 	}
 
 	// 根据启用状态注入可选内容

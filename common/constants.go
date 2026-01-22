@@ -211,3 +211,57 @@ const (
 	TopUpStatusSuccess = "success"
 	TopUpStatusExpired = "expired"
 )
+
+// Phone Verification Modes - controls when phone verification is required
+const (
+	PhoneVerificationDisabled          = "disabled"           // Phone verification completely disabled
+	PhoneVerificationOptional          = "optional"           // Phone verification is optional (default)
+	PhoneVerificationRequiredLogin     = "required_login"     // Phone verification required for login
+	PhoneVerificationRequiredSensitive = "required_sensitive" // Phone verification required for sensitive actions
+)
+
+// Registration Modes - controls how users can register
+const (
+	RegistrationModeOpen          = "open"           // Open registration (default)
+	RegistrationModeInviteOnly    = "invite_only"    // Invitation code required
+	RegistrationModeOAuthOnly     = "oauth_only"     // Only OAuth registration allowed
+	RegistrationModePhoneVerified = "phone_verified" // Phone verification required for registration
+	RegistrationModeClosed        = "closed"         // Registration closed
+)
+
+// Sensitive Action Types - actions that may require additional verification
+const (
+	SensitiveActionPayment        = "payment"
+	SensitiveActionWithdrawal     = "withdrawal"
+	SensitiveActionPasswordChange = "password_change"
+	SensitiveAction2FAChange      = "2fa_change"
+	SensitiveActionPhoneBind      = "phone_bind"
+	SensitiveActionOAuthBind      = "oauth_bind"
+	SensitiveActionAccountDelete  = "account_delete"
+	SensitiveActionTokenGenerate  = "token_generate"
+)
+
+// Login and Registration Configuration Variables
+var (
+	// Phone Verification Configuration
+	PhoneVerificationMode           = PhoneVerificationOptional // Current phone verification mode
+	PhoneRequiredForLogin           = false                     // Require phone verification for login
+	PhoneRequiredForPasswordReset   = false                     // Require phone for password reset
+	PhoneRequiredFor2FAChange       = false                     // Require phone for 2FA changes
+	PhoneRequiredForPayment         = false                     // Require phone for payment operations
+	PhoneRequiredForWithdrawal      = false                     // Require phone for withdrawal
+	PhoneRequiredForPhoneBind       = false                     // Require old phone verification to bind new phone
+	PhoneRequiredForAccountDelete   = false                     // Require phone for account deletion
+	PhoneRequiredForTokenGenerate   = false                     // Require phone for API token generation
+	PhoneRequiredForOAuthBind       = false                     // Require phone for OAuth binding
+
+	// Registration Configuration
+	RegistrationMode     = RegistrationModeOpen // Current registration mode
+	SMSAutoRegister      = true                 // Auto-register new users via SMS login
+	InviteCodeRequired   = false                // Require invitation code for registration
+
+	// Security Configuration
+	SensitiveActionRequirePassword = false // Require password re-entry for sensitive actions
+	SensitiveActionRequire2FA      = false // Require 2FA for sensitive actions
+	SessionTimeoutMinutes          = 10080 // Session timeout in minutes (7 days default)
+)
