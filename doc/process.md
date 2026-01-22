@@ -833,6 +833,623 @@ IDENTITY_SERVICE_URL: "http://identity-service.lurus-identity.svc.cluster.local:
 
 ---
 
-**文档版本 / Document Version:** v1.3
-**最后更新 / Last Updated:** 2026-01-21
-**状态 / Status:** 🚧 订阅系统开发中 / Subscription System In Progress
+---
+
+### 阶段 11: 项目文档重构 / Phase 11: Documentation Restructuring
+
+**时间 / Date:** 2026-01-22
+
+**需求 / Requirements:**
+1. 重构项目文档体系，确保敏感信息安全
+2. 创建敏感信息专用文件并添加到 .gitignore
+3. 创建项目级开发指南 (CLAUDE.md)
+4. 更新 README.md 移除敏感信息，添加 API 文档链接
+
+**实施方法 / Implementation Method:**
+1. 创建 `重要信息.md` 存放敏感配置
+2. 更新 `.gitignore` 忽略敏感文件
+3. 创建 `CLAUDE.md` 项目开发指南
+4. 更新 `README.md` 安全化处理
+
+**修改/新增内容 / Modified/Added Content:**
+
+**新增文件 / New Files:**
+
+| 文件 / File | 功能 / Function |
+|-------------|-----------------|
+| `重要信息.md` | 敏感信息存储文件（生产配置、密钥、账号等）|
+| `CLAUDE.md` | 项目开发指南（技术栈、编码规范、文件读取规则）|
+
+**修改文件 / Modified Files:**
+
+| 文件 / File | 修改内容 / Changes |
+|-------------|-------------------|
+| `.gitignore` | 添加 `重要信息.md` 到忽略列表 |
+| `README.md` | 移除敏感信息，添加 API 文档章节 |
+| `doc/process.md` | 添加本阶段开发记录 |
+
+**README.md 具体修改 / README.md Changes:**
+
+| 原内容 / Original | 替换为 / Replaced With |
+|------------------|----------------------|
+| `密码: 123456` | `密码: (首次登录后请立即修改)` |
+| `your-company` | `lurus-project` |
+| `your-registry` | `ghcr.io/lurus-project` |
+| `password` (数据库密码) | `<YOUR_DB_PASSWORD>` |
+| `your-master-key` | `<YOUR_MEILISEARCH_KEY>` |
+| `support@yourcompany.com` | `support@lurus.cn` |
+
+**新增章节 / New Sections:**
+
+1. **在线 API 文档 / Online API Documentation**
+   - 文档地址: https://docs.lurus.cn/
+   - API 入口: https://api.lurus.cn/
+
+2. **API 端点概览 / API Endpoints Overview**
+   - 认证 API (4 个端点)
+   - 令牌管理 (4 个端点)
+   - AI 模型中继 (4 个端点)
+   - 搜索 API (3 个端点)
+
+**实现的功能 / Implemented Features:**
+
+✅ **安全性增强 / Security Enhancement**
+- 敏感信息（密码、密钥）从 README.md 中移除
+- 创建专用敏感信息文件并 gitignore
+- 使用占位符替代真实凭证
+
+✅ **文档体系完善 / Documentation System**
+- 项目级开发指南 (CLAUDE.md)
+- 清晰的文件读取规则
+- 技术栈和编码规范说明
+
+✅ **API 文档可访问性 / API Documentation Accessibility**
+- 添加在线文档链接
+- API 端点概览表格
+- 清晰的导航指引
+
+**文件结构更新 / Updated File Structure:**
+
+```
+lurus-api/
+├── CLAUDE.md              # 项目开发指南 (NEW)
+├── README.md              # 更新后的项目说明
+├── 重要信息.md            # 敏感信息文件 (NEW, gitignored)
+├── .gitignore             # 更新后的忽略规则
+└── doc/
+    ├── process.md         # 开发进度（本文件）
+    └── ...
+```
+
+**验证结果 / Verification:**
+
+✅ `.gitignore` 已添加 `重要信息.md`
+✅ `README.md` 无敏感信息（密码、密钥均为占位符）
+✅ `CLAUDE.md` 包含完整开发指南
+✅ API 文档链接已添加
+
+---
+
+---
+
+### 阶段 12: 前端包管理器迁移 / Phase 12: Frontend Package Manager Migration
+
+**时间 / Date:** 2026-01-22
+
+**需求 / Requirements:**
+将项目文档中的 npm 命令统一迁移到 bun，保持与实际构建配置一致。
+
+**背景 / Background:**
+项目已在以下位置使用 bun：
+- `web/bun.lock` - 锁文件
+- `Dockerfile` - 使用 `oven/bun:latest` 镜像
+- `.github/workflows/release.yml` - Web 构建
+- `CLAUDE.md` - 开发指南
+
+但 `README.md` 仍使用 npm 命令，需要统一。
+
+**实施方法 / Implementation Method:**
+1. 更新 README.md 中的前端开发命令
+2. 确认 CLAUDE.md 格式正确
+3. 检查其他文档是否有遗漏
+4. Electron 部分暂不处理（保留 npm，因为 electron-builder 兼容性未验证）
+
+**修改内容 / Changes Made:**
+
+| 文件 / File | 修改内容 / Changes |
+|-------------|-------------------|
+| `README.md` | 第 88-92 行：`npm install` → `bun install`，`npm run dev` → `bun run dev` |
+
+**修改前 / Before:**
+```bash
+# 4. 前端开发（可选）/ Frontend development (optional)
+cd web
+npm install
+npm run dev
+```
+
+**修改后 / After:**
+```bash
+# 4. 前端开发（可选）/ Frontend development (optional)
+cd web
+bun install
+bun run dev
+```
+
+**验证结果 / Verification:**
+
+✅ `README.md` 已更新为 bun 命令
+✅ `CLAUDE.md` 已使用 bun 命令
+✅ `doc/process.md` 无 npm 命令（本文件）
+✅ `DEPLOYMENT.md` 无前端命令
+⚠️ `electron/README.md` 保留 npm（Electron 部分暂不迁移）
+
+**技术说明 / Technical Notes:**
+- Electron 部分保留 npm 的原因：electron-builder 与 bun 的兼容性未经测试
+- 如果需要迁移 Electron，建议先在本地测试 `bun install && bun run build`
+- Web 前端和 Electron 桌面端可以独立使用不同的包管理器
+
+**实现的功能 / Implemented Features:**
+
+✅ 文档命令统一为 bun
+✅ 保持与 CI/CD 配置一致
+✅ 避免用户按文档操作时的困惑
+
+---
+
+---
+
+### 阶段 13: Ailurus 设计系统实现 / Phase 13: Ailurus Design System Implementation
+
+**时间 / Date:** 2026-01-23
+
+**需求 / Requirements:**
+实现 "Ailurus" 设计哲学（高端舒适 + 赛博朋克森林），包括：
+1. 强制使用 framer-motion 做高级动效
+2. 所有元素必须有弹性入场动画和交互反馈（物理回弹感）
+3. 使用"有色阴影" (Luminous Depth) - 不用默认黑色阴影，用发光阴影
+4. 添加噪点质感 (Texture) - 消除"廉价塑料感"
+
+**实施方法 / Implementation Method:**
+
+1. **添加 framer-motion 依赖**
+   - 更新 package.json 添加 `framer-motion@^11.18.0`
+   - 运行 bun install 安装依赖
+
+2. **扩展 Tailwind 配置**
+   - 添加 Ailurus 色彩系统（小熊猫主题色）
+   - 添加自定义动画关键帧
+   - 添加发光阴影工具类
+   - 添加渐变背景工具类
+   - 添加自定义缓动函数
+
+3. **更新全局样式 (index.css)**
+   - 添加 Google Fonts 导入（Inter, Plus Jakarta Sans）
+   - 添加噪点纹理覆盖层
+   - 添加毛玻璃效果工具类
+   - 添加发光阴影样式
+   - 添加动画工具类
+
+4. **创建 Ailurus UI 组件库**
+   - motion.js - 运动系统（弹簧配置、变体）
+   - AilurusCard.jsx - 毛玻璃卡片组件
+   - AilurusButton.jsx - 弹簧动画按钮
+   - AilurusInput.jsx - 动画输入框
+   - AilurusAuthLayout.jsx - 认证页面布局
+   - index.js - 统一导出
+
+**修改/新增内容 / Modified/Added Content:**
+
+**修改文件 / Modified Files:**
+
+| 文件 / File | 修改内容 / Changes |
+|-------------|-------------------|
+| `web/package.json` | 添加 framer-motion 依赖 |
+| `web/tailwind.config.js` | 添加 Ailurus 色彩系统、动画、阴影、渐变 |
+| `web/src/index.css` | 添加 Ailurus 全局样式（噪点、毛玻璃、发光阴影）|
+
+**新增文件 / New Files:**
+
+| 文件 / File | 功能 / Function |
+|-------------|-----------------|
+| `web/src/components/ailurus-ui/motion.js` | 运动系统：弹簧配置、入场变体、交互变体 |
+| `web/src/components/ailurus-ui/AilurusCard.jsx` | 毛玻璃卡片：悬停动画、发光阴影、子组件 |
+| `web/src/components/ailurus-ui/AilurusButton.jsx` | 动画按钮：弹簧交互、渐变、多种变体 |
+| `web/src/components/ailurus-ui/AilurusInput.jsx` | 动画输入框：焦点动画、浮动标签、错误状态 |
+| `web/src/components/ailurus-ui/AilurusAuthLayout.jsx` | 认证布局：动画背景、毛玻璃面板 |
+| `web/src/components/ailurus-ui/index.js` | 统一导出所有组件和运动工具 |
+
+**Ailurus 色彩系统 / Color Palette:**
+
+| 名称 / Name | 颜色代码 / Color | 用途 / Usage |
+|-------------|-----------------|--------------|
+| ailurus-rust | #C25E00 ~ #E67E22 | 主色（小熊猫毛皮色）|
+| ailurus-obsidian | #1A1A1A | 背景深色 |
+| ailurus-forest | #0F172A | 背景森林绿 |
+| ailurus-cream | #FDFBF7 | 文本色 |
+| ailurus-teal | #06B6D4 | 科技强调色 |
+| ailurus-purple | #8B5CF6 | 科技强调色 |
+
+**发光阴影系统 / Luminous Shadows:**
+
+| 名称 / Name | 效果 / Effect |
+|-------------|--------------|
+| shadow-ailurus-rust | 橙色发光阴影 |
+| shadow-ailurus-teal | 青色发光阴影 |
+| shadow-ailurus-purple | 紫色发光阴影 |
+| shadow-ailurus-glass | 玻璃面板阴影 |
+
+**动画系统 / Animation System:**
+
+| 变体 / Variant | 效果 / Effect |
+|----------------|--------------|
+| fadeIn | 淡入 |
+| slideUp | 向上滑入 |
+| scaleIn | 缩放进入 |
+| bounceIn | 弹跳进入 |
+| staggerContainer | 级联容器 |
+| buttonVariants | 按钮交互（悬停+点击）|
+| cardVariants | 卡片交互 |
+
+**实现的功能 / Implemented Features:**
+
+✅ **基础设施 / Foundation**
+- framer-motion 依赖安装成功
+- Tailwind 配置扩展完成
+- 全局样式更新完成
+- 构建验证通过
+
+✅ **组件库 / Component Library**
+- 运动系统（弹簧配置、变体）
+- 毛玻璃卡片组件
+- 动画按钮组件
+- 动画输入框组件
+- 认证页面布局组件
+
+✅ **设计系统 / Design System**
+- 小熊猫主题色彩系统
+- 发光阴影（非黑色阴影）
+- 噪点纹理覆盖
+- 毛玻璃效果
+- 弹簧物理动画
+
+**技术亮点 / Technical Highlights:**
+
+1. **弹簧物理动画**
+   - 使用 framer-motion 的 spring 配置
+   - 模拟真实物理回弹感
+   - 可配置刚度和阻尼
+
+2. **发光阴影 (Luminous Depth)**
+   - 阴影颜色基于元素主色
+   - 橙色卡片有橙色光晕
+   - 避免"脏"的黑色阴影
+
+3. **噪点纹理**
+   - SVG 噪点背景
+   - 极低透明度（2-3%）
+   - 消除纯色"塑料感"
+
+4. **毛玻璃效果**
+   - backdrop-filter: blur(20px)
+   - 内发光边框效果
+   - 深浅模式自适应
+
+**使用示例 / Usage Examples:**
+
+```jsx
+import {
+  AilurusCard,
+  AilurusButton,
+  AilurusInput,
+  AilurusAuthLayout
+} from '@/components/ailurus-ui';
+
+// 使用毛玻璃卡片
+<AilurusCard variant="rust" hoverable>
+  <h3>标题</h3>
+  <p>内容</p>
+</AilurusCard>
+
+// 使用动画按钮
+<AilurusButton variant="primary" size="lg">
+  登录
+</AilurusButton>
+
+// 使用动画输入框
+<AilurusInput
+  label="邮箱"
+  placeholder="请输入邮箱"
+  floating
+/>
+
+// 使用认证布局
+<AilurusAuthLayout
+  logo="/logo.png"
+  title="欢迎回来"
+  systemName="Lurus API"
+>
+  <LoginForm />
+</AilurusAuthLayout>
+```
+
+---
+
+### 阶段 13.1: Ailurus 认证页面实现 / Phase 13.1: Ailurus Authentication Pages
+
+**时间 / Date:** 2026-01-23
+
+**需求 / Requirements:**
+将 Ailurus 设计组件应用到登录和注册页面，创建全新的美观认证体验。
+
+**实施方法 / Implementation Method:**
+
+1. **创建 AilurusLoginForm 组件**
+   - 使用 AilurusAuthLayout 作为页面布局
+   - 使用 AilurusInput 替代 Semi UI Form.Input
+   - 使用 AilurusButton 替代 Semi UI Button
+   - 使用 AilurusOAuthButton 替代 OAuth 按钮
+   - 保留所有原有业务逻辑（OAuth、SMS、Passkey、2FA）
+
+2. **创建 AilurusRegisterForm 组件**
+   - 与登录页面保持一致的设计风格
+   - 支持邮箱验证码、短信注册等功能
+   - 保留所有原有功能
+
+3. **更新路由配置**
+   - 修改 App.jsx 导入新的 Ailurus 组件
+   - 无需修改路由路径
+
+**修改/新增内容 / Modified/Added Content:**
+
+**新增文件 / New Files:**
+
+| 文件 / File | 功能 / Function |
+|-------------|-----------------|
+| `web/src/components/auth/AilurusLoginForm.jsx` | Ailurus 风格登录表单（完整功能）|
+| `web/src/components/auth/AilurusRegisterForm.jsx` | Ailurus 风格注册表单（完整功能）|
+
+**修改文件 / Modified Files:**
+
+| 文件 / File | 修改内容 / Changes |
+|-------------|-------------------|
+| `web/src/App.jsx` | 第 25-26 行：导入路径改为 Ailurus 组件 |
+
+**App.jsx 修改详情 / App.jsx Changes:**
+
+```jsx
+// Before:
+import RegisterForm from './components/auth/RegisterForm';
+import LoginForm from './components/auth/LoginForm';
+
+// After:
+import RegisterForm from './components/auth/AilurusRegisterForm';
+import LoginForm from './components/auth/AilurusLoginForm';
+```
+
+**组件功能特性 / Component Features:**
+
+**AilurusLoginForm:**
+- ✅ 深色森林渐变背景
+- ✅ 毛玻璃认证卡片
+- ✅ 动画背景模糊球
+- ✅ 弹簧动画按钮和输入框
+- ✅ OAuth 登录支持（GitHub、Discord、OIDC、WeChat、LinuxDO、Telegram）
+- ✅ 短信验证码登录
+- ✅ Passkey 登录
+- ✅ 2FA 双重认证
+- ✅ Turnstile 验证
+- ✅ 用户协议/隐私政策同意勾选
+- ✅ 响应式设计
+
+**AilurusRegisterForm:**
+- ✅ 深色森林渐变背景
+- ✅ 毛玻璃认证卡片
+- ✅ 用户名密码注册
+- ✅ 邮箱验证码注册
+- ✅ 短信验证码注册
+- ✅ OAuth 注册支持
+- ✅ 密码强度验证
+- ✅ Turnstile 验证
+- ✅ 用户协议同意
+
+**视觉效果 / Visual Effects:**
+
+1. **背景动画**
+   - 三个大型模糊球在背景缓慢呼吸动画
+   - 锈橙色、青色、紫色渐变
+   - 噪点纹理覆盖
+
+2. **卡片效果**
+   - 毛玻璃模糊 (backdrop-blur-xl)
+   - 发光边框 (rgba 白色边框)
+   - 锈橙色光晕阴影
+
+3. **交互动画**
+   - 按钮弹簧缩放
+   - 输入框焦点发光
+   - 页面切换淡入淡出
+   - 列表级联入场
+
+**测试验证 / Testing:**
+
+✅ 构建验证通过 (`bun run build`)
+✅ Playwright 页面渲染测试通过
+✅ 登录页面截图验证
+✅ 注册页面截图验证
+✅ 表单功能完整性验证
+
+**实现的功能 / Implemented Features:**
+
+✅ **认证页面美化 / Auth Page Beautification**
+- 全新 Ailurus 设计风格
+- 深色主题 + 发光阴影
+- 弹簧物理动画
+
+✅ **功能完整性 / Feature Completeness**
+- 所有原有功能保留
+- OAuth 登录完整支持
+- SMS/Passkey/2FA 支持
+
+✅ **代码组织 / Code Organization**
+- 组件独立封装
+- 与原组件并存
+- 易于切换和回滚
+
+**下一步计划 / Next Steps:**
+- [ ] 创建更多主题组件（表格、模态框等）
+- [ ] 添加深色/浅色模式切换动画
+- [ ] 优化移动端响应式设计
+- [ ] 应用 Ailurus 设计到其他页面（控制台、设置等）
+
+---
+
+---
+
+### 阶段 13.2: Ailurus 通用组件与 Dashboard 页面 / Phase 13.2: Ailurus Common Components & Dashboard
+
+**时间 / Date:** 2026-01-23
+
+**需求 / Requirements:**
+1. 创建 Ailurus 设计系统通用组件（Modal、Table、Tabs、StatCard、PageHeader）
+2. 将 Ailurus 设计应用到 Dashboard 页面
+
+**实施方法 / Implementation Method:**
+
+1. **创建通用组件 / Create Common Components**
+   - AilurusStatCard - 统计卡片（数字动画、趋势指示）
+   - AilurusPageHeader - 页面头部（面包屑、动作按钮）
+   - AilurusModal - 模态框（毛玻璃、弹簧动画）
+   - AilurusTabs - 标签页（下划线、胶囊、卡片三种样式）
+   - AilurusTable - 数据表格（行动画、骨架屏）
+
+2. **创建 Dashboard 组件 / Create Dashboard Components**
+   - AilurusDashboardHeader - 问候语、搜索、刷新按钮
+   - AilurusStatsCards - 统计卡片组
+   - AilurusChartsPanel - 图表面板（标签切换动画）
+   - AilurusDashboard - 主仪表盘组件
+
+3. **更新 Dashboard 页面 / Update Dashboard Page**
+   - 修改 pages/Dashboard/index.jsx 使用 AilurusDashboard
+
+**修改/新增内容 / Modified/Added Content:**
+
+**新增文件 / New Files:**
+
+| 文件 / File | 功能 / Function |
+|-------------|-----------------|
+| `web/src/components/ailurus-ui/AilurusStatCard.jsx` | 统计卡片：数字计数动画、趋势箭头、多种变体 |
+| `web/src/components/ailurus-ui/AilurusPageHeader.jsx` | 页面头部：标题、描述、面包屑、动作区 |
+| `web/src/components/ailurus-ui/AilurusModal.jsx` | 模态框：毛玻璃背景、弹簧动画、确认变体 |
+| `web/src/components/ailurus-ui/AilurusTabs.jsx` | 标签页：下划线/胶囊/卡片三种样式 |
+| `web/src/components/ailurus-ui/AilurusTable.jsx` | 数据表格：行动画、骨架屏、操作按钮 |
+| `web/src/components/dashboard/AilurusDashboardHeader.jsx` | Dashboard 头部组件 |
+| `web/src/components/dashboard/AilurusStatsCards.jsx` | Dashboard 统计卡片组 |
+| `web/src/components/dashboard/AilurusChartsPanel.jsx` | Dashboard 图表面板 |
+| `web/src/components/dashboard/AilurusDashboard.jsx` | 主 Dashboard 组件 |
+
+**修改文件 / Modified Files:**
+
+| 文件 / File | 修改内容 / Changes |
+|-------------|-------------------|
+| `web/src/components/ailurus-ui/index.js` | 添加新组件导出 |
+| `web/src/pages/Dashboard/index.jsx` | 使用 AilurusDashboard 替代原 Dashboard |
+
+**组件功能特性 / Component Features:**
+
+**AilurusStatCard:**
+- ✅ 数字计数动画（mount 时从 0 计数到目标值）
+- ✅ 趋势指示器（上升/下降/中性）
+- ✅ 多种变体（default/rust/teal/purple）
+- ✅ 发光阴影效果
+- ✅ 子组件：AilurusStatCardGroup、AilurusMiniStatCard
+
+**AilurusPageHeader:**
+- ✅ 标题和描述
+- ✅ 图标支持
+- ✅ 动作按钮区
+- ✅ 面包屑导航
+- ✅ 渐变分割线
+- ✅ 子组件：AilurusBreadcrumb、AilurusSectionHeader
+
+**AilurusModal:**
+- ✅ 毛玻璃背景（backdrop-blur）
+- ✅ 弹簧动画进入/退出
+- ✅ 多种尺寸（sm/md/lg/xl/full）
+- ✅ 键盘 ESC 关闭支持
+- ✅ 点击遮罩关闭
+- ✅ 子组件：AilurusConfirmModal（确认对话框）
+
+**AilurusTabs:**
+- ✅ 下划线样式（带动画指示器）
+- ✅ 胶囊样式（layoutId 动画）
+- ✅ 卡片样式（悬浮效果）
+- ✅ 受控/非受控模式
+- ✅ 内容切换动画
+
+**AilurusTable:**
+- ✅ 行入场动画（staggered）
+- ✅ 行悬停效果
+- ✅ 加载骨架屏
+- ✅ 空状态展示
+- ✅ 子组件：AilurusTableTag、AilurusTableAvatar、AilurusTableActions、AilurusTableActionButton
+
+**AilurusDashboard:**
+- ✅ 背景渐变光晕
+- ✅ 动画问候语
+- ✅ 搜索/刷新按钮
+- ✅ 统计卡片组（4 列）
+- ✅ 图表面板（4 种图表切换）
+- ✅ API 信息面板
+- ✅ 公告/FAQ/Uptime 面板
+
+**视觉效果 / Visual Effects:**
+
+1. **统计卡片**
+   - 毛玻璃背景
+   - 数字从 0 动画计数
+   - 悬停时轻微上浮
+   - 彩色发光阴影
+
+2. **图表面板**
+   - 标签切换平滑动画
+   - 图表内容淡入
+   - 角落装饰性光晕
+
+3. **页面整体**
+   - 三个大型背景光晕（rust/teal/purple）
+   - 入场级联动画
+   - 统一的毛玻璃风格
+
+**测试验证 / Testing:**
+
+✅ 构建验证通过 (`bun run build`)
+✅ 新组件导出正确
+✅ Dashboard 页面组件替换成功
+✅ 无 TypeScript/ESLint 错误
+
+**实现的功能 / Implemented Features:**
+
+✅ **通用组件库扩展 / Component Library Extension**
+- 5 个新的通用组件
+- 13 个子组件/变体
+- 完整的 Props 类型定义
+- 统一的设计语言
+
+✅ **Dashboard 页面美化 / Dashboard Beautification**
+- Ailurus 风格 Dashboard
+- 动画效果
+- 发光阴影
+- 毛玻璃卡片
+
+**下一步计划 / Next Steps:**
+- [ ] 应用 Ailurus 设计到更多页面（Token、Channel、User 等）
+- [ ] 创建 AilurusSelect、AilurusDropdown 组件
+- [ ] 添加深色/浅色模式切换
+- [ ] 性能优化（减少重渲染）
+
+---
+
+**文档版本 / Document Version:** v1.8
+**最后更新 / Last Updated:** 2026-01-23
+**状态 / Status:** ✅ Ailurus 通用组件与 Dashboard 实现完成 / Ailurus Common Components & Dashboard Completed

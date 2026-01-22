@@ -20,7 +20,88 @@ For commercial licensing, please contact support@quantumnous.com
 export default {
   content: ['./index.html', './src/**/*.{js,jsx,ts,tsx}'],
   theme: {
+    // ========================= Ailurus Design System =========================
+    // The Red Panda aesthetic: High-End Comfort meets Cyberpunk Forest
     colors: {
+      // Ailurus Primary Palette (Red Panda Fur)
+      'ailurus-rust': {
+        DEFAULT: '#C25E00',
+        50: '#FFF7ED',
+        100: '#FFEDD5',
+        200: '#FED7AA',
+        300: '#FDBA74',
+        400: '#FB923C',
+        500: '#E67E22',
+        600: '#C25E00',
+        700: '#9A3412',
+        800: '#7C2D12',
+        900: '#431407',
+      },
+      // Ailurus Secondary (Darkness - The Forest)
+      'ailurus-obsidian': {
+        DEFAULT: '#1A1A1A',
+        50: '#404040',
+        100: '#363636',
+        200: '#2D2D2D',
+        300: '#242424',
+        400: '#1F1F1F',
+        500: '#1A1A1A',
+        600: '#141414',
+        700: '#0F0F0F',
+        800: '#0A0A0A',
+        900: '#050505',
+      },
+      'ailurus-forest': {
+        DEFAULT: '#0F172A',
+        50: '#1E293B',
+        100: '#1A2438',
+        200: '#162033',
+        300: '#131C2E',
+        400: '#101829',
+        500: '#0F172A',
+        600: '#0C1322',
+        700: '#090F1A',
+        800: '#060A12',
+        900: '#03050A',
+      },
+      // Ailurus Accents (Face/Paws)
+      'ailurus-cream': {
+        DEFAULT: '#FDFBF7',
+        50: '#FFFFFF',
+        100: '#FEFEFE',
+        200: '#FDFCFA',
+        300: '#FDFBF7',
+        400: '#FAF5ED',
+        500: '#F7EFE3',
+      },
+      // Tech Layer Accents
+      'ailurus-teal': {
+        DEFAULT: '#06B6D4',
+        50: '#ECFEFF',
+        100: '#CFFAFE',
+        200: '#A5F3FC',
+        300: '#67E8F9',
+        400: '#22D3EE',
+        500: '#06B6D4',
+        600: '#0891B2',
+        700: '#0E7490',
+        800: '#155E75',
+        900: '#164E63',
+      },
+      'ailurus-purple': {
+        DEFAULT: '#8B5CF6',
+        50: '#F5F3FF',
+        100: '#EDE9FE',
+        200: '#DDD6FE',
+        300: '#C4B5FD',
+        400: '#A78BFA',
+        500: '#8B5CF6',
+        600: '#7C3AED',
+        700: '#6D28D9',
+        800: '#5B21B6',
+        900: '#4C1D95',
+      },
+      // Standard Semi UI color mappings
       'semi-color-white': 'var(--semi-color-white)',
       'semi-color-black': 'var(--semi-color-black)',
       'semi-color-primary': 'var(--semi-color-primary)',
@@ -142,6 +223,102 @@ export default {
         'semi-border-radius-large': 'var(--semi-border-radius-large)',
         'semi-border-radius-circle': 'var(--semi-border-radius-circle)',
         'semi-border-radius-full': 'var(--semi-border-radius-full)',
+      },
+      // ==================== Ailurus Animations ====================
+      animation: {
+        // Entrance animations
+        'ailurus-fade-in': 'ailurusFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+        'ailurus-slide-up': 'ailurusSlideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+        'ailurus-slide-down': 'ailurusSlideDown 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+        'ailurus-scale-in': 'ailurusScaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        'ailurus-bounce-in': 'ailurusBounceIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        // Micro-interaction animations
+        'ailurus-pulse-glow': 'ailurusPulseGlow 2s ease-in-out infinite',
+        'ailurus-shimmer': 'ailurusShimmer 2.5s ease-in-out infinite',
+        // Stagger cascade effect (use with animation-delay utilities)
+        'ailurus-cascade': 'ailurusCascade 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+      },
+      keyframes: {
+        ailurusFadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        ailurusSlideUp: {
+          '0%': { opacity: '0', transform: 'translateY(20px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        ailurusSlideDown: {
+          '0%': { opacity: '0', transform: 'translateY(-20px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        ailurusScaleIn: {
+          '0%': { opacity: '0', transform: 'scale(0.9)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        ailurusBounceIn: {
+          '0%': { opacity: '0', transform: 'scale(0.3)' },
+          '50%': { transform: 'scale(1.05)' },
+          '70%': { transform: 'scale(0.95)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        ailurusPulseGlow: {
+          '0%, 100%': { boxShadow: '0 0 20px rgba(194, 94, 0, 0.3)' },
+          '50%': { boxShadow: '0 0 40px rgba(230, 126, 34, 0.5)' },
+        },
+        ailurusShimmer: {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
+        ailurusCascade: {
+          '0%': { opacity: '0', transform: 'translateY(16px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+      // ==================== Luminous Shadows (Colored Glows) ====================
+      boxShadow: {
+        // Rust/Orange glows (primary)
+        'ailurus-rust-sm': '0 2px 8px rgba(194, 94, 0, 0.15)',
+        'ailurus-rust': '0 4px 16px rgba(194, 94, 0, 0.2)',
+        'ailurus-rust-lg': '0 8px 32px rgba(194, 94, 0, 0.25)',
+        'ailurus-rust-xl': '0 12px 48px rgba(230, 126, 34, 0.3)',
+        // Teal glows (tech accent)
+        'ailurus-teal-sm': '0 2px 8px rgba(6, 182, 212, 0.15)',
+        'ailurus-teal': '0 4px 16px rgba(6, 182, 212, 0.2)',
+        'ailurus-teal-lg': '0 8px 32px rgba(6, 182, 212, 0.25)',
+        // Purple glows (tech accent)
+        'ailurus-purple-sm': '0 2px 8px rgba(139, 92, 246, 0.15)',
+        'ailurus-purple': '0 4px 16px rgba(139, 92, 246, 0.2)',
+        'ailurus-purple-lg': '0 8px 32px rgba(139, 92, 246, 0.25)',
+        // Glass panel shadow
+        'ailurus-glass': '0 8px 32px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+        'ailurus-glass-lg': '0 16px 48px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+        // Inner glow for 3D glass effect
+        'ailurus-inner-glow': 'inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -1px 0 rgba(0, 0, 0, 0.1)',
+      },
+      // ==================== Background Gradients ====================
+      backgroundImage: {
+        // Primary rust gradients
+        'ailurus-gradient-rust': 'linear-gradient(135deg, #C25E00 0%, #E67E22 100%)',
+        'ailurus-gradient-rust-hover': 'linear-gradient(135deg, #D96E10 0%, #F08C30 100%)',
+        // Dark forest backgrounds
+        'ailurus-gradient-forest': 'linear-gradient(to bottom right, #1A1A1A 0%, #0F172A 100%)',
+        'ailurus-gradient-forest-radial': 'radial-gradient(ellipse at top, #1E293B 0%, #0F172A 70%)',
+        // Tech accent gradients
+        'ailurus-gradient-teal': 'linear-gradient(135deg, #06B6D4 0%, #0891B2 100%)',
+        'ailurus-gradient-purple': 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
+        // Shimmer effect background
+        'ailurus-shimmer': 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 50%, transparent 100%)',
+      },
+      // ==================== Backdrop Blur (Glassmorphism) ====================
+      backdropBlur: {
+        'ailurus-glass': '20px',
+        'ailurus-glass-heavy': '40px',
+      },
+      // ==================== Transition Timing Functions ====================
+      transitionTimingFunction: {
+        'ailurus-spring': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+        'ailurus-smooth': 'cubic-bezier(0.16, 1, 0.3, 1)',
+        'ailurus-bounce': 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
       },
     },
   },

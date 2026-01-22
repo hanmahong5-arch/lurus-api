@@ -28,3 +28,6 @@ data/
 .gocache-temp
 .gopath
 doc/database-credentials.md
+
+# Sensitive information file (DO NOT COMMIT!)
+重要信息.md

@@ -58,7 +58,7 @@
 
 ```bash
 # 1. 克隆项目 / Clone repository
-git clone https://github.com/your-company/lurus-api.git
+git clone https://github.com/hanmahong5-arch/lurus-api.git
 cd lurus-api
 
 # 2. 启动所有服务（包括 Meilisearch）/ Start all services
@@ -68,7 +68,7 @@ docker-compose up -d
 # http://localhost:3000
 # 默认账号 / Default credentials:
 # 用户名: root
-# 密码: 123456
+# 密码: (首次登录后请立即修改 / Change immediately after first login)
 ```
 
 ### 开发环境部署 / Development Setup
@@ -87,8 +87,8 @@ go build -o lurus-api
 
 # 4. 前端开发（可选）/ Frontend development (optional)
 cd web
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 ---
@@ -99,11 +99,48 @@ npm run dev
 
 | 特性 | 说明 |
 |------|------|
-| 🎨 现代化 UI | 基于 React 的响应式界面，支持暗黑模式 |
+| 🦊 **Ailurus 设计系统** | **全新小熊猫主题设计，毛玻璃 + 发光阴影 + 弹簧动画** |
+| 🎨 现代化 UI | 基于 React 18 + framer-motion 的响应式界面 |
 | 🌍 多语言 | 中文、英文界面切换 |
 | 📊 数据可视化 | 实时统计看板，使用量、消费、趋势分析 |
 | 🔍 **超快搜索** | **Meilisearch 集成，< 50ms 响应，支持模糊匹配** |
 | 📱 移动适配 | 完美支持移动端访问 |
+
+### 🦊 Ailurus 设计系统 / Ailurus Design System
+
+> **设计理念 / Design Philosophy** - "高端舒适 + 赛博朋克森林" (High-End Comfort meets Cyberpunk Forest)
+
+#### 核心特性 / Core Features
+
+| 特性 | 说明 |
+|------|------|
+| 🎨 **小熊猫配色** | 锈橙渐变主色、黑曜石背景、奶油白文字、青色/紫色点缀 |
+| ✨ **发光阴影** | Luminous Depth - 有色阴影取代黑色阴影 |
+| 🪟 **毛玻璃效果** | Glassmorphism - 模糊背景、半透明面板 |
+| 🌀 **弹簧动画** | Spring Physics - framer-motion 物理回弹效果 |
+| 🎭 **噪点纹理** | Organic Texture - 消除"塑料感" |
+
+#### 组件库 / Component Library
+
+```
+ailurus-ui/
+├── motion.js           # 运动系统：弹簧配置、动画变体
+├── AilurusCard.jsx     # 毛玻璃卡片：悬停动画、发光阴影
+├── AilurusButton.jsx   # 动画按钮：弹簧交互、多种变体
+├── AilurusInput.jsx    # 动画输入框：焦点发光、浮动标签
+├── AilurusModal.jsx    # 模态框：毛玻璃背景、弹簧进出
+├── AilurusTabs.jsx     # 标签页：下划线/胶囊/卡片样式
+├── AilurusTable.jsx    # 数据表格：行动画、骨架屏
+├── AilurusStatCard.jsx # 统计卡片：数字计数动画
+└── AilurusAuthLayout.jsx # 认证布局：动画背景
+```
+
+#### 视觉效果 / Visual Effects
+
+- 🌈 **深色森林背景** + 三色光晕（锈橙/青/紫）
+- 💎 **毛玻璃面板** - `backdrop-blur-xl` + 白色边框
+- ⚡ **级联入场** - `staggerChildren` 列表依次动画
+- 🔥 **弹簧交互** - 按钮/卡片悬停物理回弹
 
 ### 🔐 权限与安全 / Security & Authorization
 
@@ -289,16 +326,16 @@ GET /api/channel/search?keyword=openai&group=default&status=1
 version: '3'
 services:
   lurus-api:
-    image: your-registry/lurus-api:latest
+    image: ghcr.io/hanmahong5-arch/lurus-api:latest
     container_name: lurus-api
     restart: always
     ports:
       - "3000:3000"
     environment:
-      - SQL_DSN=root:password@tcp(mysql:3306)/lurus?charset=utf8mb4&parseTime=True
+      - SQL_DSN=root:<YOUR_DB_PASSWORD>@tcp(mysql:3306)/lurus?charset=utf8mb4&parseTime=True
       - MEILISEARCH_ENABLED=true
       - MEILISEARCH_HOST=http://meilisearch:7700
-      - MEILISEARCH_API_KEY=your-master-key
+      - MEILISEARCH_API_KEY=<YOUR_MEILISEARCH_KEY>
     depends_on:
       - mysql
       - meilisearch
@@ -310,7 +347,7 @@ services:
     container_name: lurus-mysql
     restart: always
     environment:
-      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_ROOT_PASSWORD=<YOUR_DB_PASSWORD>
       - MYSQL_DATABASE=lurus
     volumes:
       - ./mysql_data:/var/lib/mysql
@@ -322,7 +359,7 @@ services:
     ports:
       - "7700:7700"
     environment:
-      - MEILI_MASTER_KEY=your-master-key
+      - MEILI_MASTER_KEY=<YOUR_MEILISEARCH_KEY>
       - MEILI_ENV=production
     volumes:
       - ./meili_data:/meili_data
@@ -343,8 +380,8 @@ mkdir -p /opt/lurus-api/{data,mysql_data,meili_data}
 cd /opt/lurus-api
 
 # 下载配置文件 / Download configuration files
-wget https://raw.githubusercontent.com/your-company/lurus-api/main/docker-compose.yml
-wget https://raw.githubusercontent.com/your-company/lurus-api/main/.env.example -O .env
+wget https://raw.githubusercontent.com/lurus-project/lurus-api/main/docker-compose.yml
+wget https://raw.githubusercontent.com/lurus-project/lurus-api/main/.env.example -O .env
 ```
 
 #### 2. 配置环境变量 / Configure Environment
@@ -358,12 +395,12 @@ nano .env
 
 ```env
 # 数据库配置 / Database
-SQL_DSN=root:your-password@tcp(mysql:3306)/lurus?charset=utf8mb4&parseTime=True
+SQL_DSN=root:<YOUR_DB_PASSWORD>@tcp(mysql:3306)/lurus?charset=utf8mb4&parseTime=True
 
 # Meilisearch 配置 / Meilisearch
 MEILISEARCH_ENABLED=true
 MEILISEARCH_HOST=http://meilisearch:7700
-MEILISEARCH_API_KEY=your-secure-master-key-here
+MEILISEARCH_API_KEY=<YOUR_MEILISEARCH_KEY>
 MEILISEARCH_SYNC_ENABLED=true
 MEILISEARCH_WORKER_COUNT=10
 
@@ -405,7 +442,7 @@ curl http://localhost:7700/health
 
 # 登录默认账号 / Login with default credentials
 # 用户名: root
-# 密码: 123456
+# 密码: (首次登录后请立即修改 / Change immediately after first login)
 
 # 修改密码并配置渠道 / Change password and configure channels
 ```
@@ -484,19 +521,64 @@ server {
 
 ## 📖 文档 / Documentation
 
+### 在线 API 文档 / Online API Documentation
+
+访问完整的 API 文档 / Access full API documentation:
+
+- **文档地址 / Docs URL:** [https://docs.lurus.cn/](https://docs.lurus.cn/)
+- **API 入口 / API Entry:** [https://api.lurus.cn/](https://api.lurus.cn/)
+
+> **提示 / Tip:** 访问 api.lurus.cn 后，点击页面上的"文档"按钮即可跳转到 API 文档。
+>
+> Access api.lurus.cn and click the "Docs" button to navigate to API documentation.
+
+### API 端点概览 / API Endpoints Overview
+
+#### 认证 API / Authentication
+| 端点 / Endpoint | 方法 / Method | 说明 / Description |
+|-----------------|---------------|---------------------|
+| `/api/user/login` | POST | 用户登录 / User login |
+| `/api/user/register` | POST | 用户注册 / User registration |
+| `/api/user/logout` | GET | 用户登出 / User logout |
+| `/api/user/self` | GET | 获取当前用户信息 / Get current user info |
+
+#### 令牌管理 / Token Management
+| 端点 / Endpoint | 方法 / Method | 说明 / Description |
+|-----------------|---------------|---------------------|
+| `/api/token/` | GET | 获取所有令牌 / Get all tokens |
+| `/api/token/` | POST | 创建令牌 / Create token |
+| `/api/token/:id` | PUT | 更新令牌 / Update token |
+| `/api/token/:id` | DELETE | 删除令牌 / Delete token |
+
+#### AI 模型中继 / AI Model Relay
+| 端点 / Endpoint | 方法 / Method | 说明 / Description |
+|-----------------|---------------|---------------------|
+| `/v1/chat/completions` | POST | OpenAI 格式对话 / OpenAI format chat |
+| `/v1/messages` | POST | Claude 格式对话 / Claude format messages |
+| `/v1/embeddings` | POST | 文本嵌入 / Text embeddings |
+| `/v1/images/generations` | POST | 图像生成 / Image generation |
+
+#### 搜索 API / Search API
+| 端点 / Endpoint | 方法 / Method | 说明 / Description |
+|-----------------|---------------|---------------------|
+| `/api/log/search` | GET | 日志搜索 / Log search |
+| `/api/user/search` | GET | 用户搜索 / User search |
+| `/api/channel/search` | GET | 频道搜索 / Channel search |
+
+> **完整 API 文档请访问 / Full API documentation:** [https://docs.lurus.cn/](https://docs.lurus.cn/)
+
 ### 核心文档 / Core Documentation
 
 - 📘 [Meilisearch 集成文档](./doc/meilisearch-integration.md) - 搜索引擎配置和使用
 - 📗 [开发进度文档](./doc/process.md) - 开发历史和技术细节
-- 📙 [API 文档](./doc/api.md) - RESTful API 接口文档（待补充）
-- 📕 [部署指南](./doc/deployment.md) - 生产环境部署最佳实践（待补充）
+- 📙 [部署指南](./DEPLOYMENT.md) - 生产环境部署最佳实践
 
 ### 快速链接 / Quick Links
 
-- 🏠 [项目主页](https://github.com/your-company/lurus-api)
-- 🐛 [问题反馈](https://github.com/your-company/lurus-api/issues)
-- 💬 [讨论区](https://github.com/your-company/lurus-api/discussions)
-- 📧 [联系我们](mailto:support@yourcompany.com)
+- 🏠 [项目主页](https://github.com/hanmahong5-arch/lurus-api)
+- 🐛 [问题反馈](https://github.com/hanmahong5-arch/lurus-api/issues)
+- 💬 [讨论区](https://github.com/hanmahong5-arch/lurus-api/discussions)
+- 📧 [联系我们](mailto:support@lurus.cn)
 
 ---
 
@@ -586,9 +668,10 @@ git push origin feature/your-feature
 
 ## 📞 联系方式 / Contact
 
-- 📧 Email: support@yourcompany.com
-- 💼 公司网站: https://www.yourcompany.com
-- 🐛 问题反馈: [GitHub Issues](https://github.com/your-company/lurus-api/issues)
+- 📧 Email: support@lurus.cn
+- 🌐 API 文档: https://docs.lurus.cn/
+- 🔗 API 入口: https://api.lurus.cn/
+- 🐛 问题反馈: [GitHub Issues](https://github.com/hanmahong5-arch/lurus-api/issues)
 
 ---
 
