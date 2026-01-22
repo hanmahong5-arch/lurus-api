@@ -425,6 +425,8 @@
     "允许通过 Telegram 进行登录": "Allow login via Telegram",
     "允许通过密码进行注册": "Allow registration via password",
     "允许通过密码进行登录": "Allow login via password",
+    "允许通过手机短信进行登录": "Allow login via SMS",
+    "手机短信登录时允许自动注册新用户": "Allow auto-registration for new users via SMS login",
     "允许通过微信登录 & 注册": "Allow login & registration via WeChat",
     "元": "CNY",
     "充值": "Top Up",

@@ -49,6 +49,8 @@ const SystemSetting = () => {
     PasswordLoginEnabled: '',
     PasswordRegisterEnabled: '',
     EmailVerificationEnabled: '',
+    SMSEnabled: '',
+    SMSAutoRegister: '',
     GitHubOAuthEnabled: '',
     GitHubClientId: '',
     GitHubClientSecret: '',
@@ -173,6 +175,8 @@ const SystemSetting = () => {
           case 'PasswordLoginEnabled':
           case 'PasswordRegisterEnabled':
           case 'EmailVerificationEnabled':
+          case 'SMSEnabled':
+          case 'SMSAutoRegister':
           case 'GitHubOAuthEnabled':
           case 'WeChatAuthEnabled':
           case 'TelegramOAuthEnabled':
@@ -1027,6 +1031,24 @@ const SystemSetting = () => {
                         }
                       >
                         {t('允许 Turnstile 用户校验')}
+                      </Form.Checkbox>
+                      <Form.Checkbox
+                        field='SMSEnabled'
+                        noLabel
+                        onChange={(e) =>
+                          handleCheckboxChange('SMSEnabled', e)
+                        }
+                      >
+                        {t('允许通过手机短信进行登录')}
+                      </Form.Checkbox>
+                      <Form.Checkbox
+                        field='SMSAutoRegister'
+                        noLabel
+                        onChange={(e) =>
+                          handleCheckboxChange('SMSAutoRegister', e)
+                        }
+                      >
+                        {t('手机短信登录时允许自动注册新用户')}
                       </Form.Checkbox>
                     </Col>
                     <Col xs={24} sm={24} md={12} lg={12} xl={12}>
