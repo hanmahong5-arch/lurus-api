@@ -1226,7 +1226,7 @@ const SystemSetting = () => {
                         label={t('允许的 Origins')}
                         placeholder={t('填写带https的域名，逗号分隔')}
                         extraText={t(
-                          '为空则默认使用服务器地址，多个 Origin 用逗号分隔，例如 https://newapi.pro,https://newapi.com ,注意不能携带[]，需使用https',
+                          '为空则默认使用服务器地址，多个 Origin 用逗号分隔，例如 https://api.lurus.cn,https://example.com ,注意不能携带[]，需使用https',
                         )}
                       />
                     </Col>

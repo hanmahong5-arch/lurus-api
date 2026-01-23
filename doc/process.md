@@ -1552,6 +1552,58 @@ html:not(.dark) .ailurus-glass-panel {
 
 ---
 
-**文档版本 / Document Version:** v1.9
+### 阶段 13.4: New API 品牌脱敏 / Phase 13.4: New API Rebranding to Ailurus
+
+**时间 / Date:** 2026-01-23
+
+**问题描述 / Issue Description:**
+浏览器标签页和代码中仍然显示 "New API" 而不是 "Ailurus"，需要完全脱敏并替换为 Ailurus 品牌。
+
+**修改内容 / Changes Made:**
+
+| 文件 / File | 修改内容 / Changes |
+|-------------|-------------------|
+| `web/index.html` | `<title>New API</title>` → `<title>Ailurus</title>` |
+| `web/src/index.jsx` | 控制台消息 `WE ❤ NEWAPI` → `WE ❤ AILURUS` |
+| `web/src/components/layout/Footer.jsx` | `docs.newapi.pro` → `docs.lurus.cn` (6处) |
+| `web/src/components/settings/SystemSetting.jsx` | 示例 URL `newapi.pro` → `api.lurus.cn` |
+| `web/src/components/table/channels/index.jsx` | `NewAPI 内置功能` → `Ailurus 内置功能` |
+| `web/src/components/table/channels/ChannelsColumnDefs.jsx` | `NewAPI 内置功能` → `Ailurus 内置功能` |
+| `web/src/pages/Setting/Ratio/UpstreamRatioSync.jsx` | API 路径 `/newapi/` → `/ailurus/` |
+| `web/src/pages/Setting/Operation/SettingsGeneral.jsx` | 占位符 `docs.newapi.pro` → `docs.lurus.cn` |
+| `web/src/i18n/locales/zh.json` | 5处 NewAPI/newapi 引用 |
+| `web/src/i18n/locales/en.json` | 5处 NewAPI/newapi 引用 |
+| `web/src/i18n/locales/ja.json` | 5处 NewAPI/newapi 引用 |
+| `web/src/i18n/locales/fr.json` | 5处 NewAPI/newapi 引用 |
+| `web/src/i18n/locales/ru.json` | 5处 NewAPI/newapi 引用 |
+| `web/src/i18n/locales/vi.json` | 5处 NewAPI/newapi 引用 |
+
+**替换规则 / Replacement Rules:**
+
+| 原内容 / Original | 替换为 / Replaced With |
+|------------------|----------------------|
+| `New API` (产品名) | `Ailurus` |
+| `NewAPI` (产品名) | `Ailurus` |
+| `https://newapi.pro` | `https://api.lurus.cn` |
+| `https://newapi.com` | `https://example.com` |
+| `https://docs.newapi.pro` | `https://docs.lurus.cn` |
+| `/newapi/` (API路径) | `/ailurus/` |
+
+**保留内容 / Kept Unchanged:**
+- `newApi` (局部变量名，在 SettingsAPIInfo.jsx 中)
+- `NewAPIError` (Go 代码中的错误类型名)
+
+**实现的功能 / Implemented Features:**
+
+✅ **完整品牌脱敏 / Complete Rebranding**
+- 浏览器标签页显示 "Ailurus"
+- 控制台欢迎消息更新
+- 文档链接指向 docs.lurus.cn
+- 所有 UI 文本和提示消息更新
+- 6种语言的 i18n 翻译全部更新
+
+---
+
+**文档版本 / Document Version:** v1.10
 **最后更新 / Last Updated:** 2026-01-23
-**状态 / Status:** ✅ Ailurus Dashboard 亮色主题兼容性修复完成 / Ailurus Dashboard Light Theme Compatibility Fix Completed
+**状态 / Status:** ✅ New API 品牌脱敏完成 / New API Rebranding to Ailurus Completed
