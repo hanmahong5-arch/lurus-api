@@ -1450,6 +1450,108 @@ import LoginForm from './components/auth/AilurusLoginForm';
 
 ---
 
-**文档版本 / Document Version:** v1.8
+### 阶段 13.3: Ailurus Dashboard 亮色主题兼容性修复 / Phase 13.3: Ailurus Dashboard Light Theme Compatibility Fix
+
+**时间 / Date:** 2026-01-23
+
+**问题描述 / Issue Description:**
+Ailurus Dashboard 组件在亮色主题下显示异常：
+- 数字和文本与背景颜色相同导致不可见
+- 右上角的搜索/刷新按钮与背景融合
+- 卡片内的统计数值看不清
+
+**原因分析 / Root Cause Analysis:**
+Ailurus 设计系统的组件使用了硬编码的深色主题颜色（如 `text-ailurus-cream`），这些颜色是为深色背景设计的：
+- `text-ailurus-cream` (#FDFBF7) - 淡黄色，在浅色背景上不可见
+- `bg-white/5` - 白色透明，在亮色背景上基本透明
+- `border-white/10` - 白色透明边框，在亮色背景上不可见
+
+项目已有 Semi UI 的 CSS 变量系统支持主题切换（`semi-color-text-0`、`semi-color-fill-0` 等），但 Ailurus 组件未使用这些变量。
+
+**修复方法 / Fix Method:**
+将硬编码的颜色替换为 Semi UI 的主题感知 CSS 变量：
+
+| 原颜色 / Original | 替换为 / Replaced With | 说明 / Description |
+|------------------|----------------------|-------------------|
+| `text-ailurus-cream` | `text-semi-color-text-0` | 主要文本颜色 |
+| `text-ailurus-cream/50` | `text-semi-color-text-2` | 次要文本颜色 |
+| `bg-white/5` | `bg-semi-color-fill-0` | 填充背景 |
+| `border-white/10` | `border-semi-color-border` | 边框颜色 |
+| `bg-white/[0.03]` | `ailurus-glass-panel` (CSS class) | 毛玻璃面板 |
+
+**修改文件 / Modified Files:**
+
+| 文件 / File | 修改内容 / Changes |
+|-------------|-------------------|
+| `web/src/components/dashboard/AilurusDashboardHeader.jsx` | 问候语文本、副标题、按钮背景和图标颜色 |
+| `web/src/components/dashboard/AilurusStatsCards.jsx` | 统计项标题、数值、加载状态、卡片背景和边框 |
+| `web/src/components/dashboard/AilurusChartsPanel.jsx` | 面板背景、标题、标签页文本 |
+
+**具体修改 / Specific Changes:**
+
+**AilurusDashboardHeader.jsx:**
+- Line 36: `text-ailurus-cream` → `text-semi-color-text-0`
+- Line 43: `from-ailurus-cream via-ailurus-rust-300 to-ailurus-cream` → `from-ailurus-rust-500 via-ailurus-rust-400 to-ailurus-rust-500` + `text-transparent`
+- Line 52: `text-ailurus-cream/50` → `text-semi-color-text-2`
+- Line 68: `bg-white/5 border border-white/10` → `bg-semi-color-fill-0 border border-semi-color-border`
+- Line 78: `text-ailurus-cream/60` → `text-semi-color-text-2`
+- Line 88-100: 同上按钮样式修改
+
+**AilurusStatsCards.jsx:**
+- Line 33-40: 图标颜色 `text-ailurus-xxx-400` → `text-ailurus-xxx-500`
+- Line 49: `bg-white/[0.02] hover:bg-white/[0.05]` → `bg-semi-color-fill-0 hover:bg-semi-color-fill-1`
+- Line 50: `border-white/10` → `border-semi-color-border`
+- Line 73: `text-ailurus-cream/50` → `text-semi-color-text-2`
+- Line 74: `text-ailurus-cream` → `text-semi-color-text-0`
+- Line 76: `bg-white/10` → `bg-semi-color-fill-1`
+- Line 95: `text-ailurus-rust-400` → `text-ailurus-rust-500`
+- Line 141, 146, 151, 156: titleColor 颜色强度 400 → 500
+- Line 166: `bg-white/[0.03]` → `ailurus-glass-panel`
+- Line 183: `border-white/5` → `border-semi-color-border`
+
+**AilurusChartsPanel.jsx:**
+- Line 58: 添加 `ailurus-glass-panel` 类
+- Line 60: `border-white/10` → `border-semi-color-border`
+- Line 70: `border-white/5` → `border-semi-color-border`
+- Line 79: `text-ailurus-rust-400` → `text-ailurus-rust-500`
+- Line 81: `text-ailurus-cream` → `text-semi-color-text-0`
+- Line 86: `bg-white/5` → `bg-semi-color-fill-0`
+- Line 93-94: `text-ailurus-cream` → `text-semi-color-text-0/1/2`
+
+**技术说明 / Technical Notes:**
+CSS 类 `.ailurus-glass-panel` 在 `index.css` 中已定义了亮色/深色主题的自适应样式：
+
+```css
+/* 深色主题 */
+.ailurus-glass-panel {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* 亮色主题 */
+html:not(.dark) .ailurus-glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+```
+
+**实现的功能 / Implemented Features:**
+
+✅ **亮色主题兼容性 / Light Theme Compatibility**
+- Dashboard Header 问候语和按钮可见
+- Stats Cards 数值和标题可见
+- Charts Panel 标签页文本可见
+- 所有组件在深色/亮色主题下均能正常显示
+
+✅ **保持视觉效果 / Visual Effects Preserved**
+- 发光阴影效果保留
+- 毛玻璃效果自适应
+- 弹簧动画效果不变
+- Ailurus 品牌色系保留
+
+---
+
+**文档版本 / Document Version:** v1.9
 **最后更新 / Last Updated:** 2026-01-23
-**状态 / Status:** ✅ Ailurus 通用组件与 Dashboard 实现完成 / Ailurus Common Components & Dashboard Completed
+**状态 / Status:** ✅ Ailurus Dashboard 亮色主题兼容性修复完成 / Ailurus Dashboard Light Theme Compatibility Fix Completed

@@ -31,13 +31,13 @@ const StatItem = ({
 }) => {
   // Variant colors for icons based on avatar color
   const avatarColorMap = {
-    amber: 'bg-ailurus-rust-500/20 text-ailurus-rust-400',
-    blue: 'bg-ailurus-teal-500/20 text-ailurus-teal-400',
-    green: 'bg-green-500/20 text-green-400',
-    purple: 'bg-ailurus-purple-500/20 text-ailurus-purple-400',
-    cyan: 'bg-cyan-500/20 text-cyan-400',
-    red: 'bg-red-500/20 text-red-400',
-    orange: 'bg-orange-500/20 text-orange-400',
+    amber: 'bg-ailurus-rust-500/20 text-ailurus-rust-500',
+    blue: 'bg-ailurus-teal-500/20 text-ailurus-teal-500',
+    green: 'bg-green-500/20 text-green-500',
+    purple: 'bg-ailurus-purple-500/20 text-ailurus-purple-500',
+    cyan: 'bg-cyan-500/20 text-cyan-500',
+    red: 'bg-red-500/20 text-red-500',
+    orange: 'bg-orange-500/20 text-orange-500',
   };
 
   const iconClasses = avatarColorMap[item.avatarColor] || avatarColorMap.amber;
@@ -46,8 +46,8 @@ const StatItem = ({
     <motion.div
       className={clsx(
         'group flex items-center justify-between p-3 rounded-xl',
-        'bg-white/[0.02] hover:bg-white/[0.05]',
-        'border border-transparent hover:border-white/10',
+        'bg-semi-color-fill-0 hover:bg-semi-color-fill-1',
+        'border border-transparent hover:border-semi-color-border',
         'transition-all cursor-pointer'
       )}
       variants={staggerItem}
@@ -70,10 +70,10 @@ const StatItem = ({
         </motion.div>
 
         <div>
-          <div className="text-xs text-ailurus-cream/50">{item.title}</div>
-          <div className="text-lg font-semibold text-ailurus-cream">
+          <div className="text-xs text-semi-color-text-2">{item.title}</div>
+          <div className="text-lg font-semibold text-semi-color-text-0">
             {loading ? (
-              <div className="h-6 w-16 bg-white/10 rounded animate-pulse" />
+              <div className="h-6 w-16 bg-semi-color-fill-1 rounded animate-pulse" />
             ) : (
               <motion.span
                 initial={{ opacity: 0, y: 10 }}
@@ -92,7 +92,7 @@ const StatItem = ({
         <motion.button
           className={clsx(
             'px-3 py-1.5 rounded-full text-xs font-medium',
-            'bg-ailurus-rust-500/20 text-ailurus-rust-400',
+            'bg-ailurus-rust-500/20 text-ailurus-rust-500',
             'hover:bg-ailurus-rust-500/30',
             'border border-ailurus-rust-500/30',
             'transition-colors'
@@ -138,22 +138,22 @@ const StatsGroupCard = ({
     'bg-amber-50': {
       border: 'border-ailurus-rust-500/20',
       glow: 'shadow-ailurus-rust/10',
-      titleColor: 'text-ailurus-rust-400',
+      titleColor: 'text-ailurus-rust-500',
     },
     'bg-blue-50': {
       border: 'border-ailurus-teal-500/20',
       glow: 'shadow-ailurus-teal/10',
-      titleColor: 'text-ailurus-teal-400',
+      titleColor: 'text-ailurus-teal-500',
     },
     'bg-green-50': {
       border: 'border-green-500/20',
       glow: 'shadow-green-500/10',
-      titleColor: 'text-green-400',
+      titleColor: 'text-green-500',
     },
     'bg-purple-50': {
       border: 'border-ailurus-purple-500/20',
       glow: 'shadow-ailurus-purple/10',
-      titleColor: 'text-ailurus-purple-400',
+      titleColor: 'text-ailurus-purple-500',
     },
   };
 
@@ -162,10 +162,9 @@ const StatsGroupCard = ({
   return (
     <motion.div
       className={clsx(
-        // Glassmorphism base
+        // Glassmorphism base - use theme-aware panel
+        'ailurus-glass-panel',
         'relative overflow-hidden',
-        'backdrop-blur-xl',
-        'bg-white/[0.03]',
         'border',
         variant.border,
         'rounded-2xl',
@@ -181,7 +180,7 @@ const StatsGroupCard = ({
       }}
     >
       {/* Card title */}
-      <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/5">
+      <div className="flex items-center gap-2 mb-4 pb-3 border-b border-semi-color-border">
         <h3 className={clsx('text-sm font-semibold', variant.titleColor)}>
           {group.title}
         </h3>

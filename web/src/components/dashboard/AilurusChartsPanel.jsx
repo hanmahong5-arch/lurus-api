@@ -54,11 +54,10 @@ const AilurusChartsPanel = ({
   return (
     <motion.div
       className={clsx(
-        // Glassmorphism base
+        // Glassmorphism base - use theme-aware panel
+        'ailurus-glass-panel',
         'relative overflow-hidden',
-        'backdrop-blur-xl',
-        'bg-white/[0.03]',
-        'border border-white/10',
+        'border border-semi-color-border',
         'rounded-2xl',
         // Grid span
         hasApiInfoPanel ? 'lg:col-span-3' : ''
@@ -68,7 +67,7 @@ const AilurusChartsPanel = ({
       transition={springConfig.snappy}
     >
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 p-4 border-b border-white/5">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 p-4 border-b border-semi-color-border">
         {/* Title */}
         <div className="flex items-center gap-2">
           <motion.div
@@ -76,23 +75,23 @@ const AilurusChartsPanel = ({
             whileHover={{ scale: 1.1, rotate: 5 }}
             transition={springConfig.bouncy}
           >
-            <PieChart size={16} className="text-ailurus-rust-400" />
+            <PieChart size={16} className="text-ailurus-rust-500" />
           </motion.div>
-          <h3 className="text-sm font-semibold text-ailurus-cream">
+          <h3 className="text-sm font-semibold text-semi-color-text-0">
             {t('模型数据分析')}
           </h3>
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 p-1 bg-white/5 rounded-xl">
+        <div className="flex items-center gap-1 p-1 bg-semi-color-fill-0 rounded-xl">
           {tabs.map((tab) => (
             <motion.button
               key={tab.key}
               className={clsx(
                 'relative flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
                 activeChartTab === tab.key
-                  ? 'text-ailurus-cream'
-                  : 'text-ailurus-cream/50 hover:text-ailurus-cream/80'
+                  ? 'text-semi-color-text-0'
+                  : 'text-semi-color-text-2 hover:text-semi-color-text-1'
               )}
               onClick={() => setActiveChartTab(tab.key)}
               whileHover={{ scale: 1.02 }}

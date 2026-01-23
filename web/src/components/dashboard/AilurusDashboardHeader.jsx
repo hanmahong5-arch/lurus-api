@@ -33,14 +33,14 @@ const AilurusDashboardHeader = ({
           {greetingVisible && (
             <motion.h2
               key="greeting"
-              className="text-2xl md:text-3xl font-bold text-ailurus-cream"
+              className="text-2xl md:text-3xl font-bold text-semi-color-text-0"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={springConfig.snappy}
             >
-              {/* Gradient text effect */}
-              <span className="bg-gradient-to-r from-ailurus-cream via-ailurus-rust-300 to-ailurus-cream bg-clip-text">
+              {/* Gradient text effect - using theme-aware colors */}
+              <span className="bg-gradient-to-r from-ailurus-rust-500 via-ailurus-rust-400 to-ailurus-rust-500 bg-clip-text text-transparent">
                 {getGreeting}
               </span>
             </motion.h2>
@@ -49,7 +49,7 @@ const AilurusDashboardHeader = ({
 
         {/* Subtle subtitle */}
         <motion.p
-          className="text-sm text-ailurus-cream/50 mt-1"
+          className="text-sm text-semi-color-text-2 mt-1"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3, ...springConfig.snappy }}
@@ -65,7 +65,7 @@ const AilurusDashboardHeader = ({
       >
         {/* Search button */}
         <motion.button
-          className="group relative p-3 rounded-xl bg-white/5 border border-white/10
+          className="group relative p-3 rounded-xl bg-semi-color-fill-0 border border-semi-color-border
                      hover:bg-ailurus-teal-500/20 hover:border-ailurus-teal-500/40
                      transition-colors"
           onClick={showSearchModal}
@@ -75,7 +75,7 @@ const AilurusDashboardHeader = ({
         >
           <Search
             size={18}
-            className="text-ailurus-cream/60 group-hover:text-ailurus-teal-400 transition-colors"
+            className="text-semi-color-text-2 group-hover:text-ailurus-teal-500 transition-colors"
           />
           {/* Glow effect on hover */}
           <motion.div
@@ -86,7 +86,7 @@ const AilurusDashboardHeader = ({
 
         {/* Refresh button */}
         <motion.button
-          className="group relative p-3 rounded-xl bg-white/5 border border-white/10
+          className="group relative p-3 rounded-xl bg-semi-color-fill-0 border border-semi-color-border
                      hover:bg-ailurus-rust-500/20 hover:border-ailurus-rust-500/40
                      transition-colors disabled:opacity-50"
           onClick={refresh}
@@ -97,7 +97,7 @@ const AilurusDashboardHeader = ({
         >
           <RefreshCw
             size={18}
-            className={`text-ailurus-cream/60 group-hover:text-ailurus-rust-400 transition-colors
+            className={`text-semi-color-text-2 group-hover:text-ailurus-rust-500 transition-colors
                        ${loading ? 'animate-spin' : ''}`}
           />
           {/* Glow effect on hover */}
