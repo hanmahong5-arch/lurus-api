@@ -83,7 +83,7 @@ const AilurusTabs = forwardRef(function AilurusTabs(
     switch (variant) {
       case 'pills':
         return (
-          <div className="flex items-center gap-2 p-1 bg-white/5 rounded-xl">
+          <div className="flex items-center gap-2 p-1 bg-gray-100 dark:bg-white/5 rounded-xl">
             {items.map((item, index) => (
               <motion.button
                 key={item.key}
@@ -93,8 +93,8 @@ const AilurusTabs = forwardRef(function AilurusTabs(
                   sizeClasses[size],
                   item.disabled && 'opacity-50 cursor-not-allowed',
                   active === item.key
-                    ? 'text-ailurus-cream'
-                    : 'text-ailurus-cream/60 hover:text-ailurus-cream'
+                    ? 'text-gray-900 dark:text-ailurus-cream'
+                    : 'text-gray-600 dark:text-ailurus-cream/60 hover:text-gray-900 dark:hover:text-ailurus-cream'
                 )}
                 onClick={() => handleTabClick(item.key)}
                 disabled={item.disabled}
@@ -130,8 +130,8 @@ const AilurusTabs = forwardRef(function AilurusTabs(
                   sizeClasses[size],
                   item.disabled && 'opacity-50 cursor-not-allowed',
                   active === item.key
-                    ? 'bg-ailurus-rust-500/20 border-ailurus-rust-500/40 text-ailurus-cream shadow-ailurus-rust'
-                    : 'bg-white/5 border-white/10 text-ailurus-cream/60 hover:bg-white/10 hover:text-ailurus-cream'
+                    ? 'bg-ailurus-rust-500/20 border-ailurus-rust-500/40 text-gray-900 dark:text-ailurus-cream shadow-ailurus-rust'
+                    : 'bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-ailurus-cream/60 hover:bg-gray-200 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-ailurus-cream'
                 )}
                 onClick={() => handleTabClick(item.key)}
                 disabled={item.disabled}
@@ -150,7 +150,7 @@ const AilurusTabs = forwardRef(function AilurusTabs(
       default:
         return (
           <div className="relative">
-            <div className="flex items-center gap-1 border-b border-white/10">
+            <div className="flex items-center gap-1 border-b border-gray-200 dark:border-white/10">
               {items.map((item, index) => (
                 <motion.button
                   key={item.key}
@@ -160,8 +160,8 @@ const AilurusTabs = forwardRef(function AilurusTabs(
                     sizeClasses[size],
                     item.disabled && 'opacity-50 cursor-not-allowed',
                     active === item.key
-                      ? 'text-ailurus-rust-400'
-                      : 'text-ailurus-cream/60 hover:text-ailurus-cream'
+                      ? 'text-ailurus-rust-500 dark:text-ailurus-rust-400'
+                      : 'text-gray-600 dark:text-ailurus-cream/60 hover:text-gray-900 dark:hover:text-ailurus-cream'
                   )}
                   onClick={() => handleTabClick(item.key)}
                   disabled={item.disabled}

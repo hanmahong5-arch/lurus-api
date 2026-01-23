@@ -511,14 +511,14 @@ const AilurusRegisterForm = () => {
           onChange={(e) => setAgreedToTerms(e.target.checked)}
           className="ailurus-checkbox"
         >
-          <Text size="small" className="text-ailurus-cream/70">
+          <Text size="small" className="text-gray-600 dark:text-ailurus-cream/70">
             {t('我已阅读并同意')}
             {hasUserAgreement && (
               <a
                 href="/user-agreement"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-ailurus-rust-400 hover:text-ailurus-rust-300 mx-1 transition-colors"
+                className="text-ailurus-rust-600 dark:text-ailurus-rust-400 hover:text-ailurus-rust-500 dark:hover:text-ailurus-rust-300 mx-1 transition-colors"
               >
                 {t('用户协议')}
               </a>
@@ -529,7 +529,7 @@ const AilurusRegisterForm = () => {
                 href="/privacy-policy"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-ailurus-rust-400 hover:text-ailurus-rust-300 mx-1 transition-colors"
+                className="text-ailurus-rust-600 dark:text-ailurus-rust-400 hover:text-ailurus-rust-500 dark:hover:text-ailurus-rust-300 mx-1 transition-colors"
               >
                 {t('隐私政策')}
               </a>
@@ -665,7 +665,7 @@ const AilurusRegisterForm = () => {
         {hasOAuthOptions && (
           <motion.button
             variants={staggerItem}
-            className="flex items-center text-ailurus-cream/60 hover:text-ailurus-cream transition-colors"
+            className="flex items-center text-gray-500 dark:text-ailurus-cream/60 hover:text-gray-900 dark:hover:text-ailurus-cream transition-colors"
             onClick={handleBackToOtherOptions}
             whileHover={{ x: -4 }}
             transition={springConfig.snappy}
@@ -728,7 +728,7 @@ const AilurusRegisterForm = () => {
                       type="button"
                       onClick={sendVerificationCode}
                       disabled={disableButton || verificationCodeLoading}
-                      className="text-xs text-ailurus-rust-400 hover:text-ailurus-rust-300 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      className="text-xs text-ailurus-rust-600 dark:text-ailurus-rust-400 hover:text-ailurus-rust-500 dark:hover:text-ailurus-rust-300 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                     >
                       {disableButton
                         ? `${countdown}s`
@@ -783,7 +783,7 @@ const AilurusRegisterForm = () => {
         {/* Back button */}
         <motion.button
           variants={staggerItem}
-          className="flex items-center text-ailurus-cream/60 hover:text-ailurus-cream transition-colors"
+          className="flex items-center text-gray-500 dark:text-ailurus-cream/60 hover:text-gray-900 dark:hover:text-ailurus-cream transition-colors"
           onClick={handleBackToOtherOptions}
           whileHover={{ x: -4 }}
           transition={springConfig.snappy}
@@ -818,7 +818,7 @@ const AilurusRegisterForm = () => {
                   type="button"
                   onClick={sendSmsCodeForRegister}
                   disabled={smsDisableButton || smsSendLoading}
-                  className="text-xs text-ailurus-rust-400 hover:text-ailurus-rust-300 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  className="text-xs text-ailurus-rust-600 dark:text-ailurus-rust-400 hover:text-ailurus-rust-500 dark:hover:text-ailurus-rust-300 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   {smsDisableButton
                     ? `${smsCountdown}s`
@@ -936,10 +936,10 @@ const AilurusRegisterForm = () => {
 
       {/* Login link */}
       <AilurusAuthFooter>
-        <span className="text-ailurus-cream/60">{t('已有账户？')}</span>{' '}
+        <span className="text-gray-500 dark:text-ailurus-cream/60">{t('已有账户？')}</span>{' '}
         <Link
           to="/login"
-          className="text-ailurus-rust-400 hover:text-ailurus-rust-300 font-medium transition-colors"
+          className="text-ailurus-rust-600 dark:text-ailurus-rust-400 hover:text-ailurus-rust-500 dark:hover:text-ailurus-rust-300 font-medium transition-colors"
         >
           {t('登录')}
         </Link>

@@ -122,13 +122,15 @@ const AilurusModal = forwardRef(function AilurusModal(
               // Base styles
               'relative w-full',
               sizeClasses[size],
-              // Glassmorphism
+              // Glassmorphism - theme aware
               'backdrop-blur-2xl',
-              'bg-ailurus-obsidian/90',
-              'border border-white/10',
+              // Light mode
+              'bg-white/95 border border-gray-200',
+              'shadow-[0_25px_80px_rgba(0,0,0,0.1)]',
+              // Dark mode with Aurora glow
+              'dark:bg-ailurus-obsidian/90 dark:border-white/10',
+              'dark:shadow-[0_25px_80px_rgba(139,92,246,0.12),0_0_60px_rgba(6,182,212,0.08),inset_0_1px_0_rgba(255,255,255,0.05)]',
               'rounded-2xl',
-              // Shadow
-              'shadow-[0_25px_80px_rgba(194,94,0,0.15),inset_0_1px_0_rgba(255,255,255,0.05)]',
               // Overflow
               'overflow-hidden',
               className
@@ -142,15 +144,15 @@ const AilurusModal = forwardRef(function AilurusModal(
           >
             {/* Header */}
             {(title || closable) && (
-              <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-white/5">
                 {title && (
-                  <h2 className="text-lg font-semibold text-ailurus-cream">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-ailurus-cream">
                     {title}
                   </h2>
                 )}
                 {closable && (
                   <motion.button
-                    className="p-2 rounded-lg text-ailurus-cream/60 hover:text-ailurus-cream hover:bg-white/5 transition-colors"
+                    className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-ailurus-cream/60 dark:hover:text-ailurus-cream dark:hover:bg-white/5 transition-colors"
                     onClick={onClose}
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.95 }}
@@ -181,13 +183,14 @@ const AilurusModal = forwardRef(function AilurusModal(
 
             {/* Footer */}
             {(footer !== null) && (
-              <div className="px-6 py-4 border-t border-white/5 bg-white/[0.02]">
+              <div className="px-6 py-4 border-t border-gray-200 bg-gray-50/50 dark:border-white/5 dark:bg-white/[0.02]">
                 {footer !== undefined ? footer : defaultFooter}
               </div>
             )}
 
-            {/* Decorative corner glow */}
-            <div className="absolute -top-20 -right-20 w-40 h-40 bg-ailurus-rust-500/20 rounded-full blur-3xl pointer-events-none" />
+            {/* Decorative Aurora corner glows */}
+            <div className="absolute -top-20 -right-20 w-40 h-40 bg-ailurus-teal-500/15 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-16 -left-16 w-32 h-32 bg-ailurus-purple-500/15 rounded-full blur-3xl pointer-events-none" />
           </motion.div>
         </div>
       )}
@@ -261,11 +264,11 @@ export const AilurusConfirmModal = forwardRef(function AilurusConfirmModal(
         </motion.div>
 
         {/* Title */}
-        <h3 className="text-lg font-semibold text-ailurus-cream mb-2">{title}</h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-ailurus-cream mb-2">{title}</h3>
 
         {/* Content */}
         {content && (
-          <p className="text-sm text-ailurus-cream/60 mb-6">{content}</p>
+          <p className="text-sm text-gray-600 dark:text-ailurus-cream/60 mb-6">{content}</p>
         )}
 
         {/* Actions */}

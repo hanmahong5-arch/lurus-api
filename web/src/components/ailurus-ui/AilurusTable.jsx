@@ -59,7 +59,7 @@ const AilurusTable = forwardRef(function AilurusTable(
     <tr>
       {columns.map((col, i) => (
         <td key={i} className="px-4 py-3">
-          <div className="h-4 bg-white/10 rounded animate-pulse" />
+          <div className="h-4 bg-gray-200 dark:bg-white/10 rounded animate-pulse" />
         </td>
       ))}
     </tr>
@@ -69,7 +69,7 @@ const AilurusTable = forwardRef(function AilurusTable(
   const EmptyState = () => (
     <tr>
       <td colSpan={columns.length} className="px-4 py-12 text-center">
-        <div className="flex flex-col items-center text-ailurus-cream/40">
+        <div className="flex flex-col items-center text-gray-400 dark:text-ailurus-cream/40">
           <svg
             className="w-12 h-12 mb-3"
             fill="none"
@@ -94,8 +94,8 @@ const AilurusTable = forwardRef(function AilurusTable(
       ref={ref}
       className={clsx(
         'overflow-hidden rounded-xl',
-        'border border-white/10',
-        'bg-white/[0.02]',
+        'border border-gray-200 dark:border-white/10',
+        'bg-gray-50/50 dark:bg-white/[0.02]',
         'backdrop-blur-sm',
         className
       )}
@@ -105,12 +105,12 @@ const AilurusTable = forwardRef(function AilurusTable(
         <table className="w-full">
           {/* Table Header */}
           <thead>
-            <tr className="border-b border-white/10 bg-white/[0.03]">
+            <tr className="border-b border-gray-200 dark:border-white/10 bg-gray-100/50 dark:bg-white/[0.03]">
               {columns.map((col) => (
                 <th
                   key={col.key || col.dataIndex}
                   className={clsx(
-                    'px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ailurus-cream/70',
+                    'px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-ailurus-cream/70',
                     col.align === 'center' && 'text-center',
                     col.align === 'right' && 'text-right'
                   )}
@@ -136,9 +136,9 @@ const AilurusTable = forwardRef(function AilurusTable(
                 <motion.tr
                   key={row[rowKey] || rowIndex}
                   className={clsx(
-                    'border-b border-white/5 transition-colors',
-                    striped && rowIndex % 2 === 1 && 'bg-white/[0.02]',
-                    hoverable && 'hover:bg-white/[0.05]',
+                    'border-b border-gray-100 dark:border-white/5 transition-colors',
+                    striped && rowIndex % 2 === 1 && 'bg-gray-50 dark:bg-white/[0.02]',
+                    hoverable && 'hover:bg-gray-100 dark:hover:bg-white/[0.05]',
                     onRowClick && 'cursor-pointer'
                   )}
                   variants={rowVariants}
@@ -159,7 +159,7 @@ const AilurusTable = forwardRef(function AilurusTable(
                     <td
                       key={col.key || col.dataIndex}
                       className={clsx(
-                        'px-4 py-3 text-sm text-ailurus-cream/80',
+                        'px-4 py-3 text-sm text-gray-900 dark:text-ailurus-cream/80',
                         col.align === 'center' && 'text-center',
                         col.align === 'right' && 'text-right'
                       )}
@@ -186,13 +186,13 @@ export const AilurusTableTag = forwardRef(function AilurusTableTag(
   ref
 ) {
   const variants = {
-    default: 'bg-white/10 text-ailurus-cream/80',
-    success: 'bg-green-500/20 text-green-400',
-    warning: 'bg-yellow-500/20 text-yellow-400',
-    danger: 'bg-red-500/20 text-red-400',
-    info: 'bg-ailurus-teal-500/20 text-ailurus-teal-400',
-    rust: 'bg-ailurus-rust-500/20 text-ailurus-rust-400',
-    purple: 'bg-ailurus-purple-500/20 text-ailurus-purple-400',
+    default: 'bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-ailurus-cream/80',
+    success: 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400',
+    warning: 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400',
+    danger: 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400',
+    info: 'bg-ailurus-teal-100 dark:bg-ailurus-teal-500/20 text-ailurus-teal-700 dark:text-ailurus-teal-400',
+    rust: 'bg-ailurus-rust-100 dark:bg-ailurus-rust-500/20 text-ailurus-rust-700 dark:text-ailurus-rust-400',
+    purple: 'bg-ailurus-purple-100 dark:bg-ailurus-purple-500/20 text-ailurus-purple-700 dark:text-ailurus-purple-400',
   };
 
   return (
@@ -267,9 +267,9 @@ export const AilurusTableActionButton = forwardRef(function AilurusTableActionBu
   ref
 ) {
   const variants = {
-    default: 'text-ailurus-cream/60 hover:text-ailurus-cream hover:bg-white/10',
-    danger: 'text-red-400/60 hover:text-red-400 hover:bg-red-500/10',
-    primary: 'text-ailurus-rust-400/60 hover:text-ailurus-rust-400 hover:bg-ailurus-rust-500/10',
+    default: 'text-gray-500 dark:text-ailurus-cream/60 hover:text-gray-900 dark:hover:text-ailurus-cream hover:bg-gray-100 dark:hover:bg-white/10',
+    danger: 'text-red-400/60 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10',
+    primary: 'text-ailurus-rust-500/60 dark:text-ailurus-rust-400/60 hover:text-ailurus-rust-600 dark:hover:text-ailurus-rust-400 hover:bg-ailurus-rust-50 dark:hover:bg-ailurus-rust-500/10',
   };
 
   return (

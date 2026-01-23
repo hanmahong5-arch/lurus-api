@@ -85,13 +85,13 @@ const AilurusInput = forwardRef(function AilurusInput(
     onChange?.(e);
   };
 
-  // Animation variants for the focus ring glow
+  // Animation variants for the focus ring glow with Aurora effect
   const glowVariants = {
     unfocused: {
-      boxShadow: '0 0 0 0px rgba(194, 94, 0, 0)',
+      boxShadow: '0 0 0 0px rgba(139, 92, 246, 0)',
     },
     focused: {
-      boxShadow: '0 0 0 3px rgba(194, 94, 0, 0.15)',
+      boxShadow: '0 0 0 3px rgba(139, 92, 246, 0.15), 0 0 20px rgba(6, 182, 212, 0.1)',
       transition: springConfig.snappy,
     },
     error: {
@@ -193,13 +193,14 @@ const AilurusInput = forwardRef(function AilurusInput(
             'w-full rounded-xl outline-none',
             'transition-colors duration-200',
             // Background and border
-            'bg-white/5 dark:bg-white/5',
+            // Light mode: subtle gray background and visible border
+            'bg-gray-100/80 dark:bg-white/5',
             'border',
             error
               ? 'border-red-500'
               : isFocused
-                ? 'border-ailurus-rust-500'
-                : 'border-white/10 dark:border-white/10',
+                ? 'border-ailurus-purple-500 dark:border-ailurus-teal-500'
+                : 'border-gray-300 dark:border-white/10',
             // Text
             'text-semi-color-text-0',
             'placeholder:text-semi-color-text-2',
@@ -229,13 +230,16 @@ const AilurusInput = forwardRef(function AilurusInput(
           </div>
         )}
 
-        {/* Focus line animation at bottom */}
+        {/* Focus line animation at bottom with Aurora gradient */}
         <motion.div
-          className="absolute bottom-0 left-0 right-0 h-0.5 bg-ailurus-rust-500 rounded-full"
+          className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
+          style={{
+            background: 'linear-gradient(90deg, #06B6D4, #8B5CF6, #C25E00)',
+            originX: 0.5
+          }}
           initial={{ scaleX: 0 }}
           animate={{ scaleX: isFocused ? 1 : 0 }}
           transition={springConfig.snappy}
-          style={{ originX: 0.5 }}
         />
       </motion.div>
 
@@ -324,13 +328,14 @@ export const AilurusTextarea = forwardRef(function AilurusTextarea(
             'px-4 py-3 text-base',
             'resize-y min-h-[100px]',
             'transition-colors duration-200',
-            'bg-white/5 dark:bg-white/5',
+            // Light mode: subtle gray background and visible border
+            'bg-gray-100/80 dark:bg-white/5',
             'border',
             error
               ? 'border-red-500'
               : isFocused
                 ? 'border-ailurus-rust-500'
-                : 'border-white/10',
+                : 'border-gray-300 dark:border-white/10',
             'text-semi-color-text-0',
             'placeholder:text-semi-color-text-2',
             disabled && 'opacity-50 cursor-not-allowed',

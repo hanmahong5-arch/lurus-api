@@ -62,28 +62,28 @@ const AilurusButton = forwardRef(function AilurusButton(
   };
 
   // Variant styles with luminous shadows
+  // All variants now support both light and dark themes
   const variantClasses = {
     primary: clsx(
       'bg-ailurus-gradient-rust',
-      'text-ailurus-cream',
+      'text-white', // White text works on rust gradient in both themes
       'border-transparent',
       'shadow-ailurus-rust',
       'hover:shadow-ailurus-rust-lg',
     ),
     secondary: clsx(
-      'bg-white/5 dark:bg-white/5',
-      'bg-black/[0.03] dark:bg-white/5',
+      'bg-gray-100 dark:bg-white/5',
       'backdrop-blur-xl',
       'text-semi-color-text-0',
-      'border border-white/10 dark:border-white/10',
-      'hover:bg-white/8 dark:hover:bg-white/8',
-      'hover:border-white/15 dark:hover:border-white/15',
+      'border border-gray-200 dark:border-white/10',
+      'hover:bg-gray-200 dark:hover:bg-white/8',
+      'hover:border-gray-300 dark:hover:border-white/15',
     ),
     ghost: clsx(
       'bg-transparent',
       'text-semi-color-text-0',
       'border-transparent',
-      'hover:bg-white/5 dark:hover:bg-white/5',
+      'hover:bg-gray-100 dark:hover:bg-white/5',
     ),
     teal: clsx(
       'bg-ailurus-gradient-teal',

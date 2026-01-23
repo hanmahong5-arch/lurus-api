@@ -29,12 +29,17 @@ const Navigation = ({
   pricingRequireAuth,
 }) => {
   const renderNavLinks = () => {
+    // Base styling with smooth transitions
     const baseClasses =
-      'flex-shrink-0 flex items-center gap-1 font-semibold rounded-md transition-all duration-200 ease-in-out';
-    const hoverClasses = 'hover:text-semi-color-primary';
-    const spacingClasses = isMobile ? 'p-1' : 'p-2';
+      'flex-shrink-0 flex items-center gap-1 font-semibold rounded-xl transition-all duration-300 ease-ailurus-smooth';
+    // Explicit text color for light/dark modes to ensure visibility
+    const colorClasses = 'text-gray-700 dark:text-gray-200';
+    // Aurora-inspired hover effects
+    const hoverClasses =
+      'hover:text-ailurus-purple dark:hover:text-ailurus-teal hover:bg-ailurus-purple-500/5 dark:hover:bg-ailurus-teal-500/10';
+    const spacingClasses = isMobile ? 'px-2 py-1' : 'px-3 py-2';
 
-    const commonLinkClasses = `${baseClasses} ${spacingClasses} ${hoverClasses}`;
+    const commonLinkClasses = `${baseClasses} ${colorClasses} ${spacingClasses} ${hoverClasses}`;
 
     return mainNavLinks.map((link) => {
       const linkContent = <span>{link.text}</span>;
@@ -70,7 +75,7 @@ const Navigation = ({
   };
 
   return (
-    <nav className='flex flex-1 items-center gap-1 lg:gap-2 mx-2 md:mx-4 overflow-x-auto whitespace-nowrap scrollbar-hide'>
+    <nav className='ailurus-nav-aurora flex flex-1 items-center gap-1 lg:gap-2 mx-2 md:mx-4 overflow-x-auto whitespace-nowrap scrollbar-hide'>
       <SkeletonWrapper
         loading={isLoading}
         type='navigation'

@@ -63,7 +63,7 @@ const AilurusPageHeader = forwardRef(function AilurusPageHeader(
           <div className="flex items-center gap-3">
             {icon && (
               <motion.div
-                className="w-10 h-10 rounded-xl bg-ailurus-rust-500/20 flex items-center justify-center text-ailurus-rust-400"
+                className="w-10 h-10 rounded-xl bg-ailurus-rust-500/20 flex items-center justify-center text-ailurus-rust-500 dark:text-ailurus-rust-400"
                 variants={staggerItem}
                 whileHover={{ scale: 1.1, rotate: 5 }}
                 transition={springConfig.bouncy}
@@ -72,7 +72,7 @@ const AilurusPageHeader = forwardRef(function AilurusPageHeader(
               </motion.div>
             )}
             <motion.h1
-              className="ailurus-heading text-2xl font-bold text-ailurus-cream"
+              className="ailurus-heading text-2xl font-bold text-gray-900 dark:text-ailurus-cream"
               variants={staggerItem}
             >
               {title}
@@ -81,7 +81,7 @@ const AilurusPageHeader = forwardRef(function AilurusPageHeader(
 
           {description && (
             <motion.p
-              className="mt-2 text-sm text-ailurus-cream/60 max-w-2xl"
+              className="mt-2 text-sm text-gray-600 dark:text-ailurus-cream/60 max-w-2xl"
               variants={staggerItem}
             >
               {description}
@@ -127,19 +127,19 @@ export const AilurusBreadcrumb = forwardRef(function AilurusBreadcrumb(
       {items.map((item, index) => (
         <div key={index} className="flex items-center gap-2">
           {index > 0 && (
-            <span className="text-ailurus-cream/30">/</span>
+            <span className="text-gray-300 dark:text-ailurus-cream/30">/</span>
           )}
           {item.href ? (
             <motion.a
               href={item.href}
-              className="text-ailurus-cream/60 hover:text-ailurus-rust-400 transition-colors"
+              className="text-gray-500 dark:text-ailurus-cream/60 hover:text-ailurus-rust-500 dark:hover:text-ailurus-rust-400 transition-colors"
               whileHover={{ x: 2 }}
               transition={springConfig.snappy}
             >
               {item.label}
             </motion.a>
           ) : (
-            <span className="text-ailurus-cream">{item.label}</span>
+            <span className="text-gray-900 dark:text-ailurus-cream">{item.label}</span>
           )}
         </div>
       ))}
@@ -168,9 +168,9 @@ export const AilurusSectionHeader = forwardRef(function AilurusSectionHeader(
       {...props}
     >
       <div>
-        <h3 className="text-lg font-semibold text-ailurus-cream">{title}</h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-ailurus-cream">{title}</h3>
         {description && (
-          <p className="text-sm text-ailurus-cream/50 mt-0.5">{description}</p>
+          <p className="text-sm text-gray-500 dark:text-ailurus-cream/50 mt-0.5">{description}</p>
         )}
       </div>
       {actions && (

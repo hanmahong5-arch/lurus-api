@@ -150,8 +150,7 @@ export const AilurusCardHeader = forwardRef(function AilurusCardHeader(
       className={clsx(
         'ailurus-heading',
         'pb-4 mb-4',
-        'border-b border-white/5',
-        'dark:border-white/5',
+        'border-b border-gray-200 dark:border-white/5',
         className
       )}
       {...props}
@@ -238,8 +237,7 @@ export const AilurusCardFooter = forwardRef(function AilurusCardFooter(
       ref={ref}
       className={clsx(
         'pt-4 mt-4',
-        'border-t border-white/5',
-        'dark:border-white/5',
+        'border-t border-gray-200 dark:border-white/5',
         'flex items-center gap-3',
         className
       )}

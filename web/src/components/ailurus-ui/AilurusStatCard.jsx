@@ -63,31 +63,31 @@ const AilurusStatCard = forwardRef(function AilurusStatCard(
     }
   }, [value, shouldAnimate, delay]);
 
-  // Variant styles
+  // Variant styles - now with light theme support
   const variantStyles = {
     default: {
       iconBg: 'bg-ailurus-rust-500/20',
-      iconColor: 'text-ailurus-rust-400',
-      shadow: 'shadow-ailurus-rust/10',
-      border: 'border-white/5',
+      iconColor: 'text-ailurus-rust-500 dark:text-ailurus-rust-400',
+      shadow: 'shadow-sm dark:shadow-ailurus-rust/10',
+      border: 'border-gray-200 dark:border-white/5',
     },
     rust: {
       iconBg: 'bg-ailurus-rust-500/20',
-      iconColor: 'text-ailurus-rust-400',
-      shadow: 'shadow-ailurus-rust',
-      border: 'border-ailurus-rust-500/20',
+      iconColor: 'text-ailurus-rust-500 dark:text-ailurus-rust-400',
+      shadow: 'shadow-md shadow-ailurus-rust-200 dark:shadow-ailurus-rust',
+      border: 'border-ailurus-rust-200 dark:border-ailurus-rust-500/20',
     },
     teal: {
       iconBg: 'bg-ailurus-teal-500/20',
-      iconColor: 'text-ailurus-teal-400',
-      shadow: 'shadow-ailurus-teal',
-      border: 'border-ailurus-teal-500/20',
+      iconColor: 'text-ailurus-teal-600 dark:text-ailurus-teal-400',
+      shadow: 'shadow-md shadow-ailurus-teal-200 dark:shadow-ailurus-teal',
+      border: 'border-ailurus-teal-200 dark:border-ailurus-teal-500/20',
     },
     purple: {
       iconBg: 'bg-ailurus-purple-500/20',
-      iconColor: 'text-ailurus-purple-400',
-      shadow: 'shadow-ailurus-purple',
-      border: 'border-ailurus-purple-500/20',
+      iconColor: 'text-ailurus-purple-600 dark:text-ailurus-purple-400',
+      shadow: 'shadow-md shadow-ailurus-purple-200 dark:shadow-ailurus-purple',
+      border: 'border-ailurus-purple-200 dark:border-ailurus-purple-500/20',
     },
   };
 
@@ -126,7 +126,7 @@ const AilurusStatCard = forwardRef(function AilurusStatCard(
         // Glassmorphism base
         'relative overflow-hidden',
         'backdrop-blur-xl',
-        'bg-white/[0.03]',
+        'bg-white dark:bg-white/[0.03]',
         'border',
         styles.border,
         'rounded-2xl',
@@ -157,7 +157,7 @@ const AilurusStatCard = forwardRef(function AilurusStatCard(
       <div className="relative z-10">
         {/* Header with icon and title */}
         <div className="flex items-center justify-between mb-4">
-          <span className="text-sm font-medium text-ailurus-cream/60">{title}</span>
+          <span className="text-sm font-medium text-gray-600 dark:text-ailurus-cream/60">{title}</span>
           {icon && (
             <motion.div
               className={clsx(
@@ -175,7 +175,7 @@ const AilurusStatCard = forwardRef(function AilurusStatCard(
         {/* Value */}
         <div className="flex items-baseline gap-2">
           <motion.span
-            className="text-3xl font-bold text-ailurus-cream"
+            className="text-3xl font-bold text-gray-900 dark:text-ailurus-cream"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: delay + 0.2, ...springConfig.snappy }}
@@ -256,17 +256,17 @@ export const AilurusMiniStatCard = forwardRef(function AilurusMiniStatCard(
   ref
 ) {
   const variantStyles = {
-    default: 'bg-white/5 border-white/5',
-    rust: 'bg-ailurus-rust-500/10 border-ailurus-rust-500/20',
-    teal: 'bg-ailurus-teal-500/10 border-ailurus-teal-500/20',
-    purple: 'bg-ailurus-purple-500/10 border-ailurus-purple-500/20',
+    default: 'bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/5',
+    rust: 'bg-ailurus-rust-50 dark:bg-ailurus-rust-500/10 border-ailurus-rust-200 dark:border-ailurus-rust-500/20',
+    teal: 'bg-ailurus-teal-50 dark:bg-ailurus-teal-500/10 border-ailurus-teal-200 dark:border-ailurus-teal-500/20',
+    purple: 'bg-ailurus-purple-50 dark:bg-ailurus-purple-500/10 border-ailurus-purple-200 dark:border-ailurus-purple-500/20',
   };
 
   const iconColors = {
-    default: 'text-ailurus-cream/60',
-    rust: 'text-ailurus-rust-400',
-    teal: 'text-ailurus-teal-400',
-    purple: 'text-ailurus-purple-400',
+    default: 'text-gray-500 dark:text-ailurus-cream/60',
+    rust: 'text-ailurus-rust-500 dark:text-ailurus-rust-400',
+    teal: 'text-ailurus-teal-600 dark:text-ailurus-teal-400',
+    purple: 'text-ailurus-purple-600 dark:text-ailurus-purple-400',
   };
 
   return (
@@ -285,8 +285,8 @@ export const AilurusMiniStatCard = forwardRef(function AilurusMiniStatCard(
         <span className={iconColors[variant]}>{icon}</span>
       )}
       <div className="flex flex-col">
-        <span className="text-xs text-ailurus-cream/50">{label}</span>
-        <span className="text-sm font-semibold text-ailurus-cream">{value}</span>
+        <span className="text-xs text-gray-500 dark:text-ailurus-cream/50">{label}</span>
+        <span className="text-sm font-semibold text-gray-900 dark:text-ailurus-cream">{value}</span>
       </div>
     </motion.div>
   );

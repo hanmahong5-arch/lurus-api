@@ -21,6 +21,17 @@
   --sidebar-width: 180px;
   --sidebar-width-collapsed: 60px;
   --sidebar-current-width: var(--sidebar-width);
+  --navbar-height: 64px;
+}
+
+/* Page content offset to account for fixed navbar */
+.page-offset {
+  margin-top: var(--navbar-height);
+}
+
+/* Explicit margin-top for navbar offset (fallback for Tailwind JIT issues) */
+.mt-\[60px\] {
+  margin-top: 60px;
 }
 
 body.sidebar-collapsed {
@@ -1169,4 +1180,512 @@ html:not(.dark) .ailurus-input {
 .ailurus-focus-ring:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--ailurus-rust-500), 0 0 0 4px rgba(194, 94, 0, 0.2);
+}
+
+/* ==================== Aurora Gradient System ==================== */
+/* Signature three-color gradient (Teal → Purple → Rust) */
+
+:root {
+  --ailurus-aurora-gradient: linear-gradient(135deg, #06B6D4 0%, #8B5CF6 50%, #C25E00 100%);
+  --ailurus-aurora-glow: 0 0 40px rgba(6, 182, 212, 0.3), 0 0 80px rgba(139, 92, 246, 0.2);
+}
+
+/* Aurora gradient text effect */
+.ailurus-aurora-text {
+  background: linear-gradient(135deg, #06B6D4 0%, #8B5CF6 40%, #C25E00 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-size: 200% 200%;
+}
+
+.ailurus-aurora-text-animated {
+  background: linear-gradient(135deg, #06B6D4, #8B5CF6, #C25E00, #8B5CF6, #06B6D4);
+  background-size: 400% 400%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: auroraTextShift 8s ease-in-out infinite;
+}
+
+@keyframes auroraTextShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Aurora border glow effect */
+.ailurus-aurora-border {
+  position: relative;
+  border: 1px solid transparent;
+  background: var(--semi-color-bg-1);
+  background-clip: padding-box;
+}
+
+.ailurus-aurora-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #06B6D4 0%, #8B5CF6 50%, #C25E00 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Aurora glow shadow */
+.ailurus-aurora-glow {
+  box-shadow:
+    0 0 20px rgba(6, 182, 212, 0.2),
+    0 0 40px rgba(139, 92, 246, 0.15),
+    0 0 60px rgba(194, 94, 0, 0.1);
+}
+
+.ailurus-aurora-glow-strong {
+  box-shadow:
+    0 0 30px rgba(6, 182, 212, 0.3),
+    0 0 60px rgba(139, 92, 246, 0.25),
+    0 0 90px rgba(194, 94, 0, 0.15);
+}
+
+/* Aurora button styles */
+.ailurus-btn-aurora {
+  position: relative;
+  background: linear-gradient(135deg, #06B6D4 0%, #8B5CF6 50%, #C25E00 100%);
+  background-size: 200% 200%;
+  color: #FDFBF7;
+  border: none;
+  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3);
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ailurus-btn-aurora:hover {
+  background-position: 100% 50%;
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.4);
+  transform: translateY(-2px);
+}
+
+.ailurus-btn-aurora:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Aurora card with animated border */
+.ailurus-card-aurora {
+  position: relative;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.ailurus-card-aurora::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #06B6D4 0%, #8B5CF6 50%, #C25E00 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
+}
+
+.ailurus-card-aurora:hover::before {
+  opacity: 1;
+}
+
+html:not(.dark) .ailurus-card-aurora {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+/* ==================== Floating Organic Bubbles ==================== */
+/* Hand-drawn style decorative elements */
+
+.ailurus-bubble {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(40px);
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+.ailurus-bubble-teal {
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.5) 0%, transparent 70%);
+}
+
+.ailurus-bubble-purple {
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.5) 0%, transparent 70%);
+}
+
+.ailurus-bubble-rust {
+  background: radial-gradient(circle, rgba(194, 94, 0, 0.5) 0%, transparent 70%);
+}
+
+/* Animated floating bubble */
+.ailurus-bubble-float {
+  animation: bubbleFloat 6s ease-in-out infinite;
+}
+
+@keyframes bubbleFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-15px) scale(1.05); }
+}
+
+/* ==================== Auth Page Aurora Background ==================== */
+.ailurus-auth-bg {
+  position: relative;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0F172A 0%, #1A1A1A 100%);
+  overflow: hidden;
+}
+
+html:not(.dark) .ailurus-auth-bg {
+  background: linear-gradient(135deg, #FDFBF7 0%, #FAF5ED 100%);
+}
+
+.ailurus-auth-bg::before {
+  content: '';
+  position: absolute;
+  top: -20%;
+  left: -10%;
+  width: 50%;
+  height: 50%;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.15) 0%, transparent 70%);
+  filter: blur(60px);
+  animation: bubbleFloat 8s ease-in-out infinite;
+}
+
+.ailurus-auth-bg::after {
+  content: '';
+  position: absolute;
+  bottom: -20%;
+  right: -10%;
+  width: 60%;
+  height: 60%;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.12) 0%, transparent 70%);
+  filter: blur(80px);
+  animation: bubbleFloat 10s ease-in-out infinite reverse;
+}
+
+/* Third decorative bubble for rust accent */
+.ailurus-auth-bg-extra::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 20%;
+  width: 30%;
+  height: 30%;
+  background: radial-gradient(circle, rgba(194, 94, 0, 0.1) 0%, transparent 70%);
+  filter: blur(50px);
+  animation: bubbleFloat 7s ease-in-out infinite;
+  z-index: 0;
+}
+
+/* ==================== Enhanced Glassmorphism for Auth ==================== */
+.ailurus-auth-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 24px;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+html:not(.dark) .ailurus-auth-card {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* ==================== Navigation Aurora Accent ==================== */
+.ailurus-nav-aurora {
+  position: relative;
+}
+
+.ailurus-nav-aurora::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(6, 182, 212, 0.3) 20%,
+    rgba(139, 92, 246, 0.4) 50%,
+    rgba(194, 94, 0, 0.3) 80%,
+    transparent 100%
+  );
+  opacity: 0.6;
+}
+
+/* Active nav item with aurora indicator */
+.ailurus-nav-item-active {
+  position: relative;
+}
+
+.ailurus-nav-item-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: linear-gradient(180deg, #06B6D4 0%, #8B5CF6 50%, #C25E00 100%);
+  border-radius: 0 2px 2px 0;
+}
+
+/* ==================== Logo Aurora Gradient ==================== */
+.ailurus-logo-aurora {
+  background: linear-gradient(135deg, #06B6D4 0%, #8B5CF6 40%, #C25E00 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 700;
+}
+
+/* ==================== Input Aurora Focus ==================== */
+.ailurus-input-aurora:focus {
+  border-color: rgba(139, 92, 246, 0.5);
+  box-shadow:
+    0 0 0 3px rgba(139, 92, 246, 0.1),
+    0 0 20px rgba(6, 182, 212, 0.1);
+}
+
+/* ==================== Selection Aurora ==================== */
+::selection {
+  background: rgba(139, 92, 246, 0.3);
+  color: inherit;
+}
+
+::-moz-selection {
+  background: rgba(139, 92, 246, 0.3);
+  color: inherit;
+}
+
+/* ==================== Stunning Background Images ==================== */
+/* High-quality background image presets for different sections */
+
+:root {
+  /* Curated background images from Unsplash - tech/abstract themes */
+  --ailurus-bg-tech-dark: url('https://images.unsplash.com/photo-1639322537228-f710d846310a?w=1920&q=80');
+  --ailurus-bg-tech-light: url('https://images.unsplash.com/photo-1557683316-973673baf926?w=1920&q=80');
+  --ailurus-bg-abstract-purple: url('https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?w=1920&q=80');
+  --ailurus-bg-abstract-gradient: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1920&q=80');
+  --ailurus-bg-space: url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1920&q=80');
+  --ailurus-bg-aurora-nature: url('https://images.unsplash.com/photo-1531366936337-7c912a4589a7?w=1920&q=80');
+  --ailurus-bg-mesh-gradient: url('https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1920&q=80');
+  --ailurus-bg-particles: url('https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=1920&q=80');
+}
+
+/* Base background image container */
+.ailurus-bg-image {
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Tech-style dark background */
+.ailurus-bg-tech {
+  background-image: var(--ailurus-bg-tech-dark);
+}
+
+/* Abstract purple/pink gradient */
+.ailurus-bg-abstract {
+  background-image: var(--ailurus-bg-abstract-purple);
+}
+
+/* Space/galaxy background */
+.ailurus-bg-space {
+  background-image: var(--ailurus-bg-space);
+}
+
+/* Aurora borealis nature shot */
+.ailurus-bg-aurora-nature {
+  background-image: var(--ailurus-bg-aurora-nature);
+}
+
+/* Mesh gradient background */
+.ailurus-bg-mesh {
+  background-image: var(--ailurus-bg-mesh-gradient);
+}
+
+/* Particles/network background */
+.ailurus-bg-particles {
+  background-image: var(--ailurus-bg-particles);
+}
+
+/* Overlay for background images - dark mode */
+.ailurus-bg-overlay-dark {
+  position: relative;
+}
+
+.ailurus-bg-overlay-dark::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(15, 23, 42, 0.9) 0%,
+    rgba(26, 26, 26, 0.85) 100%
+  );
+  backdrop-filter: blur(2px);
+  z-index: 1;
+}
+
+/* Overlay for background images - light mode */
+.ailurus-bg-overlay-light {
+  position: relative;
+}
+
+.ailurus-bg-overlay-light::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(253, 251, 247, 0.92) 0%,
+    rgba(250, 245, 237, 0.88) 100%
+  );
+  backdrop-filter: blur(2px);
+  z-index: 1;
+}
+
+/* Aurora-tinted overlay */
+.ailurus-bg-overlay-aurora {
+  position: relative;
+}
+
+.ailurus-bg-overlay-aurora::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(6, 182, 212, 0.15) 0%,
+    rgba(139, 92, 246, 0.12) 50%,
+    rgba(194, 94, 0, 0.1) 100%
+  );
+  z-index: 1;
+}
+
+/* Hero section with stunning background */
+.ailurus-hero-bg {
+  position: relative;
+  min-height: 100vh;
+  background-image: var(--ailurus-bg-space);
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+.ailurus-hero-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(15, 23, 42, 0.7) 0%,
+    rgba(15, 23, 42, 0.9) 100%
+  );
+  z-index: 1;
+}
+
+html:not(.dark) .ailurus-hero-bg {
+  background-image: var(--ailurus-bg-mesh-gradient);
+}
+
+html:not(.dark) .ailurus-hero-bg::before {
+  background: linear-gradient(
+    180deg,
+    rgba(253, 251, 247, 0.85) 0%,
+    rgba(253, 251, 247, 0.95) 100%
+  );
+}
+
+/* Parallax effect for backgrounds */
+.ailurus-bg-parallax {
+  background-attachment: fixed;
+  background-size: cover;
+  background-position: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ailurus-bg-parallax {
+    background-attachment: scroll;
+  }
+}
+
+/* Animated gradient mesh background */
+.ailurus-bg-animated-mesh {
+  background: linear-gradient(
+    -45deg,
+    #0F172A,
+    #1A1A1A,
+    #06B6D4,
+    #8B5CF6,
+    #C25E00
+  );
+  background-size: 400% 400%;
+  animation: gradientShift 15s ease infinite;
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Card with background image */
+.ailurus-card-bg {
+  position: relative;
+  overflow: hidden;
+}
+
+.ailurus-card-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--ailurus-bg-abstract-gradient);
+  background-size: cover;
+  background-position: center;
+  opacity: 0.1;
+  z-index: 0;
+}
+
+.ailurus-card-bg > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Spotlight effect on background */
+.ailurus-spotlight {
+  position: relative;
+  overflow: hidden;
+}
+
+.ailurus-spotlight::after {
+  content: '';
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  top: -50%;
+  left: -50%;
+  background: radial-gradient(
+    circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(139, 92, 246, 0.15) 0%,
+    transparent 50%
+  );
+  pointer-events: none;
+  z-index: 2;
 }
