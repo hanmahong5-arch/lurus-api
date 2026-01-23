@@ -585,14 +585,15 @@ code {
   }
 }
 
+/* Light mode: Use aurora gradient with purple highlight */
 .shine-text {
   background: linear-gradient(
     90deg,
-    currentColor 0%,
-    currentColor 40%,
-    rgba(255, 255, 255, 0.9) 50%,
-    currentColor 60%,
-    currentColor 100%
+    #6366f1 0%,
+    #8B5CF6 30%,
+    #C25E00 50%,
+    #8B5CF6 70%,
+    #6366f1 100%
   );
   background-size: 200% 100%;
   -webkit-background-clip: text;
@@ -601,14 +602,15 @@ code {
   animation: sweep-shine 4s linear infinite;
 }
 
+/* Dark mode: Use teal to gold gradient */
 .dark .shine-text {
   background: linear-gradient(
     90deg,
-    currentColor 0%,
-    currentColor 40%,
+    #06B6D4 0%,
+    #8B5CF6 30%,
     #facc15 50%,
-    currentColor 60%,
-    currentColor 100%
+    #8B5CF6 70%,
+    #06B6D4 100%
   );
   background-size: 200% 100%;
   -webkit-background-clip: text;
