@@ -1,5 +1,89 @@
 ﻿# 开发进度文档 / Development Progress Document
 
+### 阶段 20: 移除所有 Ailurus 视觉增强 / Phase 20: Remove All Ailurus Visual Enhancements
+
+**时间 / Date:** 2026-01-23
+
+**用户需求 / User Requirements:**
+将 lurus-api 的所有网页视觉润色（包括背景、主题、颜色、效果增强等）全部删除，恢复到原始 new-api 项目的视觉表现。
+
+The user requested to remove ALL visual enhancements from lurus-api and restore it to the original new-api project's visual appearance.
+
+**执行的操作 / Actions Performed:**
+
+1. **替换核心样式文件 / Replaced Core Style Files:**
+   - `web/src/index.css`: 从 1694 行缩减至 837 行，移除所有 Ailurus/Aurora 相关 CSS
+   - `web/tailwind.config.js`: 从 365 行缩减至 150 行，仅保留 Semi Design 颜色映射
+
+2. **删除 Ailurus UI 组件目录 / Deleted Ailurus UI Component Directory:**
+   - `web/src/components/ailurus-ui/` 整个目录（11个文件）:
+     - AilurusButton.jsx
+     - AilurusCard.jsx
+     - AilurusInput.jsx
+     - AilurusModal.jsx
+     - AilurusTable.jsx
+     - AilurusTabs.jsx
+     - AilurusStatCard.jsx
+     - AilurusAuthLayout.jsx
+     - AilurusPageHeader.jsx
+     - motion.js
+     - index.js
+
+3. **删除 Ailurus 认证组件 / Deleted Ailurus Auth Components:**
+   - `web/src/components/auth/AilurusLoginForm.jsx`
+   - `web/src/components/auth/AilurusRegisterForm.jsx`
+
+4. **删除 Ailurus Dashboard 组件 / Deleted Ailurus Dashboard Components:**
+   - `web/src/components/dashboard/AilurusDashboard.jsx`
+   - `web/src/components/dashboard/AilurusDashboardHeader.jsx`
+   - `web/src/components/dashboard/AilurusStatsCards.jsx`
+   - `web/src/components/dashboard/AilurusChartsPanel.jsx`
+
+5. **清理依赖 / Cleaned Dependencies:**
+   - 从 `package.json` 移除 `antd` 和 `framer-motion` 依赖
+
+6. **修复组件引用 / Fixed Component Imports:**
+   - `web/src/App.jsx`: 将 AilurusLoginForm/AilurusRegisterForm 引用改回原始 LoginForm/RegisterForm
+   - `web/src/pages/Dashboard/index.jsx`: 恢复使用原始 Dashboard 组件
+   - `web/src/pages/Home/index.jsx`: 用原始版本替换
+
+7. **替换残留 Ailurus 类的文件 / Replaced Files with Remaining Ailurus Classes:**
+   - `web/src/components/layout/headerbar/UserArea.jsx`
+   - `web/src/components/layout/headerbar/LanguageSelector.jsx`
+   - `web/src/components/layout/headerbar/Navigation.jsx`
+   - `web/src/components/auth/TwoFAVerification.jsx`
+
+8. **删除 Ailurus 设计文档 / Deleted Ailurus Design Document:**
+   - `web/CLAUDE.md` (包含 Ailurus 设计理念)
+
+**移除的视觉特性 / Removed Visual Features:**
+
+| 特性 / Feature | 描述 / Description |
+|----------------|-------------------|
+| Aurora 渐变系统 | Teal → Purple → Rust 三色渐变 |
+| 浮动气泡动画 | 有机曲线装饰元素 |
+| 玻璃态效果 | Glassmorphism 背景 |
+| Unsplash 背景图片 | 8种高质量背景预设 |
+| Ailurus 调色板 | rust, teal, purple, cream, obsidian, forest 等自定义颜色 |
+| 自定义动画 | ailurus-aurora-shift, ailurus-float, ailurus-glow-pulse 等 |
+| 复杂阴影系统 | 彩色阴影、发光效果 |
+
+**统计 / Statistics:**
+- 删除文件数: 20+
+- CSS 减少: ~857 行
+- Tailwind 配置减少: ~215 行
+- 依赖减少: 2 (antd, framer-motion)
+
+**构建验证 / Build Verification:**
+- ✅ `bun run build` 成功 (57.28s)
+- ✅ 无编译错误
+- ✅ 无 ailurus 相关引用残留
+
+**结果 / Result:**
+项目视觉样式已完全恢复到原始 new-api 的外观，使用标准 Semi Design 组件和简洁的 Tailwind CSS 样式。
+
+---
+
 ### 阶段 19: 首页亮色主题修复 / Phase 19: Homepage Light Theme Fix
 
 **时间 / Date:** 2026-01-23
@@ -411,6 +495,6 @@ className="!text-gray-600 dark:!text-gray-300"
 
 ---
 
-**文档版本 / Document Version:** v1.18
+**文档版本 / Document Version:** v1.20
 **最后更新 / Last Updated:** 2026-01-23
-**状态 / Status:** ✅ 亮色主题全面修复完成 / Light Theme Comprehensive Fix Completed
+**状态 / Status:** ✅ Ailurus 视觉增强已完全移除，恢复原始 new-api 外观 / Ailurus visual enhancements completely removed, restored to original new-api appearance

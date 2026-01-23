@@ -18,21 +18,12 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import AilurusDashboard from '../../components/dashboard/AilurusDashboard';
+import Dashboard from '../../components/dashboard';
 
-/**
- * Dashboard Page - Main user dashboard with Ailurus styling
- *
- * Features:
- * - Statistics cards with animated counters
- * - Charts panel with multiple visualization types
- * - API info, announcements, FAQ, and uptime panels
- * - Glassmorphic design with luminous effects
- */
-const DashboardPage = () => (
-  <div className="mt-[60px] px-4 py-2">
-    <AilurusDashboard />
+const Detail = () => (
+  <div className='mt-[60px] px-2'>
+    <Dashboard />
   </div>
 );
 
-export default DashboardPage;
+export default Detail;

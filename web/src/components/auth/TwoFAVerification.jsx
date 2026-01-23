@@ -119,8 +119,7 @@ const TwoFAVerification = ({ onSuccess, onBack, isModal = false }) => {
               setUseBackupCode(!useBackupCode);
               setVerificationCode('');
             }}
-            className="text-ailurus-rust-500 dark:text-ailurus-rust-400"
-            style={{ marginRight: 16, padding: 0 }}
+            style={{ marginRight: 16, color: '#1890ff', padding: 0 }}
           >
             {useBackupCode ? '使用认证器验证码' : '使用备用码'}
           </Button>
@@ -130,8 +129,7 @@ const TwoFAVerification = ({ onSuccess, onBack, isModal = false }) => {
               theme='borderless'
               type='tertiary'
               onClick={onBack}
-              className="text-ailurus-rust-500 dark:text-ailurus-rust-400"
-              style={{ padding: 0 }}
+              style={{ color: '#1890ff', padding: 0 }}
             >
               返回登录
             </Button>
@@ -204,8 +202,7 @@ const TwoFAVerification = ({ onSuccess, onBack, isModal = false }) => {
               setUseBackupCode(!useBackupCode);
               setVerificationCode('');
             }}
-            className="text-ailurus-rust-500 dark:text-ailurus-rust-400"
-            style={{ marginRight: 16, padding: 0 }}
+            style={{ marginRight: 16, color: '#1890ff', padding: 0 }}
           >
             {useBackupCode ? '使用认证器验证码' : '使用备用码'}
           </Button>
@@ -215,8 +212,7 @@ const TwoFAVerification = ({ onSuccess, onBack, isModal = false }) => {
               theme='borderless'
               type='tertiary'
               onClick={onBack}
-              className="text-ailurus-rust-500 dark:text-ailurus-rust-400"
-              style={{ padding: 0 }}
+              style={{ color: '#1890ff', padding: 0 }}
             >
               返回登录
             </Button>
@@ -224,7 +220,12 @@ const TwoFAVerification = ({ onSuccess, onBack, isModal = false }) => {
         </div>
 
         <div
-          className="bg-gray-50 dark:bg-gray-800 rounded-lg mt-6 p-4"
+          style={{
+            marginTop: 24,
+            padding: 16,
+            background: '#f6f8fa',
+            borderRadius: 6,
+          }}
         >
           <Text size='small' type='secondary'>
             <strong>提示：</strong>
