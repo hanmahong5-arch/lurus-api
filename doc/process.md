@@ -1,5 +1,75 @@
 ﻿# 开发进度文档 / Development Progress Document
 
+### 阶段 19: 首页亮色主题修复 / Phase 19: Homepage Light Theme Fix
+
+**时间 / Date:** 2026-01-23
+
+**用户需求 / User Requirements:**
+首页在亮色模式下显示为黑色背景，导航和内容不可见。
+
+**问题分析 / Problem Analysis:**
+1. 首页 Banner 区域没有为亮色模式设置明确的背景色
+2. 模糊球（blur-ball）效果在白色背景上不明显
+3. shine-text 动画使用 `currentColor`，在亮色模式下效果不佳
+
+**修复方案 / Fix Approach:**
+1. 为 Banner 区域添加双主题背景渐变：
+   - 亮色: `from-gray-50 via-white to-gray-100`
+   - 暗色: `from-ailurus-obsidian via-ailurus-forest to-ailurus-obsidian`
+2. 改进 shine-text CSS：
+   - 亮色模式使用 Aurora 渐变（indigo → purple → rust）
+   - 暗色模式使用 teal → purple → gold 渐变
+
+**修改文件 / Modified Files:**
+| 文件 / File | 变更 / Changes |
+|-------------|---------------|
+| `web/src/pages/Home/index.jsx` | Banner 区域添加 `bg-gradient-to-br` 双主题背景 |
+| `web/src/index.css` | 重写 `.shine-text` 类，使用 Aurora 渐变色而非 `currentColor` |
+
+**部署状态 / Deployment:**
+- Commit: `c330337b`
+- 已推送并通过 ArgoCD 自动部署到生产环境
+
+---
+
+### 阶段 18: Ailurus UI 亮色主题全面修复 / Phase 18: Ailurus UI Light Theme Comprehensive Fix
+
+**时间 / Date:** 2026-01-23
+
+**用户需求 / User Requirements:**
+修复 Ailurus UI 组件在亮色模式下的可见性问题（38个主题兼容性问题）。
+
+**问题根因 / Root Cause:**
+所有组件采用"暗色优先"设计，使用仅适合暗色主题的颜色值（如 `text-ailurus-cream`、`bg-white/5`）。
+
+**修复策略 / Fix Strategy:**
+1. 显式双主题颜色: `text-gray-900 dark:text-ailurus-cream`
+2. 图标颜色替换: `!text-current` → `!text-gray-600 dark:!text-gray-300`
+3. Dropdown 配色统一使用 `ailurus-rust`
+
+**修改文件 / Modified Files (21 files, +1287/-1908 lines):**
+| 组件 / Component | 修复内容 / Fixes |
+|-----------------|----------------|
+| AilurusButton.jsx | primary/secondary/ghost variant 文本和背景色 |
+| AilurusTable.jsx | 表头、单元格、标签、操作按钮 |
+| AilurusTabs.jsx | pills/cards/underline variants |
+| AilurusStatCard.jsx | 标题、数值、图标、variant 边框 |
+| AilurusCard.jsx | CardHeader/CardFooter 边框 |
+| AilurusPageHeader.jsx | 标题、描述、面包屑 |
+| AilurusRegisterForm.jsx | terms checkbox、链接、验证码按钮 |
+| TwoFAVerification.jsx | 移除硬编码 `#f6f8fa`，链接颜色 |
+| ThemeToggle.jsx | 图标颜色 |
+| NotificationButton.jsx | 图标颜色 |
+| LanguageSelector.jsx | 图标颜色、选中状态 |
+| MobileMenuButton.jsx | 图标颜色 |
+| UserArea.jsx | Dropdown hover 颜色 |
+
+**部署状态 / Deployment:**
+- Commit: `21e5418a`
+- 已通过 ArgoCD 自动部署到生产环境
+
+---
+
 ### 阶段 15: Pencil 精美网页设计 - 苹果极简+手绘风+科技感 / Phase 15: Pencil Premium Web Design - Apple Minimalism + Hand-drawn + Tech Style
 
 **时间 / Date:** 2026-01-23
