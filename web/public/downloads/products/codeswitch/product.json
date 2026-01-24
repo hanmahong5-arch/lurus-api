@@ -1,7 +1,7 @@
 {
   "id": "codeswitch",
   "name": "CodeSwitch",
-  "displayName": "Lurus CodeSwitch",
+  "displayName": "Ailurus CodeSwitch",
   "description": {
     "zh": "面向 TUI 和 GUI 应用的企业级 AI 网关",
     "en": "Enterprise AI Gateway for TUI and GUI Applications"
@@ -13,7 +13,7 @@
   "repository": "https://github.com/user/codeswitch",
   "license": "MIT",
   "author": {
-    "name": "Lurus Team",
+    "name": "Ailurus Team",
     "email": "support@lurus.cn"
   },
   "platforms": ["windows", "darwin", "linux"],

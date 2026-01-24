@@ -13,7 +13,7 @@
   "repository": "https://github.com/user/gemini-gui",
   "license": "Apache-2.0",
   "author": {
-    "name": "Lurus Team",
+    "name": "Ailurus Team",
     "email": "support@lurus.cn"
   },
   "platforms": ["windows", "darwin", "linux"],
