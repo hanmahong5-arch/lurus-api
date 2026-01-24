@@ -234,7 +234,7 @@ const Subscription = () => {
   ];
 
   return (
-    <div className='mt-[60px] px-2'>
+    <div className='px-2'>
       <Card>
         <Typography.Title heading={4}>{t('订阅管理')}</Typography.Title>
 

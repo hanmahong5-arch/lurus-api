@@ -181,6 +181,7 @@ const PageLayout = () => {
             flex: '1 1 auto',
             display: 'flex',
             flexDirection: 'column',
+            marginTop: '64px', // Reserve space for fixed header
           }}
         >
           <Content
