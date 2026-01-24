@@ -1,5 +1,61 @@
 ﻿# 开发进度文档 / Development Progress Document
 
+### 阶段 21: 登录/注册页面浅色主题修复 / Phase 21: Login/Register Page Light Theme Fix
+
+**时间 / Date:** 2026-01-24
+
+**用户需求 / User Requirements:**
+1. 浅色主题始终有问题（深色模糊球与浅灰色背景不协调）
+2. 登录页面设计太紧凑，展示不够合理
+
+The user reported that the light theme on login page still had issues (dark blur balls conflicting with light gray background), and the login page layout was too compact.
+
+**问题分析 / Problem Analysis:**
+1. 登录页面使用 `bg-gray-100` 浅灰背景，但 blur-ball 装饰元素使用深色（indigo #6366f1, teal #14b8a6）
+2. 容器宽度使用 `max-w-sm`（~384px）太窄，但内部卡片使用 `max-w-md`（~448px）
+3. 固定的 `mt-[60px]` 顶部边距导致布局不灵活
+4. 部分标题样式 `!text-gray-800` 在深色主题下不可见
+
+**修复方案 / Fix Approach:**
+1. 移除 blur-ball 装饰元素，简化登录页面样式
+2. 使用 `min-h-screen` 占满全屏，移除固定顶部边距
+3. 将容器宽度从 `max-w-sm` 扩展到 `max-w-md`
+4. 使用 Semi Design CSS 变量 `bg-[var(--semi-color-bg-0)]` 确保主题兼容
+5. 为标题添加 `dark:!text-gray-200` 支持深色主题
+
+**修改的文件 / Modified Files:**
+
+| 文件 / File | 修改内容 / Changes |
+|-------------|-------------------|
+| `web/src/components/auth/LoginForm.jsx` | 移除 blur-ball，修复容器和标题样式 |
+| `web/src/components/auth/RegisterForm.jsx` | 同步修复，移除 blur-ball 和修复样式 |
+| `web/src/components/auth/PasswordResetForm.jsx` | 同步修复 |
+| `web/src/components/auth/PasswordResetConfirm.jsx` | 同步修复 |
+
+**具体代码变更 / Specific Code Changes:**
+
+```jsx
+// Before / 修改前
+<div className='relative overflow-hidden bg-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8'>
+  <div className='blur-ball blur-ball-indigo' style={{ top: '-80px', right: '-80px', transform: 'none' }} />
+  <div className='blur-ball blur-ball-teal' style={{ top: '50%', left: '-120px' }} />
+  <div className='w-full max-w-sm mt-[60px]'>
+
+// After / 修改后
+<div className='min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-[var(--semi-color-bg-0)]'>
+  <div className='w-full max-w-md'>
+```
+
+**构建验证 / Build Verification:**
+- ✅ `bun run build` 成功
+- ✅ Playwright 截图验证：浅色主题显示正常
+- ✅ Playwright 截图验证：深色主题显示正常
+
+**结果 / Result:**
+登录、注册、密码重置页面现在在浅色和深色主题下都能正确显示，页面布局更加宽敞合理。
+
+---
+
 ### 阶段 20: 移除所有 Ailurus 视觉增强 / Phase 20: Remove All Ailurus Visual Enhancements
 
 **时间 / Date:** 2026-01-23
