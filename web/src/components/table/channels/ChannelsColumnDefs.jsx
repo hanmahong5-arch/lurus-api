@@ -346,7 +346,7 @@ export const getChannelsColumns = ({
             {nameNode}
             <Tooltip
               content={t(
-                '该渠道已开启请求透传：参数覆写、模型重定向、渠道适配等 Ailurus 内置功能将失效，非最佳实践；如因此产生问题，请勿提交 issue 反馈。',
+                '该渠道已开启请求透传：参数覆写、模型重定向、渠道适配等 New API 内置功能将失效，非最佳实践；如因此产生问题，请勿提交 issue 反馈。',
               )}
               trigger='hover'
               position='topLeft'
