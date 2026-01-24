@@ -1,5 +1,75 @@
 ﻿# 开发进度文档 / Development Progress Document
 
+### 阶段 22: 固定导航栏遮挡修复及文字发光特效 / Phase 22: Fixed Header Overlap Fix and Nav Text Glow Effects
+
+**时间 / Date:** 2026-01-24
+
+**用户需求 / User Requirements:**
+1. Console 页面顶部被固定导航栏遮挡
+2. 顶部导航文字与背景混在一起看不清，需要添加发光特效
+
+The user reported that console page content was being obscured by the fixed header, and the navigation text was hard to see against the background, requiring glow effects.
+
+**问题分析 / Problem Analysis:**
+1. PageLayout 没有为固定导航栏预留顶部空间（64px）
+2. 各个 Console 页面使用 `mt-[60px]` 独立处理，不统一且冗余
+3. 导航栏文字在深色/渐变背景上可见度差
+
+**修复方案 / Fix Approach:**
+1. 在 PageLayout.jsx 添加 `marginTop: '64px'` 为固定导航栏预留空间
+2. 移除所有 Console 页面中冗余的 `mt-[60px]` 类
+3. 为 Navigation.jsx 添加 text glow 效果（drop-shadow）
+
+**修改的文件 / Modified Files:**
+
+| 文件 / File | 修改内容 / Changes |
+|-------------|-------------------|
+| `web/src/components/layout/PageLayout.jsx` | 添加 `marginTop: '64px'` |
+| `web/src/components/layout/headerbar/Navigation.jsx` | 添加 drop-shadow 发光效果 |
+| `web/src/pages/Dashboard/index.jsx` | 移除 `mt-[60px]` |
+| `web/src/pages/Channel/index.jsx` | 移除 `mt-[60px]` |
+| `web/src/pages/User/index.jsx` | 移除 `mt-[60px]` |
+| `web/src/pages/Token/index.jsx` | 移除 `mt-[60px]` |
+| `web/src/pages/Log/index.jsx` | 移除 `mt-[60px]` |
+| `web/src/pages/Task/index.jsx` | 移除 `mt-[60px]` |
+| `web/src/pages/Model/index.jsx` | 移除 `mt-[60px]` |
+| `web/src/pages/Midjourney/index.jsx` | 移除 `mt-[60px]` |
+| `web/src/pages/Redemption/index.jsx` | 移除 `mt-[60px]` |
+| `web/src/pages/Setting/index.jsx` | 移除 `mt-[60px]` |
+| `web/src/pages/Subscription/index.jsx` | 移除 `mt-[60px]` |
+| `web/src/pages/ModelDeployment/index.jsx` | 移除 `mt-[60px]` |
+| `web/src/components/settings/PersonalSetting.jsx` | 移除 `mt-[60px]` |
+
+**具体代码变更 / Specific Code Changes:**
+
+```jsx
+// PageLayout.jsx - 添加顶部边距
+<Layout
+  style={{
+    marginLeft: isMobile ? '0' : showSider ? 'var(--sidebar-current-width)' : '0',
+    marginTop: '64px', // Reserve space for fixed header
+    // ...
+  }}
+>
+
+// Navigation.jsx - 添加文字发光效果
+const textClasses = 'text-white dark:text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] dark:drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]';
+const hoverClasses = 'hover:text-semi-color-primary hover:drop-shadow-[0_0_12px_rgba(59,130,246,0.8)]';
+```
+
+**构建验证 / Build Verification:**
+- ✅ `bun run build` 成功
+- ✅ 已部署到 K3s 集群
+
+**部署信息 / Deployment:**
+- Commit: `774ecc17`
+- 已通过 ArgoCD 自动部署到生产环境
+
+**结果 / Result:**
+Console 页面内容不再被固定导航栏遮挡，导航栏文字添加了白色发光效果，在深色背景上清晰可见。
+
+---
+
 ### 阶段 21: 登录/注册页面浅色主题修复 / Phase 21: Login/Register Page Light Theme Fix
 
 **时间 / Date:** 2026-01-24
