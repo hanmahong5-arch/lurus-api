@@ -271,10 +271,23 @@ func migrateDB() error {
 		&Subscription{},
 		&InternalApiKey{},
 		&InvitationCode{},
+		// Multi-tenant models
+		&Tenant{},
+		&UserIdentityMapping{},
+		&TenantConfig{},
 	)
 	if err != nil {
 		return err
 	}
+
+	// Initialize tenant context manager after DB migration
+	err = InitTenantContextManager(DB)
+	if err != nil {
+		common.SysLog("Failed to initialize tenant context manager: " + err.Error())
+		return err
+	}
+	common.SysLog("Tenant context manager initialized successfully")
+
 	return nil
 }
 

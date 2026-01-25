@@ -294,5 +294,14 @@ func InitResources() error {
 	// 启动订阅定时任务
 	model.StartSubscriptionCronJobs()
 
+	// Initialize Zitadel authentication (multi-tenant OAuth)
+	// 初始化 Zitadel 认证（多租户 OAuth）
+	err = middleware.InitZitadelAuth()
+	if err != nil {
+		common.SysError(fmt.Sprintf("Failed to initialize Zitadel authentication: %v", err))
+		// Don't return error - Zitadel is optional and can be enabled later
+		// 不返回错误 - Zitadel 是可选的，可以稍后启用
+	}
+
 	return nil
 }
