@@ -190,6 +190,7 @@ const Setting = () => {
             activeKey={tabActiveKey}
             onChange={(key) => onChangeTab(key)}
             dropdownClassName='!z-[1001]'
+            tabBarStyle={{ background: 'var(--semi-color-bg-1)' }}
           >
             {panes.map((pane) => (
               <TabPane itemKey={pane.itemKey} tab={pane.tab} key={pane.itemKey}>
