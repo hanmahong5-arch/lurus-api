@@ -22,7 +22,16 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        'sketchy-heading': ['Caveat', 'ZCOOL KuaiLe', 'cursive'],
+        'sketchy-body': ['Indie Flower', 'ZCOOL KuaiLe', 'cursive'],
+      },
       colors: {
+        'sketchy-bg': 'var(--sketchy-bg-primary)',
+        'sketchy-bg-card': 'var(--sketchy-bg-card)',
+        'sketchy-stroke': 'var(--sketchy-stroke)',
+        'sketchy-stroke-light': 'var(--sketchy-stroke-light)',
+        'sketchy-highlight': 'var(--sketchy-highlight)',
         'semi-color-white': 'var(--semi-color-white)',
         'semi-color-black': 'var(--semi-color-black)',
         'semi-color-primary': 'var(--semi-color-primary)',

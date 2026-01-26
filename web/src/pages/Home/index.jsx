@@ -105,7 +105,9 @@ const Home = () => {
       }
     } else {
       showError(message);
-      setHomePageContent('加载首页内容失败...');
+      // Keep empty to show default sketchy banner
+      setHomePageContent('');
+      localStorage.removeItem('home_page_content');
     }
     setHomePageContentLoaded(true);
   };
@@ -155,35 +157,37 @@ const Home = () => {
         onClose={() => setNoticeVisible(false)}
         isMobile={isMobile}
       />
-      {homePageContentLoaded && homePageContent === '' ? (
+      {!homePageContent ? (
         <div className='w-full overflow-x-hidden'>
-          {/* Banner 部分 */}
-          <div className='w-full border-b border-semi-color-border min-h-[500px] md:min-h-[600px] lg:min-h-[700px] relative overflow-x-hidden'>
-            {/* 背景模糊晕染球 */}
-            <div className='blur-ball blur-ball-indigo' />
-            <div className='blur-ball blur-ball-teal' />
-            <div className='flex items-center justify-center h-full px-4 py-20 md:py-24 lg:py-32 mt-10'>
+          {/* Banner - Sketchy/Excalidraw style */}
+          <div className='w-full border-b border-semi-color-border min-h-[500px] md:min-h-[600px] lg:min-h-[700px] relative overflow-x-hidden sketchy-banner'>
+            {/* Decorative doodles */}
+            <div className='sketchy-doodle-star' style={{ top: '15%', left: '8%' }} />
+            <div className='sketchy-doodle-circle' style={{ top: '25%', right: '12%' }} />
+            <div className='sketchy-doodle-arrow' style={{ bottom: '20%', left: '5%', transform: 'rotate(-15deg)' }} />
+            <div className='sketchy-doodle-star' style={{ bottom: '30%', right: '8%' }} />
+            <div className='flex items-center justify-center h-full px-4 py-20 md:py-24 lg:py-32 mt-10 relative z-10'>
               {/* 居中内容区 */}
               <div className='flex flex-col items-center justify-center text-center max-w-4xl mx-auto'>
                 <div className='flex flex-col items-center justify-center mb-6 md:mb-8'>
                   <h1
-                    className={`text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-semi-color-text-0 leading-tight ${isChinese ? 'tracking-wide md:tracking-wider' : ''}`}
+                    className={`text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-tight sketchy-heading ${isChinese ? 'tracking-wide md:tracking-wider' : ''}`}
                   >
                     <>
                       {t('统一的')}
                       <br />
-                      <span className='shine-text'>{t('大模型接口网关')}</span>
+                      <span className='sketchy-highlight-text'>{t('大模型接口网关')}</span>
                     </>
                   </h1>
-                  <p className='text-base md:text-lg lg:text-xl text-semi-color-text-1 mt-4 md:mt-6 max-w-xl'>
+                  <p className='text-base md:text-lg lg:text-xl mt-4 md:mt-6 max-w-xl sketchy-subtext'>
                     {t('更好的价格，更好的稳定性，只需要将模型基址替换为：')}
                   </p>
-                  {/* BASE URL 与端点选择 */}
+                  {/* BASE URL with endpoint selector */}
                   <div className='flex flex-col md:flex-row items-center justify-center gap-4 w-full mt-4 md:mt-6 max-w-md'>
                     <Input
                       readonly
                       value={serverAddress}
-                      className='flex-1 !rounded-full'
+                      className='flex-1 sketchy-input'
                       size={isMobile ? 'default' : 'large'}
                       suffix={
                         <div className='flex items-center gap-2'>
@@ -203,7 +207,7 @@ const Home = () => {
                             type='primary'
                             onClick={handleCopyBaseURL}
                             icon={<IconCopy />}
-                            className='!rounded-full'
+                            className='sketchy-button'
                           />
                         </div>
                       }
@@ -211,14 +215,14 @@ const Home = () => {
                   </div>
                 </div>
 
-                {/* 操作按钮 */}
+                {/* Action buttons */}
                 <div className='flex flex-row gap-4 justify-center items-center'>
                   <Link to='/console'>
                     <Button
                       theme='solid'
                       type='primary'
                       size={isMobile ? 'default' : 'large'}
-                      className='!rounded-3xl px-8 py-2'
+                      className='sketchy-button px-8 py-2'
                       icon={<IconPlay />}
                     >
                       {t('获取密钥')}
@@ -227,7 +231,7 @@ const Home = () => {
                   {isDemoSiteMode && statusState?.status?.version ? (
                     <Button
                       size={isMobile ? 'default' : 'large'}
-                      className='flex items-center !rounded-3xl px-6 py-2'
+                      className='flex items-center sketchy-button-secondary px-6 py-2'
                       icon={<IconGithubLogo />}
                       onClick={() =>
                         window.open(
@@ -242,7 +246,7 @@ const Home = () => {
                     docsLink && (
                       <Button
                         size={isMobile ? 'default' : 'large'}
-                        className='flex items-center !rounded-3xl px-6 py-2'
+                        className='flex items-center sketchy-button-secondary px-6 py-2'
                         icon={<IconFile />}
                         onClick={() => window.open(docsLink, '_blank')}
                       >
@@ -252,17 +256,15 @@ const Home = () => {
                   )}
                 </div>
 
-                {/* 框架兼容性图标 */}
+                {/* Provider icons - sticky note style */}
                 <div className='mt-12 md:mt-16 lg:mt-20 w-full'>
                   <div className='flex items-center mb-6 md:mb-8 justify-center'>
-                    <Text
-                      type='tertiary'
-                      className='text-lg md:text-xl lg:text-2xl font-light'
-                    >
+                    <Text className='text-lg md:text-xl lg:text-2xl sketchy-subtext'>
                       {t('支持众多的大模型供应商')}
                     </Text>
                   </div>
-                  <div className='flex flex-wrap items-center justify-center gap-3 sm:gap-4 md:gap-6 lg:gap-8 max-w-5xl mx-auto px-4'>
+                  <div className='sketchy-icons-wrapper max-w-5xl mx-auto'>
+                    <div className='flex flex-wrap items-center justify-center gap-3 sm:gap-4 md:gap-6 lg:gap-8 px-4 relative z-10'>
                     <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
                       <Moonshot size={40} />
                     </div>
@@ -324,9 +326,10 @@ const Home = () => {
                       <Xinference.Color size={40} />
                     </div>
                     <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
-                      <Typography.Text className='!text-lg sm:!text-xl md:!text-2xl lg:!text-3xl font-bold'>
+                      <Typography.Text className='!text-lg sm:!text-xl md:!text-2xl lg:!text-3xl font-sketchy-heading font-bold'>
                         30+
                       </Typography.Text>
+                    </div>
                     </div>
                   </div>
                 </div>

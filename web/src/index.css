@@ -834,3 +834,254 @@ html.dark .with-pastel-balls::before {
 .semi-datepicker-range-input {
   border-radius: 10px !important;
 }
+
+/* ==================== Sketchy/Excalidraw Style System ==================== */
+
+/* --- CSS Variables --- */
+:root {
+  /* Light theme sketchy colors */
+  --sketchy-bg-primary: #fffef5;
+  --sketchy-bg-card: #fffdf7;
+  --sketchy-stroke: #2c3e50;
+  --sketchy-stroke-light: #5d6d7e;
+  --sketchy-highlight: #f39c12;
+  --sketchy-highlight-soft: rgba(243, 156, 18, 0.25);
+  --sketchy-paper-texture: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+}
+
+html.dark {
+  /* Dark theme sketchy colors */
+  --sketchy-bg-primary: #1a1a2e;
+  --sketchy-bg-card: #1e1e32;
+  --sketchy-stroke: #e5e7eb;
+  --sketchy-stroke-light: #9ca3af;
+  --sketchy-highlight: #fbbf24;
+  --sketchy-highlight-soft: rgba(251, 191, 36, 0.2);
+}
+
+/* --- Sketchy Banner (replaces blur-ball background) --- */
+.sketchy-banner {
+  background-color: var(--sketchy-bg-primary);
+  position: relative;
+  overflow: hidden;
+}
+
+.sketchy-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--sketchy-paper-texture);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Decorative hand-drawn corner squiggles */
+.sketchy-banner::after {
+  content: '';
+  position: absolute;
+  top: 20px;
+  right: 30px;
+  width: 80px;
+  height: 80px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M10 50 Q 30 20, 50 50 T 90 50' stroke='%23f39c12' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3Cpath d='M20 70 Q 40 40, 60 70 T 90 70' stroke='%2314b8a6' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 1;
+}
+
+html.dark .sketchy-banner::after {
+  opacity: 0.4;
+  filter: brightness(1.2);
+}
+
+/* --- Sketchy Heading --- */
+.sketchy-heading {
+  font-family: 'Caveat', 'ZCOOL KuaiLe', cursive;
+  color: var(--sketchy-stroke);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.05);
+  letter-spacing: 0.02em;
+}
+
+/* --- Highlighter Effect for Text --- */
+.sketchy-highlight-text {
+  position: relative;
+  display: inline-block;
+}
+
+.sketchy-highlight-text::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  bottom: 0.1em;
+  height: 0.4em;
+  background: var(--sketchy-highlight-soft);
+  z-index: -1;
+  transform: rotate(-1deg) skewX(-5deg);
+  border-radius: 2px;
+}
+
+/* --- Hand-drawn Border --- */
+.sketchy-border {
+  border: 2px solid var(--sketchy-stroke);
+  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.08);
+}
+
+/* --- Sticky Note Card --- */
+.sketchy-card {
+  background-color: var(--sketchy-bg-card);
+  border: 2px solid var(--sketchy-stroke-light);
+  border-radius: 3px 25px 4px 20px / 20px 4px 25px 3px;
+  box-shadow:
+    3px 3px 0 rgba(0, 0, 0, 0.06),
+    inset 0 0 30px rgba(0, 0, 0, 0.02);
+  transform: rotate(-0.5deg);
+  position: relative;
+}
+
+.sketchy-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--sketchy-paper-texture);
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0.5;
+}
+
+/* --- Sketchy Input --- */
+.sketchy-input {
+  background-color: var(--sketchy-bg-card) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 12px 4px 16px 4px / 4px 16px 4px 12px !important;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.05) !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.sketchy-input:focus-within {
+  border-color: var(--sketchy-highlight) !important;
+  box-shadow: 3px 3px 0 rgba(243, 156, 18, 0.15) !important;
+}
+
+html.dark .sketchy-input {
+  background-color: var(--sketchy-bg-card) !important;
+}
+
+/* --- Sketchy Button --- */
+.sketchy-button {
+  font-family: 'Caveat', 'ZCOOL KuaiLe', cursive !important;
+  font-size: 1.15em !important;
+  font-weight: 600 !important;
+  background-color: var(--sketchy-highlight) !important;
+  color: #1a1a2e !important;
+  border: 2px solid var(--sketchy-stroke) !important;
+  border-radius: 20px 8px 18px 8px / 8px 18px 8px 20px !important;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.15) !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.sketchy-button:hover {
+  transform: translate(-1px, -1px) !important;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.2) !important;
+}
+
+.sketchy-button:active {
+  transform: translate(1px, 1px) !important;
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Secondary variant */
+.sketchy-button-secondary {
+  font-family: 'Caveat', 'ZCOOL KuaiLe', cursive !important;
+  font-size: 1.15em !important;
+  font-weight: 600 !important;
+  background-color: var(--sketchy-bg-card) !important;
+  color: var(--sketchy-stroke) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 18px 6px 20px 6px / 6px 20px 6px 18px !important;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1) !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.sketchy-button-secondary:hover {
+  transform: translate(-1px, -1px) !important;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.15) !important;
+  border-color: var(--sketchy-stroke) !important;
+}
+
+/* --- Sketchy Decorative Elements --- */
+.sketchy-doodle-star {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2 L14 9 L21 9 L15 14 L17 21 L12 17 L7 21 L9 14 L3 9 L10 9 Z' stroke='%23f39c12' stroke-width='1.5' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.sketchy-doodle-circle {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='15' stroke='%2314b8a6' stroke-width='2' fill='none' stroke-dasharray='4 2'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.sketchy-doodle-arrow {
+  position: absolute;
+  width: 60px;
+  height: 30px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 30'%3E%3Cpath d='M5 15 Q 20 5, 35 15 T 55 15' stroke='%236366f1' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3Cpath d='M48 10 L55 15 L48 20' stroke='%236366f1' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* --- Sketchy Icons Container --- */
+.sketchy-icons-wrapper {
+  background-color: var(--sketchy-bg-card);
+  border: 2px dashed var(--sketchy-stroke-light);
+  border-radius: 8px 24px 12px 20px / 20px 12px 24px 8px;
+  padding: 1.5rem 2rem;
+  position: relative;
+}
+
+.sketchy-icons-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--sketchy-paper-texture);
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0.3;
+}
+
+/* --- Sketchy Text Styles --- */
+.sketchy-subtext {
+  font-family: 'Indie Flower', 'ZCOOL KuaiLe', cursive;
+  color: var(--sketchy-stroke-light);
+}
+
+/* --- Responsive adjustments --- */
+@media (max-width: 767px) {
+  .sketchy-banner::after {
+    width: 50px;
+    height: 50px;
+    top: 10px;
+    right: 15px;
+  }
+
+  .sketchy-heading {
+    font-size: 2.5rem;
+  }
+
+  .sketchy-button,
+  .sketchy-button-secondary {
+    font-size: 1.05em !important;
+  }
+}
