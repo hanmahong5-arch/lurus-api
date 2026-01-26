@@ -32,8 +32,8 @@ const Navigation = ({
     // Enhanced text visibility with glow effect for dark backgrounds
     const baseClasses =
       'flex-shrink-0 flex items-center gap-1 font-semibold rounded-md transition-all duration-200 ease-in-out';
-    const textClasses = 'text-semi-color-text-0';
-    const hoverClasses = 'hover:text-semi-color-primary';
+    const textClasses = 'text-gray-900 dark:text-gray-100';
+    const hoverClasses = 'hover:text-blue-600 dark:hover:text-blue-400';
     const spacingClasses = isMobile ? 'p-1' : 'p-2';
 
     const commonLinkClasses = `${baseClasses} ${textClasses} ${spacingClasses} ${hoverClasses}`;
