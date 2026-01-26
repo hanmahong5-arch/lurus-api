@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"context"
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
@@ -14,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/QuantumNous/lurus-api/logger"
+	"github.com/QuantumNous/lurus-api/common"
 	"github.com/QuantumNous/lurus-api/model"
 
 	"github.com/gin-gonic/gin"
@@ -88,7 +87,7 @@ func InitZitadelAuth() error {
 	// Load Zitadel configuration from environment variables
 	zitadelEnabled = os.Getenv("ZITADEL_ENABLED") == "true"
 	if !zitadelEnabled {
-		logger.SysLog("Zitadel authentication is disabled")
+		common.SysLog("Zitadel authentication is disabled")
 		return nil
 	}
 
@@ -112,9 +111,9 @@ func InitZitadelAuth() error {
 		jwksManager = NewJWKSManager(zitadelJwksURI)
 	})
 
-	logger.SysLog("Zitadel authentication initialized successfully")
-	logger.SysLog(fmt.Sprintf("Zitadel Issuer: %s", zitadelIssuer))
-	logger.SysLog(fmt.Sprintf("Zitadel JWKS URI: %s", zitadelJwksURI))
+	common.SysLog("Zitadel authentication initialized successfully")
+	common.SysLog(fmt.Sprintf("Zitadel Issuer: %s", zitadelIssuer))
+	common.SysLog(fmt.Sprintf("Zitadel JWKS URI: %s", zitadelJwksURI))
 
 	return nil
 }
@@ -129,7 +128,7 @@ func NewJWKSManager(jwksURI string) *JWKSManager {
 	// Initial key fetch
 	err := m.refreshKeys()
 	if err != nil {
-		logger.SysError(fmt.Sprintf("Failed to fetch JWKS keys: %v", err))
+		common.SysError(fmt.Sprintf("Failed to fetch JWKS keys: %v", err))
 		m.updateFailed = true
 	}
 
@@ -141,7 +140,7 @@ func NewJWKSManager(jwksURI string) *JWKSManager {
 
 // refreshKeys fetches public keys from Zitadel JWKS endpoint
 func (m *JWKSManager) refreshKeys() error {
-	logger.SysLog(fmt.Sprintf("Fetching JWKS from: %s", m.jwksURI))
+	common.SysLog(fmt.Sprintf("Fetching JWKS from: %s", m.jwksURI))
 
 	// Fetch JWKS from Zitadel
 	resp, err := http.Get(m.jwksURI)
@@ -170,7 +169,7 @@ func (m *JWKSManager) refreshKeys() error {
 
 		publicKey, err := jwkToRSAPublicKey(jwk)
 		if err != nil {
-			logger.SysError(fmt.Sprintf("Failed to convert JWK to RSA public key (kid=%s): %v", jwk.Kid, err))
+			common.SysError(fmt.Sprintf("Failed to convert JWK to RSA public key (kid=%s): %v", jwk.Kid, err))
 			continue
 		}
 
@@ -188,7 +187,7 @@ func (m *JWKSManager) refreshKeys() error {
 	m.updateFailed = false
 	m.mu.Unlock()
 
-	logger.SysLog(fmt.Sprintf("Successfully refreshed %d JWKS keys", len(newKeys)))
+	common.SysLog(fmt.Sprintf("Successfully refreshed %d JWKS keys", len(newKeys)))
 
 	return nil
 }
@@ -201,7 +200,7 @@ func (m *JWKSManager) autoRefresh() {
 	for range m.refreshTicker.C {
 		err := m.refreshKeys()
 		if err != nil {
-			logger.SysError(fmt.Sprintf("Auto-refresh JWKS failed: %v", err))
+			common.SysError(fmt.Sprintf("Auto-refresh JWKS failed: %v", err))
 		}
 	}
 }
@@ -316,7 +315,7 @@ func ZitadelAuth() gin.HandlerFunc {
 		})
 
 		if err != nil || !token.Valid {
-			logger.SysLog(fmt.Sprintf("JWT validation failed: %v", err))
+			common.SysLog(fmt.Sprintf("JWT validation failed: %v", err))
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
 				"message": "Token 无效或已过期 / Invalid or expired token",
@@ -352,7 +351,7 @@ func ZitadelAuth() gin.HandlerFunc {
 		// Map Zitadel user to lurus user and tenant
 		tenantID, lurusUserID, err := mapZitadelUserToLurus(claims)
 		if err != nil {
-			logger.SysError(fmt.Sprintf("User mapping failed: %v", err))
+			common.SysError(fmt.Sprintf("User mapping failed: %v", err))
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
 				"message": "用户身份映射失败 / User identity mapping failed",
@@ -382,7 +381,7 @@ func ZitadelAuth() gin.HandlerFunc {
 
 		// Log successful authentication (debug mode)
 		if os.Getenv("ZITADEL_DEBUG_LOGGING") == "true" {
-			logger.SysLog(fmt.Sprintf("User authenticated: tenant=%s, user=%d, email=%s, roles=%v",
+			common.SysLog(fmt.Sprintf("User authenticated: tenant=%s, user=%d, email=%s, roles=%v",
 				tenantID, lurusUserID, claims.Email, roles))
 		}
 
@@ -402,13 +401,13 @@ func mapZitadelUserToLurus(claims *ZitadelClaims) (tenantID string, lurusUserID 
 			if err != nil {
 				return "", 0, fmt.Errorf("failed to create tenant: %w", err)
 			}
-			logger.SysLog(fmt.Sprintf("Auto-created tenant: id=%s, org_id=%s, name=%s",
+			common.SysLog(fmt.Sprintf("Auto-created tenant: id=%s, org_id=%s, name=%s",
 				tenant.Id, tenant.ZitadelOrgID, tenant.Name))
 
 			// Initialize default configs for new tenant
 			err = model.InitializeDefaultTenantConfigs(tenant.Id)
 			if err != nil {
-				logger.SysError(fmt.Sprintf("Failed to initialize tenant configs: %v", err))
+				common.SysError(fmt.Sprintf("Failed to initialize tenant configs: %v", err))
 			}
 		} else {
 			return "", 0, fmt.Errorf("tenant not found for Zitadel Org ID: %s", claims.OrgID)
@@ -439,12 +438,12 @@ func mapZitadelUserToLurus(claims *ZitadelClaims) (tenantID string, lurusUserID 
 			}
 
 			// Create user and mapping
-			user, mapping, err := model.CreateUserFromZitadelClaims(userClaims, tenantID)
+			user, _, err := model.CreateUserFromZitadelClaims(userClaims, tenantID)
 			if err != nil {
 				return "", 0, fmt.Errorf("failed to create user: %w", err)
 			}
 
-			logger.SysLog(fmt.Sprintf("Auto-created user: tenant=%s, lurus_user=%d, zitadel_user=%s, email=%s",
+			common.SysLog(fmt.Sprintf("Auto-created user: tenant=%s, lurus_user=%d, zitadel_user=%s, email=%s",
 				tenantID, user.Id, claims.Subject, claims.Email))
 
 			return tenantID, user.Id, nil
@@ -456,7 +455,7 @@ func mapZitadelUserToLurus(claims *ZitadelClaims) (tenantID string, lurusUserID 
 	// Sync user data from Zitadel (update email, display name, etc.)
 	err = model.SyncUserDataFromZitadel(mapping.Id, claims.Email, claims.Name, claims.PreferredUsername)
 	if err != nil {
-		logger.SysError(fmt.Sprintf("Failed to sync user data: %v", err))
+		common.SysError(fmt.Sprintf("Failed to sync user data: %v", err))
 		// Non-fatal error, continue
 	}
 

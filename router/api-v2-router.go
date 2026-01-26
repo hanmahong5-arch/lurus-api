@@ -3,7 +3,6 @@ package router
 import (
 	"github.com/QuantumNous/lurus-api/controller"
 	"github.com/QuantumNous/lurus-api/middleware"
-	"github.com/QuantumNous/lurus-api/model"
 
 	"github.com/gin-gonic/gin"
 )

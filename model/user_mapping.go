@@ -294,14 +294,6 @@ func GenerateRandomPassword() string {
 	return "ZITADEL_AUTH_USER_" + time.Now().Format("20060102150405")
 }
 
-// GetTenantConfigInt retrieves integer config value from tenant_configs
-// This is a placeholder - implement actual function in tenant_config.go
-func GetTenantConfigInt(tenantID string, key string, defaultValue int) int {
-	// TODO: Implement actual tenant config retrieval
-	// For now, return default value
-	return defaultValue
-}
-
 // generateAffCode generates a unique affiliate code
 // This is a placeholder - use existing implementation from user.go
 func generateAffCode() string {

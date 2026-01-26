@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/lurus-api/logger"
+	"github.com/QuantumNous/lurus-api/common"
 	"github.com/QuantumNous/lurus-api/model"
 
 	"github.com/gin-contrib/sessions"
@@ -77,7 +77,7 @@ func ZitadelLoginRedirect(c *gin.Context) {
 	// Generate state parameter (contains tenant slug + redirect URL + nonce)
 	state, err := generateOAuthState(tenantSlug, redirectURL)
 	if err != nil {
-		logger.SysError(fmt.Sprintf("Failed to generate OAuth state: %v", err))
+		common.SysError(fmt.Sprintf("Failed to generate OAuth state: %v", err))
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Internal server error",
@@ -111,7 +111,7 @@ func ZitadelCallback(c *gin.Context) {
 	// Parse and validate state
 	stateData, err := parseOAuthState(state)
 	if err != nil {
-		logger.SysError(fmt.Sprintf("Invalid OAuth state: %v", err))
+		common.SysError(fmt.Sprintf("Invalid OAuth state: %v", err))
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "Invalid state parameter",
@@ -131,7 +131,7 @@ func ZitadelCallback(c *gin.Context) {
 	// Exchange authorization code for tokens
 	tokenResp, err := exchangeCodeForToken(code)
 	if err != nil {
-		logger.SysError(fmt.Sprintf("Failed to exchange code for token: %v", err))
+		common.SysError(fmt.Sprintf("Failed to exchange code for token: %v", err))
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to obtain access token",
@@ -238,7 +238,7 @@ func RefreshAccessToken(c *gin.Context) {
 	// Exchange refresh token for new access token
 	tokenResp, err := refreshAccessToken(refreshToken)
 	if err != nil {
-		logger.SysError(fmt.Sprintf("Failed to refresh access token: %v", err))
+		common.SysError(fmt.Sprintf("Failed to refresh access token: %v", err))
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"message": "Failed to refresh access token",

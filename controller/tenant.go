@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/QuantumNous/lurus-api/logger"
+	"github.com/QuantumNous/lurus-api/common"
 	"github.com/QuantumNous/lurus-api/model"
 
 	"github.com/gin-gonic/gin"
@@ -30,7 +30,7 @@ func ListTenants(c *gin.Context) {
 	// Get tenants from database
 	tenants, total, err := model.ListTenants(offset, pageSize, status)
 	if err != nil {
-		logger.SysError("Failed to list tenants: " + err.Error())
+		common.SysError("Failed to list tenants: " + err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to retrieve tenants",
@@ -110,7 +110,7 @@ func CreateTenant(c *gin.Context) {
 	// Create tenant
 	tenant, err := model.CreateTenantFromZitadel(req.ZitadelOrgID, req.Slug, req.Name)
 	if err != nil {
-		logger.SysError("Failed to create tenant: " + err.Error())
+		common.SysError("Failed to create tenant: " + err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to create tenant",
@@ -126,13 +126,13 @@ func CreateTenant(c *gin.Context) {
 		"max_quota": req.MaxQuota,
 	})
 	if err != nil {
-		logger.SysError("Failed to update tenant: " + err.Error())
+		common.SysError("Failed to update tenant: " + err.Error())
 	}
 
 	// Initialize default configs for new tenant
 	err = model.InitializeDefaultTenantConfigs(tenant.Id)
 	if err != nil {
-		logger.SysError("Failed to initialize tenant configs: " + err.Error())
+		common.SysError("Failed to initialize tenant configs: " + err.Error())
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
@@ -193,7 +193,7 @@ func UpdateTenant(c *gin.Context) {
 	// Update tenant
 	err := model.UpdateTenant(tenantID, updates)
 	if err != nil {
-		logger.SysError("Failed to update tenant: " + err.Error())
+		common.SysError("Failed to update tenant: " + err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to update tenant",
@@ -246,7 +246,7 @@ func DeleteTenant(c *gin.Context) {
 	// Soft delete tenant
 	err = model.DeleteTenant(tenantID)
 	if err != nil {
-		logger.SysError("Failed to delete tenant: " + err.Error())
+		common.SysError("Failed to delete tenant: " + err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to delete tenant",
@@ -269,7 +269,7 @@ func EnableTenant(c *gin.Context) {
 
 	err := model.EnableTenant(tenantID)
 	if err != nil {
-		logger.SysError("Failed to enable tenant: " + err.Error())
+		common.SysError("Failed to enable tenant: " + err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to enable tenant",
@@ -300,7 +300,7 @@ func DisableTenant(c *gin.Context) {
 
 	err := model.DisableTenant(tenantID)
 	if err != nil {
-		logger.SysError("Failed to disable tenant: " + err.Error())
+		common.SysError("Failed to disable tenant: " + err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to disable tenant",
@@ -331,7 +331,7 @@ func SuspendTenant(c *gin.Context) {
 
 	err := model.SuspendTenant(tenantID)
 	if err != nil {
-		logger.SysError("Failed to suspend tenant: " + err.Error())
+		common.SysError("Failed to suspend tenant: " + err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to suspend tenant",
@@ -401,7 +401,7 @@ func GetTenantConfigs(c *gin.Context) {
 	includeSystem := c.Query("include_system") == "true"
 	configs, err := model.ListTenantConfigs(tenantID, includeSystem)
 	if err != nil {
-		logger.SysError("Failed to list tenant configs: " + err.Error())
+		common.SysError("Failed to list tenant configs: " + err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to retrieve configurations",
@@ -463,7 +463,7 @@ func UpdateTenantConfig(c *gin.Context) {
 	// Set config
 	err = model.SetTenantConfig(tenantID, configKey, req.Value, req.ConfigType, req.Description, false)
 	if err != nil {
-		logger.SysError("Failed to set tenant config: " + err.Error())
+		common.SysError("Failed to set tenant config: " + err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to update configuration",

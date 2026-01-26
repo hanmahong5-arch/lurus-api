@@ -3,9 +3,9 @@ package model
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // TenantPlugin is a GORM plugin that automatically filters queries by tenant_id
@@ -65,9 +65,9 @@ func beforeQuery(db *gorm.DB) {
 	}
 
 	// Add WHERE tenant_id = ? clause
-	db.Statement.AddClause(gorm.Where{
-		Exprs: []gorm.Expression{
-			gorm.Expr("tenant_id = ?", tenantID),
+	db.Statement.AddClause(clause.Where{
+		Exprs: []clause.Expression{
+			clause.Expr{SQL: "tenant_id = ?", Vars: []interface{}{tenantID}},
 		},
 	})
 }
@@ -93,9 +93,7 @@ func beforeCreate(db *gorm.DB) {
 	}
 
 	// Set tenant_id field
-	if err := db.Statement.SetColumn("tenant_id", tenantID); err != nil {
-		db.AddError(fmt.Errorf("failed to set tenant_id: %w", err))
-	}
+	db.Statement.SetColumn("tenant_id", tenantID)
 }
 
 // beforeUpdate adds tenant_id filter to UPDATE queries
@@ -118,9 +116,9 @@ func beforeUpdate(db *gorm.DB) {
 	}
 
 	// Add WHERE tenant_id = ? clause
-	db.Statement.AddClause(gorm.Where{
-		Exprs: []gorm.Expression{
-			gorm.Expr("tenant_id = ?", tenantID),
+	db.Statement.AddClause(clause.Where{
+		Exprs: []clause.Expression{
+			clause.Expr{SQL: "tenant_id = ?", Vars: []interface{}{tenantID}},
 		},
 	})
 }
@@ -145,9 +143,9 @@ func beforeDelete(db *gorm.DB) {
 	}
 
 	// Add WHERE tenant_id = ? clause
-	db.Statement.AddClause(gorm.Where{
-		Exprs: []gorm.Expression{
-			gorm.Expr("tenant_id = ?", tenantID),
+	db.Statement.AddClause(clause.Where{
+		Exprs: []clause.Expression{
+			clause.Expr{SQL: "tenant_id = ?", Vars: []interface{}{tenantID}},
 		},
 	})
 }
