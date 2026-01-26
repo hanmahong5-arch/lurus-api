@@ -189,6 +189,7 @@ const Setting = () => {
             collapsible
             activeKey={tabActiveKey}
             onChange={(key) => onChangeTab(key)}
+            dropdownClassName='!z-[1001]'
           >
             {panes.map((pane) => (
               <TabPane itemKey={pane.itemKey} tab={pane.tab} key={pane.itemKey}>

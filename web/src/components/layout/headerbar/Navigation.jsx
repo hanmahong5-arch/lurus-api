@@ -32,8 +32,8 @@ const Navigation = ({
     // Enhanced text visibility with glow effect for dark backgrounds
     const baseClasses =
       'flex-shrink-0 flex items-center gap-1 font-semibold rounded-md transition-all duration-200 ease-in-out';
-    const textClasses = 'text-white dark:text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] dark:drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]';
-    const hoverClasses = 'hover:text-semi-color-primary hover:drop-shadow-[0_0_12px_rgba(59,130,246,0.8)]';
+    const textClasses = 'text-semi-color-text-0';
+    const hoverClasses = 'hover:text-semi-color-primary';
     const spacingClasses = isMobile ? 'p-1' : 'p-2';
 
     const commonLinkClasses = `${baseClasses} ${textClasses} ${spacingClasses} ${hoverClasses}`;
