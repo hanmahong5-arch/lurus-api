@@ -932,6 +932,403 @@ html:not(.dark) .semi-sidesheet-inner {
   background-color: var(--sketchy-warm-gray-0) !important;
 }
 
+/* ==================== Sketchy Button Style ==================== */
+html:not(.dark) .semi-button {
+  font-family: 'Caveat', 'ZCOOL KuaiLe', Lato, sans-serif !important;
+  font-size: 1.1em !important;
+  font-weight: 600 !important;
+  border-radius: 12px 4px 14px 4px / 4px 14px 4px 12px !important;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.08) !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+html:not(.dark) .semi-button:hover {
+  transform: translate(-1px, -1px) !important;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.12) !important;
+}
+
+html:not(.dark) .semi-button:active {
+  transform: translate(1px, 1px) !important;
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+html:not(.dark) .semi-button-primary {
+  background-color: var(--sketchy-highlight) !important;
+  border: 2px solid var(--sketchy-stroke) !important;
+  color: #1a1a2e !important;
+}
+
+html:not(.dark) .semi-button-secondary,
+html:not(.dark) .semi-button-tertiary {
+  background-color: var(--sketchy-warm-gray-1) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+}
+
+/* ==================== Sketchy Input Style ==================== */
+html:not(.dark) .semi-input-wrapper {
+  background-color: var(--sketchy-warm-gray-1) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 10px 3px 12px 3px / 3px 12px 3px 10px !important;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.04) !important;
+}
+
+html:not(.dark) .semi-input-wrapper:focus-within {
+  border-color: var(--sketchy-highlight) !important;
+  box-shadow: 3px 3px 0 rgba(243, 156, 18, 0.12) !important;
+}
+
+html:not(.dark) .semi-input-textarea-wrapper {
+  background-color: var(--sketchy-warm-gray-1) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 8px 4px 10px 4px / 4px 10px 4px 8px !important;
+}
+
+/* ==================== Sketchy Select Style ==================== */
+html:not(.dark) .semi-select {
+  background-color: var(--sketchy-warm-gray-1) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 10px 3px 12px 3px / 3px 12px 3px 10px !important;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.04) !important;
+}
+
+html:not(.dark) .semi-select:hover {
+  border-color: var(--sketchy-stroke) !important;
+}
+
+html:not(.dark) .semi-select-option-list {
+  background-color: var(--sketchy-warm-gray-0) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 6px 12px 6px 10px / 10px 6px 12px 6px !important;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.08) !important;
+}
+
+html:not(.dark) .semi-select-option:hover {
+  background-color: var(--sketchy-warm-gray-2) !important;
+}
+
+html:not(.dark) .semi-select-option-selected {
+  background-color: var(--sketchy-highlight-soft) !important;
+}
+
+/* ==================== Sketchy Dropdown Style ==================== */
+html:not(.dark) .semi-dropdown-menu {
+  background-color: var(--sketchy-warm-gray-0) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 6px 14px 6px 12px / 12px 6px 14px 6px !important;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.08) !important;
+}
+
+html:not(.dark) .semi-dropdown-item:hover {
+  background-color: var(--sketchy-warm-gray-2) !important;
+}
+
+/* ==================== Sketchy Tag Style ==================== */
+html:not(.dark) .semi-tag {
+  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  font-size: 1.05em !important;
+  border-radius: 8px 3px 10px 3px / 3px 10px 3px 8px !important;
+  border: 1.5px solid var(--sketchy-stroke-light) !important;
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+html:not(.dark) .semi-tag-light {
+  background-color: var(--sketchy-warm-gray-2) !important;
+}
+
+/* ==================== Sketchy Checkbox & Radio Style ==================== */
+html:not(.dark) .semi-checkbox-inner {
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 4px 2px 5px 2px / 2px 5px 2px 4px !important;
+}
+
+html:not(.dark) .semi-checkbox-checked .semi-checkbox-inner {
+  background-color: var(--sketchy-highlight) !important;
+  border-color: var(--sketchy-stroke) !important;
+}
+
+html:not(.dark) .semi-radio-inner {
+  border: 2px solid var(--sketchy-stroke-light) !important;
+}
+
+html:not(.dark) .semi-radio-checked .semi-radio-inner {
+  border-color: var(--sketchy-highlight) !important;
+}
+
+html:not(.dark) .semi-radio-checked .semi-radio-inner-display {
+  background-color: var(--sketchy-highlight) !important;
+}
+
+/* ==================== Sketchy Tabs Style ==================== */
+html:not(.dark) .semi-tabs-bar {
+  border-bottom: 2px solid var(--sketchy-warm-gray-3) !important;
+}
+
+html:not(.dark) .semi-tabs-tab {
+  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  font-size: 1.15em !important;
+  font-weight: 600 !important;
+}
+
+html:not(.dark) .semi-tabs-tab-active {
+  color: var(--sketchy-stroke) !important;
+}
+
+html:not(.dark) .semi-tabs-ink-bar {
+  background-color: var(--sketchy-highlight) !important;
+  height: 3px !important;
+  border-radius: 2px !important;
+}
+
+html:not(.dark) .semi-tabs-tab-button {
+  background-color: var(--sketchy-warm-gray-1) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+}
+
+html:not(.dark) .semi-tabs-tab-button-active {
+  background-color: var(--sketchy-highlight) !important;
+  border-color: var(--sketchy-stroke) !important;
+  color: #1a1a2e !important;
+}
+
+/* ==================== Sketchy Form Style ==================== */
+html:not(.dark) .semi-form-field-label-text {
+  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  font-size: 1.1em !important;
+  font-weight: 600 !important;
+  color: var(--sketchy-stroke) !important;
+}
+
+/* ==================== Sketchy Tooltip Style ==================== */
+html:not(.dark) .semi-tooltip-wrapper {
+  background-color: var(--sketchy-warm-gray-0) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 6px 10px 6px 8px / 8px 6px 10px 6px !important;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.08) !important;
+}
+
+/* ==================== Sketchy Badge Style ==================== */
+html:not(.dark) .semi-badge-dot {
+  border: 2px solid var(--sketchy-warm-gray-0) !important;
+}
+
+html:not(.dark) .semi-badge-count {
+  font-family: 'Caveat', sans-serif !important;
+  font-weight: 700 !important;
+  border: 2px solid var(--sketchy-warm-gray-0) !important;
+}
+
+/* ==================== Sketchy Avatar Style ==================== */
+html:not(.dark) .semi-avatar {
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.06) !important;
+}
+
+/* ==================== Sketchy Banner Style ==================== */
+html:not(.dark) .semi-banner {
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 6px 14px 6px 12px / 12px 6px 14px 6px !important;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.06) !important;
+}
+
+html:not(.dark) .semi-banner-info {
+  background-color: #e8f4fd !important;
+  border-color: #5cacee !important;
+}
+
+html:not(.dark) .semi-banner-warning {
+  background-color: #fff8e6 !important;
+  border-color: var(--sketchy-highlight) !important;
+}
+
+html:not(.dark) .semi-banner-success {
+  background-color: #e6f7e9 !important;
+  border-color: #52c41a !important;
+}
+
+html:not(.dark) .semi-banner-danger {
+  background-color: #fff1f0 !important;
+  border-color: #ff4d4f !important;
+}
+
+/* ==================== Sketchy Progress Style ==================== */
+html:not(.dark) .semi-progress-track {
+  background-color: var(--sketchy-warm-gray-3) !important;
+  border-radius: 8px !important;
+}
+
+html:not(.dark) .semi-progress-line-bar {
+  background-color: var(--sketchy-highlight) !important;
+  border-radius: 8px !important;
+}
+
+/* ==================== Sketchy Empty Style ==================== */
+html:not(.dark) .semi-empty-title {
+  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  font-size: 1.3em !important;
+}
+
+html:not(.dark) .semi-empty-description {
+  font-family: 'Indie Flower', 'ZCOOL KuaiLe', sans-serif !important;
+}
+
+/* ==================== Sketchy Spin Style ==================== */
+html:not(.dark) .semi-spin-wrapper .semi-spin {
+  color: var(--sketchy-highlight) !important;
+}
+
+/* ==================== Sketchy Pagination Style ==================== */
+html:not(.dark) .semi-page-item {
+  font-family: 'Caveat', sans-serif !important;
+  font-weight: 600 !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 8px 3px 10px 3px / 3px 10px 3px 8px !important;
+}
+
+html:not(.dark) .semi-page-item:hover {
+  background-color: var(--sketchy-warm-gray-2) !important;
+}
+
+html:not(.dark) .semi-page-item-active {
+  background-color: var(--sketchy-highlight) !important;
+  border-color: var(--sketchy-stroke) !important;
+  color: #1a1a2e !important;
+}
+
+/* ==================== Sketchy Popover Style ==================== */
+html:not(.dark) .semi-popover-wrapper {
+  background-color: var(--sketchy-warm-gray-0) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 8px 16px 8px 14px / 14px 8px 16px 8px !important;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.1) !important;
+}
+
+/* ==================== Sketchy Navigation Style ==================== */
+html:not(.dark) .semi-navigation {
+  background-color: var(--sketchy-warm-gray-0) !important;
+}
+
+html:not(.dark) .semi-navigation-item {
+  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  font-size: 1.1em !important;
+  border-radius: 8px 3px 10px 3px / 3px 10px 3px 8px !important;
+}
+
+html:not(.dark) .semi-navigation-item-selected {
+  background-color: var(--sketchy-highlight-soft) !important;
+}
+
+html:not(.dark) .semi-navigation-item:hover {
+  background-color: var(--sketchy-warm-gray-2) !important;
+}
+
+/* ==================== Sketchy Toast Style ==================== */
+html:not(.dark) .semi-toast-wrapper {
+  background-color: var(--sketchy-warm-gray-0) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 8px 14px 8px 12px / 12px 8px 14px 8px !important;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.1) !important;
+}
+
+html:not(.dark) .semi-toast-content-text {
+  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  font-size: 1.1em !important;
+}
+
+/* ==================== Sketchy Notification Style ==================== */
+html:not(.dark) .semi-notification-wrapper {
+  background-color: var(--sketchy-warm-gray-0) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 8px 18px 8px 16px / 16px 8px 18px 8px !important;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.1) !important;
+}
+
+html:not(.dark) .semi-notification-title {
+  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  font-size: 1.2em !important;
+  font-weight: 700 !important;
+}
+
+/* ==================== Sketchy Divider Style ==================== */
+html:not(.dark) .semi-divider {
+  border-color: var(--sketchy-warm-gray-3) !important;
+}
+
+/* ==================== Sketchy Collapse Style ==================== */
+html:not(.dark) .semi-collapse {
+  background-color: var(--sketchy-warm-gray-1) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 6px 14px 6px 12px / 12px 6px 14px 6px !important;
+}
+
+html:not(.dark) .semi-collapse-header {
+  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  font-size: 1.15em !important;
+  font-weight: 600 !important;
+}
+
+/* ==================== Sketchy Timeline Style ==================== */
+html:not(.dark) .semi-timeline-item-head {
+  border: 2px solid var(--sketchy-highlight) !important;
+  background-color: var(--sketchy-warm-gray-0) !important;
+}
+
+html:not(.dark) .semi-timeline-item-tail {
+  border-left: 2px dashed var(--sketchy-stroke-light) !important;
+}
+
+/* ==================== Sketchy Transfer Style ==================== */
+html:not(.dark) .semi-transfer {
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 8px 16px 8px 14px / 14px 8px 16px 8px !important;
+}
+
+html:not(.dark) .semi-transfer-left,
+html:not(.dark) .semi-transfer-right {
+  background-color: var(--sketchy-warm-gray-1) !important;
+}
+
+/* ==================== Sketchy TreeSelect Style ==================== */
+html:not(.dark) .semi-tree-option-list {
+  background-color: var(--sketchy-warm-gray-0) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 6px 12px 6px 10px / 10px 6px 12px 6px !important;
+}
+
+/* ==================== Sketchy Slider Style ==================== */
+html:not(.dark) .semi-slider-track {
+  background-color: var(--sketchy-warm-gray-3) !important;
+}
+
+html:not(.dark) .semi-slider-track-active {
+  background-color: var(--sketchy-highlight) !important;
+}
+
+html:not(.dark) .semi-slider-handle {
+  border: 3px solid var(--sketchy-highlight) !important;
+  background-color: var(--sketchy-warm-gray-0) !important;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1) !important;
+}
+
+/* ==================== Sketchy DatePicker Style ==================== */
+html:not(.dark) .semi-datepicker-range-input {
+  background-color: var(--sketchy-warm-gray-1) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+}
+
+html:not(.dark) .semi-datepicker-panel-container {
+  background-color: var(--sketchy-warm-gray-0) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 8px 16px 8px 14px / 14px 8px 16px 8px !important;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.1) !important;
+}
+
+/* ==================== Sketchy TimePicker Style ==================== */
+html:not(.dark) .semi-timepicker-panel {
+  background-color: var(--sketchy-warm-gray-0) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 6px 12px 6px 10px / 10px 6px 12px 6px !important;
+}
+
 /* ==================== Sketchy/Excalidraw Style System ==================== */
 
 /* --- CSS Variables --- */
