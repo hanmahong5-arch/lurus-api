@@ -32,8 +32,8 @@ body.sidebar-collapsed {
 }
 
 body {
-  font-family: 'Caveat', 'ZCOOL KuaiLe', Lato, 'Helvetica Neue', Arial,
-    Helvetica, 'Microsoft YaHei', sans-serif;
+  font-family: Lato, 'Helvetica Neue', Arial, Helvetica, 'Microsoft YaHei',
+    sans-serif;
   color: var(--semi-color-text-0);
   background-color: var(--sketchy-warm-gray-0);
 }
@@ -48,22 +48,6 @@ html:not(.dark) {
   --semi-color-fill-0: var(--sketchy-warm-gray-2);
   --semi-color-fill-1: var(--sketchy-warm-gray-3);
   --semi-color-fill-2: var(--sketchy-warm-gray-4);
-}
-
-/* Global font for all text elements */
-html:not(.dark) h1,
-html:not(.dark) h2,
-html:not(.dark) h3,
-html:not(.dark) h4,
-html:not(.dark) h5,
-html:not(.dark) h6,
-html:not(.dark) .semi-typography,
-html:not(.dark) .semi-button,
-html:not(.dark) .semi-input,
-html:not(.dark) .semi-select,
-html:not(.dark) .semi-navigation-item-text,
-html:not(.dark) .semi-tabs-tab {
-  font-family: 'Caveat', 'ZCOOL KuaiLe', Lato, 'Microsoft YaHei', sans-serif;
 }
 
 code {
@@ -907,7 +891,7 @@ html:not(.dark) .semi-table {
 
 html:not(.dark) .semi-table-thead > .semi-table-row > .semi-table-row-head {
   background-color: var(--sketchy-warm-gray-2) !important;
-  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  /* font removed - use default */
   font-weight: 600 !important;
 }
 
@@ -924,7 +908,7 @@ html:not(.dark) .semi-modal-content {
 }
 
 html:not(.dark) .semi-modal-header {
-  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  /* font removed - use default */
 }
 
 /* ==================== Sketchy Sidesheet Style ==================== */
@@ -934,7 +918,7 @@ html:not(.dark) .semi-sidesheet-inner {
 
 /* ==================== Sketchy Button Style ==================== */
 html:not(.dark) .semi-button {
-  font-family: 'Caveat', 'ZCOOL KuaiLe', Lato, sans-serif !important;
+  /* font removed - use default */
   font-size: 1.1em !important;
   font-weight: 600 !important;
   border-radius: 12px 4px 14px 4px / 4px 14px 4px 12px !important;
@@ -1024,7 +1008,7 @@ html:not(.dark) .semi-dropdown-item:hover {
 
 /* ==================== Sketchy Tag Style ==================== */
 html:not(.dark) .semi-tag {
-  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  /* font removed - use default */
   font-size: 1.05em !important;
   border-radius: 8px 3px 10px 3px / 3px 10px 3px 8px !important;
   border: 1.5px solid var(--sketchy-stroke-light) !important;
@@ -1064,7 +1048,7 @@ html:not(.dark) .semi-tabs-bar {
 }
 
 html:not(.dark) .semi-tabs-tab {
-  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  /* font removed - use default */
   font-size: 1.15em !important;
   font-weight: 600 !important;
 }
@@ -1092,7 +1076,7 @@ html:not(.dark) .semi-tabs-tab-button-active {
 
 /* ==================== Sketchy Form Style ==================== */
 html:not(.dark) .semi-form-field-label-text {
-  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  /* font removed - use default */
   font-size: 1.1em !important;
   font-weight: 600 !important;
   color: var(--sketchy-stroke) !important;
@@ -1112,7 +1096,7 @@ html:not(.dark) .semi-badge-dot {
 }
 
 html:not(.dark) .semi-badge-count {
-  font-family: 'Caveat', sans-serif !important;
+  /* font removed - use default */
   font-weight: 700 !important;
   border: 2px solid var(--sketchy-warm-gray-0) !important;
 }
@@ -1163,12 +1147,12 @@ html:not(.dark) .semi-progress-line-bar {
 
 /* ==================== Sketchy Empty Style ==================== */
 html:not(.dark) .semi-empty-title {
-  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  /* font removed - use default */
   font-size: 1.3em !important;
 }
 
 html:not(.dark) .semi-empty-description {
-  font-family: 'Indie Flower', 'ZCOOL KuaiLe', sans-serif !important;
+  /* font removed - use default */
 }
 
 /* ==================== Sketchy Spin Style ==================== */
@@ -1178,7 +1162,7 @@ html:not(.dark) .semi-spin-wrapper .semi-spin {
 
 /* ==================== Sketchy Pagination Style ==================== */
 html:not(.dark) .semi-page-item {
-  font-family: 'Caveat', sans-serif !important;
+  /* font removed - use default */
   font-weight: 600 !important;
   border: 2px solid var(--sketchy-stroke-light) !important;
   border-radius: 8px 3px 10px 3px / 3px 10px 3px 8px !important;
@@ -1208,7 +1192,7 @@ html:not(.dark) .semi-navigation {
 }
 
 html:not(.dark) .semi-navigation-item {
-  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  /* font removed - use default */
   font-size: 1.1em !important;
   border-radius: 8px 3px 10px 3px / 3px 10px 3px 8px !important;
 }
@@ -1230,7 +1214,7 @@ html:not(.dark) .semi-toast-wrapper {
 }
 
 html:not(.dark) .semi-toast-content-text {
-  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  /* font removed - use default */
   font-size: 1.1em !important;
 }
 
@@ -1243,7 +1227,7 @@ html:not(.dark) .semi-notification-wrapper {
 }
 
 html:not(.dark) .semi-notification-title {
-  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  /* font removed - use default */
   font-size: 1.2em !important;
   font-weight: 700 !important;
 }
@@ -1261,7 +1245,7 @@ html:not(.dark) .semi-collapse {
 }
 
 html:not(.dark) .semi-collapse-header {
-  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  /* font removed - use default */
   font-size: 1.15em !important;
   font-weight: 600 !important;
 }
@@ -1391,7 +1375,7 @@ html.dark .sketchy-banner::after {
 
 /* --- Sketchy Heading --- */
 .sketchy-heading {
-  font-family: 'Caveat', 'ZCOOL KuaiLe', cursive;
+  /* font removed - use default */
   color: var(--sketchy-stroke);
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.05);
   letter-spacing: 0.02em;
@@ -1465,7 +1449,7 @@ html.dark .sketchy-input {
 
 /* --- Sketchy Button --- */
 .sketchy-button {
-  font-family: 'Caveat', 'ZCOOL KuaiLe', cursive !important;
+  /* font removed - use default */
   font-size: 1.15em !important;
   font-weight: 600 !important;
   background-color: var(--sketchy-highlight) !important;
@@ -1488,7 +1472,7 @@ html.dark .sketchy-input {
 
 /* Secondary variant */
 .sketchy-button-secondary {
-  font-family: 'Caveat', 'ZCOOL KuaiLe', cursive !important;
+  /* font removed - use default */
   font-size: 1.15em !important;
   font-weight: 600 !important;
   background-color: var(--sketchy-bg-card) !important;
@@ -1557,7 +1541,7 @@ html.dark .sketchy-input {
 
 /* --- Sketchy Text Styles --- */
 .sketchy-subtext {
-  font-family: 'Indie Flower', 'ZCOOL KuaiLe', cursive;
+  /* font removed - use default */
   color: var(--sketchy-stroke-light);
 }
 

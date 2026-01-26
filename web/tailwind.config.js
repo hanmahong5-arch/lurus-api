@@ -22,10 +22,6 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
-      fontFamily: {
-        'sketchy-heading': ['Caveat', 'ZCOOL KuaiLe', 'cursive'],
-        'sketchy-body': ['Indie Flower', 'ZCOOL KuaiLe', 'cursive'],
-      },
       colors: {
         'sketchy-bg': 'var(--sketchy-bg-primary)',
         'sketchy-bg-card': 'var(--sketchy-bg-card)',
