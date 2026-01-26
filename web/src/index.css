@@ -18,6 +18,13 @@
   --sidebar-width: 180px;
   --sidebar-width-collapsed: 60px;
   --sidebar-current-width: var(--sidebar-width);
+
+  /* Warm gray background overrides for light theme */
+  --sketchy-warm-gray-0: #f7f6f3;
+  --sketchy-warm-gray-1: #f3f2ef;
+  --sketchy-warm-gray-2: #eae9e6;
+  --sketchy-warm-gray-3: #e0dfdc;
+  --sketchy-warm-gray-4: #d6d5d2;
 }
 
 body.sidebar-collapsed {
@@ -25,10 +32,38 @@ body.sidebar-collapsed {
 }
 
 body {
-  font-family: Lato, 'Helvetica Neue', Arial, Helvetica, 'Microsoft YaHei',
-    sans-serif;
+  font-family: 'Caveat', 'ZCOOL KuaiLe', Lato, 'Helvetica Neue', Arial,
+    Helvetica, 'Microsoft YaHei', sans-serif;
   color: var(--semi-color-text-0);
-  background-color: var(--semi-color-bg-0);
+  background-color: var(--sketchy-warm-gray-0);
+}
+
+/* Override Semi UI background colors for light theme */
+html:not(.dark) {
+  --semi-color-bg-0: var(--sketchy-warm-gray-0);
+  --semi-color-bg-1: var(--sketchy-warm-gray-1);
+  --semi-color-bg-2: var(--sketchy-warm-gray-2);
+  --semi-color-bg-3: var(--sketchy-warm-gray-3);
+  --semi-color-bg-4: var(--sketchy-warm-gray-4);
+  --semi-color-fill-0: var(--sketchy-warm-gray-2);
+  --semi-color-fill-1: var(--sketchy-warm-gray-3);
+  --semi-color-fill-2: var(--sketchy-warm-gray-4);
+}
+
+/* Global font for all text elements */
+html:not(.dark) h1,
+html:not(.dark) h2,
+html:not(.dark) h3,
+html:not(.dark) h4,
+html:not(.dark) h5,
+html:not(.dark) h6,
+html:not(.dark) .semi-typography,
+html:not(.dark) .semi-button,
+html:not(.dark) .semi-input,
+html:not(.dark) .semi-select,
+html:not(.dark) .semi-navigation-item-text,
+html:not(.dark) .semi-tabs-tab {
+  font-family: 'Caveat', 'ZCOOL KuaiLe', Lato, 'Microsoft YaHei', sans-serif;
 }
 
 code {
@@ -835,18 +870,80 @@ html.dark .with-pastel-balls::before {
   border-radius: 10px !important;
 }
 
+/* ==================== Sketchy Switch Style ==================== */
+html:not(.dark) .semi-switch {
+  background-color: var(--sketchy-warm-gray-3) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 20px 8px 18px 8px / 8px 18px 8px 20px !important;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.08) !important;
+}
+
+html:not(.dark) .semi-switch-checked {
+  background-color: var(--sketchy-highlight) !important;
+  border-color: var(--sketchy-stroke) !important;
+}
+
+html:not(.dark) .semi-switch-knob {
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.1) !important;
+}
+
+html:not(.dark) .semi-switch-checked .semi-switch-knob {
+  border-color: var(--sketchy-stroke) !important;
+}
+
+/* ==================== Sketchy Card Style ==================== */
+html:not(.dark) .semi-card {
+  background-color: var(--sketchy-warm-gray-1) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 4px 16px 4px 12px / 12px 4px 16px 4px !important;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.06) !important;
+}
+
+/* ==================== Sketchy Table Style ==================== */
+html:not(.dark) .semi-table {
+  background-color: var(--sketchy-warm-gray-1) !important;
+}
+
+html:not(.dark) .semi-table-thead > .semi-table-row > .semi-table-row-head {
+  background-color: var(--sketchy-warm-gray-2) !important;
+  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+  font-weight: 600 !important;
+}
+
+html:not(.dark) .semi-table-tbody > .semi-table-row:hover {
+  background-color: var(--sketchy-warm-gray-2) !important;
+}
+
+/* ==================== Sketchy Modal Style ==================== */
+html:not(.dark) .semi-modal-content {
+  background-color: var(--sketchy-warm-gray-0) !important;
+  border: 2px solid var(--sketchy-stroke-light) !important;
+  border-radius: 8px 20px 8px 16px / 16px 8px 20px 8px !important;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.1) !important;
+}
+
+html:not(.dark) .semi-modal-header {
+  font-family: 'Caveat', 'ZCOOL KuaiLe', sans-serif !important;
+}
+
+/* ==================== Sketchy Sidesheet Style ==================== */
+html:not(.dark) .semi-sidesheet-inner {
+  background-color: var(--sketchy-warm-gray-0) !important;
+}
+
 /* ==================== Sketchy/Excalidraw Style System ==================== */
 
 /* --- CSS Variables --- */
 :root {
-  /* Light theme sketchy colors */
-  --sketchy-bg-primary: #fffef5;
-  --sketchy-bg-card: #fffdf7;
+  /* Light theme sketchy colors - using warm gray system */
+  --sketchy-bg-primary: var(--sketchy-warm-gray-0, #f7f6f3);
+  --sketchy-bg-card: var(--sketchy-warm-gray-1, #f3f2ef);
   --sketchy-stroke: #2c3e50;
   --sketchy-stroke-light: #5d6d7e;
   --sketchy-highlight: #f39c12;
   --sketchy-highlight-soft: rgba(243, 156, 18, 0.25);
-  --sketchy-paper-texture: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  --sketchy-paper-texture: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
 }
 
 html.dark {
