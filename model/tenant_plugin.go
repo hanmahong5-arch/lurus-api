@@ -177,6 +177,7 @@ func skipTenantIsolation(db *gorm.DB) bool {
 // hasTenantIDColumn checks if the current table has tenant_id column
 func hasTenantIDColumn(db *gorm.DB) bool {
 	// Tables that have tenant_id column
+	// Note: logs table does NOT have tenant_id, removed from list
 	tablesWithTenantID := map[string]bool{
 		"users":              true,
 		"tokens":             true,
@@ -184,7 +185,6 @@ func hasTenantIDColumn(db *gorm.DB) bool {
 		"topups":             true,
 		"subscriptions":      true,
 		"redemptions":        true,
-		"logs":               true,
 		"passkeys":           true,
 		"twofa":              true,
 		// Add more tables as needed
