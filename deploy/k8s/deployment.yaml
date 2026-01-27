@@ -31,6 +31,12 @@ spec:
               value: "3000"
             - name: TZ
               value: "Asia/Shanghai"
+            # Session secret for persistent login
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: lurus-api-secrets
+                  key: SESSION_SECRET
             - name: SQL_DSN
               valueFrom:
                 secretKeyRef:
