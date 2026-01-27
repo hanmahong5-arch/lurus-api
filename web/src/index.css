@@ -55,6 +55,19 @@ code {
     monospace;
 }
 
+/* ==================== Layout Background Override ==================== */
+html:not(.dark) .semi-layout {
+  background-color: var(--sketchy-warm-gray-0) !important;
+}
+
+html:not(.dark) .semi-layout-content {
+  background-color: var(--sketchy-warm-gray-0) !important;
+}
+
+html:not(.dark) .semi-layout-header {
+  background-color: var(--sketchy-warm-gray-0) !important;
+}
+
 /* ==================== 布局相关样式 ==================== */
 .semi-layout::-webkit-scrollbar,
 .semi-layout-content::-webkit-scrollbar,

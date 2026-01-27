@@ -261,7 +261,7 @@ const PricingCardView = ({
                   <div className='flex items-start space-x-3 flex-1 min-w-0'>
                     {getModelIcon(model)}
                     <div className='flex-1 min-w-0'>
-                      <h3 className='text-lg font-bold text-gray-900 truncate'>
+                      <h3 className='text-lg font-bold text-semi-color-text-0 truncate'>
                         {model.model_name}
                       </h3>
                       <div className='flex items-center gap-3 text-xs mt-1'>

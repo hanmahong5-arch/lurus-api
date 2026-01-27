@@ -203,7 +203,7 @@ export const renderMonitorList = (
             className='w-2 h-2 rounded-full flex-shrink-0'
             style={{ backgroundColor: getUptimeStatusColor(monitor.status) }}
           />
-          <span className='text-sm font-medium text-gray-900'>
+          <span className='text-sm font-medium text-semi-color-text-0'>
             {monitor.name}
           </span>
         </div>
