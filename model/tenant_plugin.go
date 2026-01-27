@@ -79,16 +79,18 @@ func beforeCreate(db *gorm.DB) {
 		return
 	}
 
+	// Check if the table has tenant_id column FIRST
+	// Tables without tenant_id (like logs) should skip this check entirely
+	if !hasTenantIDColumn(db) {
+		return
+	}
+
 	// Get tenant ID from context
 	tenantID := getTenantIDFromContext(db)
 	if tenantID == "" {
 		// No tenant ID in context, this is an error for CREATE operations
+		// on tables that require tenant_id
 		db.AddError(errors.New("tenant_id is required for create operations"))
-		return
-	}
-
-	// Check if the table has tenant_id column
-	if !hasTenantIDColumn(db) {
 		return
 	}
 
