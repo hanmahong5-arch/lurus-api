@@ -23,7 +23,7 @@ RUN go mod download
 
 COPY . .
 COPY --from=builder /build/dist ./web/dist
-RUN go build -ldflags "-s -w -X 'github.com/QuantumNous/lurus-api/common.Version=$(cat VERSION)'" -o lurus-api
+RUN go build -ldflags "-s -w -X 'github.com/QuantumNous/lurus-api/internal/pkg/common.Version=$(cat VERSION)'" -o lurus-api ./cmd/server
 
 FROM debian:bookworm-slim
 

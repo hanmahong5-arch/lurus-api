@@ -73,22 +73,33 @@
 
 ```
 lurus-api/
-├── controller/          # API controllers
-├── model/               # Data models
-├── router/              # Route definitions
-├── relay/               # AI model relay logic
-├── search/              # Meilisearch integration
-├── web/                 # Frontend (React)
-├── deploy/              # Deployment configs
-│   └── k8s/             # Kubernetes manifests
-├── doc/                 # Documentation
-│   ├── plan.md          # Project planning
-│   ├── process.md       # Development progress
-│   ├── structure.md     # Architecture document
-│   └── develop-guide.md # Development guide
-├── CLAUDE.md            # This file
-├── README.md            # Project readme
-└── 重要信息.md           # Sensitive info (local only, gitignored)
+├── cmd/server/              # Entry point (main.go)
+├── internal/
+│   ├── biz/                 # Business logic
+│   │   ├── service/         # Service layer
+│   │   └── relay/           # AI model relay logic
+│   ├── data/
+│   │   └── model/           # Data models (GORM)
+│   ├── server/
+│   │   ├── controller/      # API controllers
+│   │   ├── middleware/       # HTTP middleware
+│   │   └── router/          # Route definitions
+│   └── pkg/                 # Internal shared utilities
+│       ├── common/          # Common helpers
+│       ├── constant/        # Constants
+│       ├── dto/             # Data transfer objects
+│       ├── logger/          # Logger setup
+│       ├── search/          # Meilisearch integration
+│       ├── setting/         # Settings (ratio, model, system, etc.)
+│       └── types/           # Shared types
+├── pkg/                     # Public packages (ionet)
+├── web/                     # Frontend (React)
+├── deploy/                  # Deployment configs
+│   └── k8s/                 # Kubernetes manifests
+├── doc/                     # Documentation
+├── CLAUDE.md                # This file
+├── README.md                # Project readme
+└── 重要信息.md               # Sensitive info (local only, gitignored)
 ```
 
 ---
@@ -117,7 +128,7 @@ lurus-api/
 ```bash
 # Build (silent mode)
 cargo build -q 2>&1  # For Rust
-go build -o lurus-api  # For Go
+go build -o lurus-api ./cmd/server  # For Go
 
 # Run
 ./lurus-api

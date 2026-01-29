@@ -55,13 +55,13 @@ jobs:
       #   if: runner.os != 'Windows'
       #   run: |
       #     go mod download
-      #     go build -ldflags "-s -w -X 'lurus-api/common.Version=$(git describe --tags)' -extldflags '-static'" -o lurus-api
+      #     go build -ldflags "-s -w -X 'github.com/QuantumNous/lurus-api/internal/pkg/common.Version=$(git describe --tags)' -extldflags '-static'" -o lurus-api ./cmd/server
 
       - name: Build Go binary (Windows)
         if: runner.os == 'Windows'
         run: |
           go mod download
-          go build -ldflags "-s -w -X 'lurus-api/common.Version=$(git describe --tags)'" -o lurus-api.exe
+          go build -ldflags "-s -w -X 'github.com/QuantumNous/lurus-api/internal/pkg/common.Version=$(git describe --tags)'" -o lurus-api.exe ./cmd/server
 
       - name: Update Electron version
         run: |

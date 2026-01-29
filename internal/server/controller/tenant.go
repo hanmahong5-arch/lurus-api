@@ -1,0 +1,479 @@
+package controller
+
+import (
+	"net/http"
+	"strconv"
+
+	"github.com/QuantumNous/lurus-api/internal/pkg/common"
+	"github.com/QuantumNous/lurus-api/internal/data/model"
+
+	"github.com/gin-gonic/gin"
+)
+
+// ListTenants retrieves all tenants (Platform Admin only)
+// Route: GET /api/v2/admin/tenants
+func ListTenants(c *gin.Context) {
+	// Parse pagination parameters
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	status, _ := strconv.Atoi(c.DefaultQuery("status", "0"))
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	offset := (page - 1) * pageSize
+
+	// Get tenants from database
+	tenants, total, err := model.ListTenants(offset, pageSize, status)
+	if err != nil {
+		common.SysError("Failed to list tenants: " + err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to retrieve tenants",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"tenants":   tenants,
+			"total":     total,
+			"page":      page,
+			"page_size": pageSize,
+		},
+	})
+}
+
+// GetTenant retrieves a single tenant by ID (Platform Admin only)
+// Route: GET /api/v2/admin/tenants/:id
+func GetTenant(c *gin.Context) {
+	tenantID := c.Param("id")
+
+	tenant, err := model.GetTenantByID(tenantID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "Tenant not found",
+		})
+		return
+	}
+
+	// Get tenant statistics
+	userCount, _ := model.GetTenantUserCount(tenantID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"tenant":     tenant,
+			"user_count": userCount,
+		},
+	})
+}
+
+// CreateTenant creates a new tenant (Platform Admin only)
+// Route: POST /api/v2/admin/tenants
+func CreateTenant(c *gin.Context) {
+	var req struct {
+		ZitadelOrgID string `json:"zitadel_org_id" binding:"required"`
+		Slug         string `json:"slug" binding:"required"`
+		Name         string `json:"name" binding:"required"`
+		PlanType     string `json:"plan_type"`
+		MaxUsers     int    `json:"max_users"`
+		MaxQuota     int64  `json:"max_quota"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid request parameters",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Set defaults
+	if req.PlanType == "" {
+		req.PlanType = model.TenantPlanFree
+	}
+	if req.MaxUsers == 0 {
+		req.MaxUsers = 100
+	}
+	if req.MaxQuota == 0 {
+		req.MaxQuota = 1000000
+	}
+
+	// Create tenant
+	tenant, err := model.CreateTenantFromZitadel(req.ZitadelOrgID, req.Slug, req.Name)
+	if err != nil {
+		common.SysError("Failed to create tenant: " + err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to create tenant",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Update tenant with additional fields
+	err = model.UpdateTenant(tenant.Id, map[string]interface{}{
+		"plan_type": req.PlanType,
+		"max_users": req.MaxUsers,
+		"max_quota": req.MaxQuota,
+	})
+	if err != nil {
+		common.SysError("Failed to update tenant: " + err.Error())
+	}
+
+	// Initialize default configs for new tenant
+	err = model.InitializeDefaultTenantConfigs(tenant.Id)
+	if err != nil {
+		common.SysError("Failed to initialize tenant configs: " + err.Error())
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"message": "Tenant created successfully",
+		"data":    tenant,
+	})
+}
+
+// UpdateTenant updates tenant information (Platform Admin only)
+// Route: PUT /api/v2/admin/tenants/:id
+func UpdateTenant(c *gin.Context) {
+	tenantID := c.Param("id")
+
+	var req struct {
+		Name     string `json:"name"`
+		Status   int    `json:"status"`
+		PlanType string `json:"plan_type"`
+		MaxUsers int    `json:"max_users"`
+		MaxQuota int64  `json:"max_quota"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid request parameters",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Build updates map (only include non-zero fields)
+	updates := make(map[string]interface{})
+	if req.Name != "" {
+		updates["name"] = req.Name
+	}
+	if req.Status > 0 {
+		updates["status"] = req.Status
+	}
+	if req.PlanType != "" {
+		updates["plan_type"] = req.PlanType
+	}
+	if req.MaxUsers > 0 {
+		updates["max_users"] = req.MaxUsers
+	}
+	if req.MaxQuota > 0 {
+		updates["max_quota"] = req.MaxQuota
+	}
+
+	if len(updates) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "No fields to update",
+		})
+		return
+	}
+
+	// Update tenant
+	err := model.UpdateTenant(tenantID, updates)
+	if err != nil {
+		common.SysError("Failed to update tenant: " + err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to update tenant",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Retrieve updated tenant
+	tenant, err := model.GetTenantByID(tenantID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "Tenant not found after update",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Tenant updated successfully",
+		"data":    tenant,
+	})
+}
+
+// DeleteTenant soft deletes a tenant (Platform Admin only)
+// Route: DELETE /api/v2/admin/tenants/:id
+func DeleteTenant(c *gin.Context) {
+	tenantID := c.Param("id")
+
+	// Prevent deletion of default tenant
+	if tenantID == "default" {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "Cannot delete default tenant",
+		})
+		return
+	}
+
+	// Check if tenant exists
+	tenant, err := model.GetTenantByID(tenantID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "Tenant not found",
+		})
+		return
+	}
+
+	// Soft delete tenant
+	err = model.DeleteTenant(tenantID)
+	if err != nil {
+		common.SysError("Failed to delete tenant: " + err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to delete tenant",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Tenant deleted successfully",
+		"data":    tenant,
+	})
+}
+
+// EnableTenant enables a tenant (Platform Admin only)
+// Route: POST /api/v2/admin/tenants/:id/enable
+func EnableTenant(c *gin.Context) {
+	tenantID := c.Param("id")
+
+	err := model.EnableTenant(tenantID)
+	if err != nil {
+		common.SysError("Failed to enable tenant: " + err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to enable tenant",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Tenant enabled successfully",
+	})
+}
+
+// DisableTenant disables a tenant (Platform Admin only)
+// Route: POST /api/v2/admin/tenants/:id/disable
+func DisableTenant(c *gin.Context) {
+	tenantID := c.Param("id")
+
+	// Prevent disabling default tenant
+	if tenantID == "default" {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "Cannot disable default tenant",
+		})
+		return
+	}
+
+	err := model.DisableTenant(tenantID)
+	if err != nil {
+		common.SysError("Failed to disable tenant: " + err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to disable tenant",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Tenant disabled successfully",
+	})
+}
+
+// SuspendTenant suspends a tenant (Platform Admin only)
+// Route: POST /api/v2/admin/tenants/:id/suspend
+func SuspendTenant(c *gin.Context) {
+	tenantID := c.Param("id")
+
+	// Prevent suspending default tenant
+	if tenantID == "default" {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "Cannot suspend default tenant",
+		})
+		return
+	}
+
+	err := model.SuspendTenant(tenantID)
+	if err != nil {
+		common.SysError("Failed to suspend tenant: " + err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to suspend tenant",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Tenant suspended successfully",
+	})
+}
+
+// GetTenantStats retrieves statistics for a tenant (Platform Admin only)
+// Route: GET /api/v2/admin/tenants/:id/stats
+func GetTenantStats(c *gin.Context) {
+	tenantID := c.Param("id")
+
+	// Check if tenant exists
+	tenant, err := model.GetTenantByID(tenantID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "Tenant not found",
+		})
+		return
+	}
+
+	// Get tenant statistics
+	userCount, _ := model.GetTenantUserCount(tenantID)
+
+	// TODO: Add more statistics
+	// - Total quota used
+	// - Total API requests
+	// - Active subscriptions
+	// - Total revenue
+	// - Channel count
+	// - Log count
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"tenant_id":  tenant.Id,
+			"user_count": userCount,
+			"max_users":  tenant.MaxUsers,
+			"max_quota":  tenant.MaxQuota,
+			// Add more stats here
+		},
+	})
+}
+
+// GetTenantConfigs retrieves all configurations for a tenant
+// Route: GET /api/v2/:tenant_slug/config
+func GetTenantConfigs(c *gin.Context) {
+	// Get tenant ID from context
+	tenantID, err := model.GetTenantID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Tenant context not found",
+		})
+		return
+	}
+
+	// Get all configs (exclude system configs for non-admin users)
+	includeSystem := c.Query("include_system") == "true"
+	configs, err := model.ListTenantConfigs(tenantID, includeSystem)
+	if err != nil {
+		common.SysError("Failed to list tenant configs: " + err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to retrieve configurations",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    configs,
+	})
+}
+
+// UpdateTenantConfig updates a single tenant configuration
+// Route: PUT /api/v2/:tenant_slug/config/:key
+func UpdateTenantConfig(c *gin.Context) {
+	// Get tenant ID from context
+	tenantID, err := model.GetTenantID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Tenant context not found",
+		})
+		return
+	}
+
+	configKey := c.Param("key")
+
+	var req struct {
+		Value       string `json:"value" binding:"required"`
+		ConfigType  string `json:"config_type"`
+		Description string `json:"description"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid request parameters",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Set defaults
+	if req.ConfigType == "" {
+		req.ConfigType = model.ConfigTypeString
+	}
+
+	// Check if config exists and is not a system config
+	existingConfig, err := model.GetTenantConfig(tenantID, configKey)
+	if err == nil && existingConfig.IsSystem {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "Cannot modify system configuration",
+		})
+		return
+	}
+
+	// Set config
+	err = model.SetTenantConfig(tenantID, configKey, req.Value, req.ConfigType, req.Description, false)
+	if err != nil {
+		common.SysError("Failed to set tenant config: " + err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to update configuration",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Configuration updated successfully",
+	})
+}

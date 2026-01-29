@@ -82,7 +82,7 @@ cp .env.meilisearch.example .env
 # 编辑 .env 文件，设置数据库和 Meilisearch 配置
 
 # 3. 编译运行 / Build and run
-go build -o lurus-api
+go build -o lurus-api ./cmd/server
 ./lurus-api
 
 # 4. 前端开发（可选）/ Frontend development (optional)

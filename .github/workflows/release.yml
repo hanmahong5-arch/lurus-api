@@ -44,12 +44,12 @@ jobs:
       - name: Build Backend (amd64)
         run: |
           go mod download
-          go build -ldflags "-s -w -X 'lurus-api/common.Version=$VERSION' -extldflags '-static'" -o lurus-api-$VERSION
+          go build -ldflags "-s -w -X 'github.com/QuantumNous/lurus-api/internal/pkg/common.Version=$VERSION' -extldflags '-static'" -o lurus-api-$VERSION ./cmd/server
       - name: Build Backend (arm64)
         run: |
           sudo apt-get update
           DEBIAN_FRONTEND=noninteractive sudo apt-get install -y gcc-aarch64-linux-gnu
-          CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -ldflags "-s -w -X 'lurus-api/common.Version=$VERSION' -extldflags '-static'" -o lurus-api-arm64-$VERSION
+          CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -ldflags "-s -w -X 'github.com/QuantumNous/lurus-api/internal/pkg/common.Version=$VERSION' -extldflags '-static'" -o lurus-api-arm64-$VERSION ./cmd/server
       - name: Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
@@ -90,7 +90,7 @@ jobs:
       - name: Build Backend
         run: |
           go mod download
-          go build -ldflags "-X 'lurus-api/common.Version=$VERSION'" -o lurus-api-macos-$VERSION
+          go build -ldflags "-X 'github.com/QuantumNous/lurus-api/internal/pkg/common.Version=$VERSION'" -o lurus-api-macos-$VERSION ./cmd/server
       - name: Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
@@ -132,7 +132,7 @@ jobs:
       - name: Build Backend
         run: |
           go mod download
-          go build -ldflags "-s -w -X 'lurus-api/common.Version=$VERSION'" -o lurus-api-$VERSION.exe
+          go build -ldflags "-s -w -X 'github.com/QuantumNous/lurus-api/internal/pkg/common.Version=$VERSION'" -o lurus-api-$VERSION.exe
       - name: Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')

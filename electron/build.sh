@@ -14,25 +14,25 @@ cd ..
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "Building for macOS..."
-    CGO_ENABLED=1 go build -ldflags="-s -w" -o lurus-api
+    CGO_ENABLED=1 go build -ldflags="-s -w" -o lurus-api ./cmd/server
     cd electron
     npm install
     npm run build:mac
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     echo "Building for Linux..."
-    CGO_ENABLED=1 go build -ldflags="-s -w" -o lurus-api
+    CGO_ENABLED=1 go build -ldflags="-s -w" -o lurus-api ./cmd/server
     cd electron
     npm install
     npm run build:linux
 elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
     echo "Building for Windows..."
-    CGO_ENABLED=1 go build -ldflags="-s -w" -o lurus-api.exe
+    CGO_ENABLED=1 go build -ldflags="-s -w" -o lurus-api.exe ./cmd/server
     cd electron
     npm install
     npm run build:win
 else
     echo "Unknown OS, building for current platform..."
-    CGO_ENABLED=1 go build -ldflags="-s -w" -o lurus-api
+    CGO_ENABLED=1 go build -ldflags="-s -w" -o lurus-api ./cmd/server
     cd electron
     npm install
     npm run build
