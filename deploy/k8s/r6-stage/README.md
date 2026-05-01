@@ -1,0 +1,35 @@
+# lurus-newhub — R6 STAGE manifest
+
+Live deployment of `2b-svc-newhub` on the R6 STAGE cluster, fronted by R6 host nginx.
+
+- Cluster: R6 (`43.226.38.244`, Tailscale `100.122.83.20`), single-node K3s
+- Namespace: `lurus-newhub`
+- Domain: https://test-newhub.lurus.cn
+- Service: NodePort 30850 -> container port 3000
+- Image: `ghcr.io/hanmahong5-arch/lurus-api:main` (floating tag, `imagePullPolicy: Always`)
+
+## First apply
+
+```bash
+# 1. Seed the secret with real values (NEVER commit them):
+kubectl -n lurus-newhub create secret generic lurus-newhub-secrets \
+  --from-literal=SESSION_SECRET='<real>' \
+  --from-literal=SQL_DSN='<real>' \
+  --from-literal=IDENTITY_SERVICE_INTERNAL_KEY='<real>' \
+  --from-literal=IDENTITY_SESSION_SECRET='<real>'
+
+# 2. Apply the rest (kustomize will try to apply secret-template.yaml too;
+#    it is harmless because the keys above already exist — stringData is merged).
+kubectl apply -k deploy/k8s/r6-stage/
+```
+
+## Sync nginx vhost to R6 host
+
+```bash
+scp deploy/r6-host-nginx/test-newhub.conf root@100.122.83.20:/etc/nginx/sites-available/test-newhub
+ssh root@100.122.83.20 "ln -sf ../sites-available/test-newhub /etc/nginx/sites-enabled/ && nginx -t && systemctl reload nginx"
+```
+
+## Known deviation
+
+`deploy/k8s/staging/` is a different topology (Traefik IngressRoute, distinct namespace) — do not mix with this overlay. Promote to PROD only after pinning the image to `main-<sha7>`.

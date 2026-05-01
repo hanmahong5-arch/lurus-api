@@ -1,0 +1,133 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lurus-newhub
+  namespace: lurus-newhub
+  labels:
+    app: lurus-newhub
+    environment: stage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lurus-newhub
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: lurus-newhub
+        environment: stage
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: lurus-newhub
+          # NOTE: STAGE tracks the floating "main" tag with imagePullPolicy=Always.
+          # Pin to ghcr.io/hanmahong5-arch/lurus-api:main-<sha7> before promoting to PROD.
+          image: ghcr.io/hanmahong5-arch/lurus-api:main
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: PORT
+              value: "3000"
+            - name: TZ
+              value: "Asia/Shanghai"
+            - name: GIN_MODE
+              value: "release"
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: lurus-newhub-secrets
+                  key: SESSION_SECRET
+            - name: SQL_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: lurus-newhub-secrets
+                  key: SQL_DSN
+            - name: REDIS_CONN_STRING
+              value: "redis://redis.lurus-system.svc.cluster.local:6379/2"
+            - name: SESSION_COOKIE_DOMAIN
+              value: "test-newhub.lurus.cn"
+            - name: ZITADEL_ENABLED
+              value: "false"
+            - name: MEILISEARCH_ENABLED
+              value: "false"
+            - name: BILLING_UNIFIED_ENABLED
+              value: "false"
+            - name: IDENTITY_SERVICE_URL
+              value: "http://platform-core.lurus-platform.svc.cluster.local:18104"
+            - name: IDENTITY_GRPC_ADDR
+              value: "platform-core.lurus-platform.svc.cluster.local:18105"
+            - name: IDENTITY_SERVICE_INTERNAL_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: lurus-newhub-secrets
+                  key: IDENTITY_SERVICE_INTERNAL_KEY
+            - name: IDENTITY_SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: lurus-newhub-secrets
+                  key: IDENTITY_SESSION_SECRET
+            - name: ALLOWED_ORIGINS
+              value: "https://test-newhub.lurus.cn"
+            - name: LLM_QUOTA_NATS_ENABLED
+              value: "true"
+            - name: NATS_URL
+              value: "nats://100.120.110.73:14222"
+            - name: LLM_QUOTA_NATS_STREAM
+              value: "LLM_EVENTS"
+            - name: NODE_TYPE
+              value: "master"
+            - name: SYNC_FREQUENCY
+              value: "60"
+            - name: GRACEFUL_SHUTDOWN_TIMEOUT
+              value: "30s"
+            - name: LOG_FORMAT
+              value: "json"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          startupProbe:
+            httpGet:
+              path: /api/status
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 30
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /api/status
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /api/status
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
