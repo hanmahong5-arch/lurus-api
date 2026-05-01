@@ -94,6 +94,13 @@ func PreConsumeQuota(c *gin.Context, preConsumedQuota int, relayInfo *relaycommo
 			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 	}
 
+	// Tenant monthly quota enforcement (runs after user-level check).
+	if apiErr := enforceTenantQuota(c.GetString("tenant_id"), preConsumedQuota); apiErr != nil {
+		releasePlatformPreAuth(relayInfo)
+		relayInfo.PlatformPreAuthID = 0
+		return apiErr
+	}
+
 	// Trust optimization: skip local pre-deduction when balance is high enough
 	trustQuota := common.GetTrustQuota()
 	relayInfo.UserQuota = userQuota

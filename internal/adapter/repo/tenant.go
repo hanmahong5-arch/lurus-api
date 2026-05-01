@@ -2,6 +2,7 @@ package repo
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/LurusTech/lurus-hub/internal/domain/entity"
@@ -264,6 +265,28 @@ func GetTenantQuotaStats(tenantID string) (usedQuota int64, remainingQuota int64
 	return result.UsedQuota, result.RemainQuota, err
 }
 
+
+// GetTenantMonthlyQuotaUsed returns the sum of quota consumed by a tenant within
+// the given billing period (format "YYYY-MM"). It queries the log table so no
+// cron reset is needed — the window is computed at query time.
+func GetTenantMonthlyQuotaUsed(tenantID string, period string) (int64, error) {
+	// Parse period "YYYY-MM" into UTC month boundaries (unix seconds).
+	t, err := time.Parse("2006-01", period)
+	if err != nil {
+		return 0, fmt.Errorf("invalid period %q: %w", period, err)
+	}
+	startUnix := t.UTC().Unix()
+	// First second of next month
+	endUnix := t.AddDate(0, 1, 0).UTC().Unix()
+
+	var used int64
+	err = LOG_DB.Model(&Log{}).
+		Select("COALESCE(SUM(quota), 0)").
+		Where("tenant_id = ? AND type = ? AND created_at >= ? AND created_at < ?",
+			tenantID, LogTypeConsume, startUnix, endUnix).
+		Scan(&used).Error
+	return used, err
+}
 
 // GetTenantRedemptionCount returns the number of redemption codes in a tenant
 func GetTenantRedemptionCount(tenantID string) (int64, error) {

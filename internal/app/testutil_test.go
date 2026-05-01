@@ -28,6 +28,7 @@ func setupServiceTestDB(t *testing.T) *gorm.DB {
 		&repo.Log{},
 		&repo.Channel{},
 		&repo.Option{},
+		&repo.Tenant{},
 	)
 	if err != nil {
 		t.Fatalf("failed to auto-migrate: %v", err)
