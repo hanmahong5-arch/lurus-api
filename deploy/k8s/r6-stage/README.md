@@ -21,6 +21,11 @@ kubectl -n lurus-newhub create secret generic lurus-newhub-secrets \
 # 2. Apply the rest (kustomize will try to apply secret-template.yaml too;
 #    it is harmless because the keys above already exist — stringData is merged).
 kubectl apply -k deploy/k8s/r6-stage/
+
+# 3. Seed the default tenant (slug='lurus') — required for v2 multi-tenant
+#    routes; without it /api/v2/lurus/* returns 404 "record not found".
+ssh root@100.122.83.20 "kubectl exec -n database lurus-pg-0 -- \
+  psql -U lurus -d newhub" < deploy/k8s/r6-stage/seed-default-tenant.sql
 ```
 
 ## Sync nginx vhost to R6 host
