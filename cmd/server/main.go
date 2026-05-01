@@ -26,6 +26,7 @@ import (
 	"github.com/LurusTech/lurus-hub/internal/pkg/config"
 	"github.com/LurusTech/lurus-hub/internal/pkg/constant"
 	"github.com/LurusTech/lurus-hub/internal/pkg/logger"
+	hubnats "github.com/LurusTech/lurus-hub/internal/pkg/nats"
 	"github.com/LurusTech/lurus-hub/internal/pkg/search"
 	"github.com/LurusTech/lurus-hub/internal/pkg/setting/ratio_setting"
 	"github.com/LurusTech/lurus-hub/internal/pkg/tracing"
@@ -536,6 +537,18 @@ func InitResources(ctx context.Context) error {
 		common.SysError(fmt.Sprintf("Failed to initialize tracing: %v", err))
 		// Don't return error - tracing is optional
 		// 不返回错误 - 追踪是可选的
+	}
+
+	// Initialize NATS publisher for LLM_QUOTA threshold events.
+	// Optional — Init is no-op when LLM_QUOTA_NATS_ENABLED=false.
+	if hubnats.Enabled() {
+		if err := hubnats.Init(); err != nil {
+			common.SysError(fmt.Sprintf("Failed to initialize NATS quota publisher: %v", err))
+			// Non-fatal: quota threshold events skipped, main path unaffected
+		} else {
+			common.SysLog(fmt.Sprintf("NATS quota publisher initialized, url=%s stream=%s",
+				os.Getenv("NATS_URL"), os.Getenv("LLM_QUOTA_NATS_STREAM")))
+		}
 	}
 
 	return nil
