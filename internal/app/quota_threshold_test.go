@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os"
 	"sync"
 	"testing"
@@ -11,7 +11,7 @@ import (
 
 // --- minimal mocks ---
 
-// mockRedis implements redisSetNXer; controls whether SetNX returns set=true.
+// mockRedis implements redisDeduper; controls whether SetNXBool returns set=true.
 type mockRedis struct {
 	mu      sync.Mutex
 	setKeys map[string]bool // key -> already set
@@ -19,20 +19,14 @@ type mockRedis struct {
 
 func newMockRedis() *mockRedis { return &mockRedis{setKeys: make(map[string]bool)} }
 
-type mockSetNXResult struct{ ok bool; err error }
-
-func (r mockSetNXResult) Result() (bool, error) { return r.ok, r.err }
-
-func (m *mockRedis) SetNX(_ context.Context, key string, _ interface{}, _ time.Duration) interface {
-	Result() (bool, error)
-} {
+func (m *mockRedis) SetNXBool(_ context.Context, key string, _ time.Duration) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.setKeys[key] {
-		return mockSetNXResult{ok: false}
+		return false, nil
 	}
 	m.setKeys[key] = true
-	return mockSetNXResult{ok: true}
+	return true, nil
 }
 
 // mockPublisher records every published message.
@@ -63,7 +57,7 @@ func (p *mockPublisher) count() int {
 	return len(p.messages)
 }
 
-// helper: enable the feature flag for the duration of the test.
+// withQuotaNATSEnabled enables the feature flag for the duration of the test.
 func withQuotaNATSEnabled(t *testing.T) {
 	t.Helper()
 	prev := os.Getenv("LLM_QUOTA_NATS_ENABLED")
@@ -73,20 +67,20 @@ func withQuotaNATSEnabled(t *testing.T) {
 
 // --- AC6 tests ---
 
-// AC6(a): no threshold crossed → no publish
+// AC6(a): usage doesn't cross any threshold → no publish.
 func TestCheckAndPublishQuotaThresholds_NoCrossing_NoPublish(t *testing.T) {
 	withQuotaNATSEnabled(t)
 	rdb := newMockRedis()
 	pub := &mockPublisher{}
 
-	// 40% → 45%: no 50% crossing
+	// before ≈ 38%, after ≈ 43% — neither crosses 50%.
 	params := quotaThresholdParams{
 		UserId:            1,
 		IdentityAccountID: 100,
-		QuotaBefore:       600, // remaining before
 		QuotaConsumed:     50,
-		UsedQuotaBefore:   400, // already used
-		// totalMax = 600 + 400 + 50 = 1050; percentBefore = 400/1050 ≈ 38%, after = 450/1050 ≈ 42.8%
+		UsedTokensAfter:   450, // 450/1050 ≈ 42.8%
+		LimitTokens:       1050,
+		// usedBefore = 450-50 = 400; percentBefore = 400/1050 ≈ 38.1%
 	}
 
 	checkAndPublishQuotaThresholds(context.Background(), params, rdb, pub)
@@ -96,20 +90,20 @@ func TestCheckAndPublishQuotaThresholds_NoCrossing_NoPublish(t *testing.T) {
 	}
 }
 
-// AC6(b): crosses 50% → exactly one publish on llm.quota.threshold
+// AC6(b): crosses 50% → exactly one publish on llm.quota.threshold.
 func TestCheckAndPublishQuotaThresholds_Cross50_PublishesOnce(t *testing.T) {
 	withQuotaNATSEnabled(t)
 	rdb := newMockRedis()
 	pub := &mockPublisher{}
 
-	// before ≈ 40%, after ≈ 55%
+	// usedBefore = 550-150 = 400; percentBefore = 400/1100 ≈ 36.4% (< 50)
+	// usedAfter  = 550;           percentAfter  = 550/1100 = 50% (>= 50)
 	params := quotaThresholdParams{
 		UserId:            2,
 		IdentityAccountID: 200,
-		QuotaBefore:       550, // remaining before
 		QuotaConsumed:     150,
-		UsedQuotaBefore:   400,
-		// totalMax = 550+400+150 = 1100; percentBefore=400/1100≈36.4%, after=550/1100=50%
+		UsedTokensAfter:   550,
+		LimitTokens:       1100,
 	}
 
 	checkAndPublishQuotaThresholds(context.Background(), params, rdb, pub)
@@ -122,7 +116,7 @@ func TestCheckAndPublishQuotaThresholds_Cross50_PublishesOnce(t *testing.T) {
 	}
 	payload, ok := pub.messages[0].payload.(QuotaThresholdPayload)
 	if !ok {
-		t.Fatalf("payload is not QuotaThresholdPayload")
+		t.Fatalf("payload type mismatch: %T", pub.messages[0].payload)
 	}
 	if payload.AccountID != 200 {
 		t.Errorf("account_id = %d, want 200", payload.AccountID)
@@ -130,9 +124,15 @@ func TestCheckAndPublishQuotaThresholds_Cross50_PublishesOnce(t *testing.T) {
 	if payload.UsagePercent < 50.0 {
 		t.Errorf("usage_percent = %f, want >= 50", payload.UsagePercent)
 	}
+	if payload.UsedTokens != 550 {
+		t.Errorf("used_tokens = %d, want 550", payload.UsedTokens)
+	}
+	if payload.LimitTokens != 1100 {
+		t.Errorf("limit_tokens = %d, want 1100", payload.LimitTokens)
+	}
 }
 
-// AC6(c): same threshold not re-published (Redis NX blocks duplicate)
+// AC6(c): same threshold not re-published (Redis NX dedup).
 func TestCheckAndPublishQuotaThresholds_AlreadySent_NoRepublish(t *testing.T) {
 	withQuotaNATSEnabled(t)
 	rdb := newMockRedis()
@@ -141,9 +141,9 @@ func TestCheckAndPublishQuotaThresholds_AlreadySent_NoRepublish(t *testing.T) {
 	params := quotaThresholdParams{
 		UserId:            3,
 		IdentityAccountID: 300,
-		QuotaBefore:       550,
 		QuotaConsumed:     150,
-		UsedQuotaBefore:   400,
+		UsedTokensAfter:   550,
+		LimitTokens:       1100,
 	}
 
 	// First call — should publish once.
@@ -155,31 +155,29 @@ func TestCheckAndPublishQuotaThresholds_AlreadySent_NoRepublish(t *testing.T) {
 	// Second call with same params — Redis NX returns false, no publish.
 	checkAndPublishQuotaThresholds(context.Background(), params, rdb, pub)
 	if pub.count() != 1 {
-		t.Errorf("second call: expected still 1 publish (dedup), got %d", pub.count())
+		t.Errorf("second call: expected still 1 (dedup), got %d", pub.count())
 	}
 }
 
-// AC6(d): NATS publish fails → function returns without panic; main flow unaffected
+// AC6(d): NATS publish fails → no panic, main flow unaffected (void return).
 func TestCheckAndPublishQuotaThresholds_PublishFails_NoError(t *testing.T) {
 	withQuotaNATSEnabled(t)
 	rdb := newMockRedis()
-	pub := &mockPublisher{failErr: errPublishFailed}
+	pub := &mockPublisher{failErr: errors.New("simulated NATS publish failure")}
 
 	params := quotaThresholdParams{
 		UserId:            4,
 		IdentityAccountID: 400,
-		QuotaBefore:       550,
 		QuotaConsumed:     150,
-		UsedQuotaBefore:   400,
+		UsedTokensAfter:   550,
+		LimitTokens:       1100,
 	}
 
-	// Must not panic; function is fire-and-forget.
+	// Must not panic; function is fire-and-forget with void return.
 	checkAndPublishQuotaThresholds(context.Background(), params, rdb, pub)
-	// No assertion on publish count — the publisher always fails, that's the point.
-	// We only verify no panic / no error propagation (void return).
 }
 
-// AC6(e): LLM_QUOTA_NATS_ENABLED=false → completely skipped
+// AC6(e): LLM_QUOTA_NATS_ENABLED=false → completely skipped.
 func TestCheckAndPublishQuotaThresholds_Disabled_Skips(t *testing.T) {
 	os.Setenv("LLM_QUOTA_NATS_ENABLED", "false")
 	t.Cleanup(func() { os.Unsetenv("LLM_QUOTA_NATS_ENABLED") })
@@ -189,9 +187,9 @@ func TestCheckAndPublishQuotaThresholds_Disabled_Skips(t *testing.T) {
 	params := quotaThresholdParams{
 		UserId:            5,
 		IdentityAccountID: 500,
-		QuotaBefore:       550,
 		QuotaConsumed:     150,
-		UsedQuotaBefore:   400,
+		UsedTokensAfter:   550,
+		LimitTokens:       1100,
 	}
 
 	checkAndPublishQuotaThresholds(context.Background(), params, nil, pub)
@@ -200,6 +198,3 @@ func TestCheckAndPublishQuotaThresholds_Disabled_Skips(t *testing.T) {
 		t.Errorf("expected 0 publishes when disabled, got %d", pub.count())
 	}
 }
-
-// errPublishFailed is a sentinel error for AC6(d).
-var errPublishFailed = fmt.Errorf("simulated NATS publish failure")

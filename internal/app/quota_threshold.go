@@ -2,14 +2,30 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/LurusTech/lurus-hub/internal/pkg/nats"
 	hubnats "github.com/LurusTech/lurus-hub/internal/pkg/nats"
 )
+
+// redisClientDeduper wraps *redis.Client to implement redisDeduper.
+type redisClientDeduper struct{ c *redis.Client }
+
+func (r *redisClientDeduper) SetNXBool(ctx context.Context, key string, expiration time.Duration) (bool, error) {
+	return r.c.SetNX(ctx, key, "1", expiration).Result()
+}
+
+// wrapRedis returns a redisDeduper for the given client, or nil if client is nil.
+func wrapRedis(c *redis.Client) redisDeduper {
+	if c == nil {
+		return nil
+	}
+	return &redisClientDeduper{c: c}
+}
 
 // quotaThresholds are the crossing points (percent) that trigger a NATS event.
 var quotaThresholds = []int{50, 80, 95, 100}
@@ -32,12 +48,11 @@ func dedupKey(userId int, threshold int, now time.Time) string {
 	return fmt.Sprintf("quota_threshold_sent:user:%d:%d:%s", userId, threshold, period)
 }
 
-// redisSetNXer is the minimal interface needed for deduplication.
-// Matches *redis.Client.SetNX so production code can pass common.RDB directly.
-type redisSetNXer interface {
-	SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) interface {
-		Result() (bool, error)
-	}
+// redisDeduper is the minimal interface needed for deduplication.
+// SetNXBool performs a Redis SET NX and returns (true, nil) when the key was set
+// (first time), (false, nil) when the key already existed, and (_, err) on error.
+type redisDeduper interface {
+	SetNXBool(ctx context.Context, key string, expiration time.Duration) (bool, error)
 }
 
 // thresholdPublisher is the minimal publish interface.
@@ -46,53 +61,57 @@ type thresholdPublisher interface {
 }
 
 // quotaThresholdParams carries all inputs needed for the threshold check.
-// Separated from PostConsumeQuota so it can be tested without a real relay session.
+// UsedTokensAfter and LimitTokens must be derived from a fresh DB fetch
+// (called inside the async goroutine, so it doesn't block the relay path).
 type quotaThresholdParams struct {
 	// UserId is the local newhub user ID (for Redis dedup key).
 	UserId int
 	// IdentityAccountID is the lurus-platform account ID sent as account_id.
 	IdentityAccountID int64
-	// QuotaBefore is the user's remaining quota before this consumption.
-	QuotaBefore int64
-	// QuotaConsumed is how much was consumed in this transaction.
+	// QuotaConsumed is how much was consumed in this transaction (positive).
 	QuotaConsumed int64
-	// UsedQuotaBefore is the user's historical used_quota before this transaction.
-	UsedQuotaBefore int64
+	// UsedTokensAfter is the user's cumulative used_quota after this transaction.
+	UsedTokensAfter int64
+	// LimitTokens is the user's total quota ceiling (remaining + used_after).
+	LimitTokens int64
 }
 
 // checkAndPublishQuotaThresholds fires NATS events for any thresholds crossed
 // by the current consumption. It is designed to be called asynchronously and
 // must not block or panic the caller.
 //
+// Crossing definition: before this transaction percentBefore < threshold,
+// after percentAfter >= threshold.
+//
 // Dedup: Redis SET NX with 24h TTL ensures at-most-once per threshold per user per month.
 // Fire-and-forget: publish errors are warned but not returned.
 func checkAndPublishQuotaThresholds(
 	ctx context.Context,
 	params quotaThresholdParams,
-	rdb redisSetNXer,
+	rdb redisDeduper,
 	pub thresholdPublisher,
 ) {
 	if !nats.Enabled() || pub == nil {
 		return
 	}
-	if params.IdentityAccountID <= 0 {
+	if params.IdentityAccountID <= 0 || params.LimitTokens <= 0 {
 		return
 	}
 
-	// Compute quota state.
-	totalMax := params.QuotaBefore + params.UsedQuotaBefore + params.QuotaConsumed
-	if totalMax <= 0 {
-		return
+	usedAfter := params.UsedTokensAfter
+	usedBefore := usedAfter - params.QuotaConsumed
+	if usedBefore < 0 {
+		usedBefore = 0
 	}
-	usedAfter := params.UsedQuotaBefore + params.QuotaConsumed
-	percentAfter := float64(usedAfter) / float64(totalMax) * 100.0
-	percentBefore := float64(params.UsedQuotaBefore) / float64(totalMax) * 100.0
+
+	percentAfter := float64(usedAfter) / float64(params.LimitTokens) * 100.0
+	percentBefore := float64(usedBefore) / float64(params.LimitTokens) * 100.0
 
 	now := time.Now()
 
 	for _, threshold := range quotaThresholds {
 		ft := float64(threshold)
-		// Check crossing: before < threshold, after >= threshold.
+		// Crossing: before < threshold AND after >= threshold.
 		if percentBefore >= ft || percentAfter < ft {
 			continue
 		}
@@ -100,7 +119,7 @@ func checkAndPublishQuotaThresholds(
 		// Dedup via Redis SET NX.
 		if rdb != nil {
 			key := dedupKey(params.UserId, threshold, now)
-			set, err := rdb.SetNX(ctx, key, "1", 24*time.Hour).Result()
+			set, err := rdb.SetNXBool(ctx, key, 24*time.Hour)
 			if err != nil {
 				slog.Warn("quota threshold dedup failed",
 					"key", key, "err", err)
@@ -116,7 +135,7 @@ func checkAndPublishQuotaThresholds(
 		payload := QuotaThresholdPayload{
 			AccountID:    params.IdentityAccountID,
 			UsedTokens:   usedAfter,
-			LimitTokens:  totalMax,
+			LimitTokens:  params.LimitTokens,
 			UsagePercent: percentAfter,
 		}
 
@@ -132,9 +151,4 @@ func checkAndPublishQuotaThresholds(
 				"usage_percent", percentAfter)
 		}
 	}
-}
-
-// jsonRoundTrip is a helper for tests to verify payload serialisation.
-func jsonRoundTrip(payload QuotaThresholdPayload) ([]byte, error) {
-	return json.Marshal(payload)
 }

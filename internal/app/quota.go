@@ -14,6 +14,7 @@ import (
 	"github.com/LurusTech/lurus-hub/internal/pkg/dto"
 	"github.com/LurusTech/lurus-hub/internal/pkg/logger"
 	"github.com/LurusTech/lurus-hub/internal/pkg/metrics"
+	hubnats "github.com/LurusTech/lurus-hub/internal/pkg/nats"
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
 	relaycommon "github.com/LurusTech/lurus-hub/internal/adapter/provider/common"
 	"github.com/LurusTech/lurus-hub/internal/app/governance"
@@ -603,6 +604,7 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 				rptCtx, rptCancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer rptCancel()
 				common.ReportLLMUsageGRPC(rptCtx, accountID, amountLB)
+				reportQuotaThreshold(rptCtx, relayInfo, totalQuota)
 			})
 		} else {
 			// Legacy path: fire-and-forget debit (no pre-auth)
@@ -615,6 +617,7 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 						accountID, amountLB, debitErr.Error()))
 				}
 				common.ReportLLMUsageGRPC(debitCtx, accountID, amountLB)
+				reportQuotaThreshold(debitCtx, relayInfo, totalQuota)
 			})
 		}
 	}
@@ -624,6 +627,48 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 		return err
 	}
 	return nil
+}
+
+// reportQuotaThreshold fetches the user's current quota state from DB and
+// fires checkAndPublishQuotaThresholds. Designed to be called inside an
+// existing async goroutine — it must not panic or block the caller.
+// consumed is the total quota consumed in this transaction (positive int).
+func reportQuotaThreshold(ctx context.Context, relayInfo *relaycommon.RelayInfo, consumed int) {
+	if !hubnats.Enabled() {
+		return
+	}
+	pub := hubnats.Get()
+	if pub == nil {
+		return
+	}
+	if relayInfo.IdentityAccountID <= 0 || relayInfo.UserId == 0 || consumed <= 0 {
+		return
+	}
+
+	user, err := repo.GetUserById(relayInfo.UserId)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("quota threshold: failed to fetch user %d: %s", relayInfo.UserId, err.Error()))
+		return
+	}
+
+	// user.Quota = remaining after this transaction (decremented in Phase 1).
+	// user.UsedQuota = historical used quota (may or may not include this transaction
+	// depending on batch-update timing; best-effort).
+	usedAfter := int64(user.UsedQuota)
+	limitTokens := int64(user.Quota) + usedAfter
+
+	var rdb redisDeduper
+	if common.RedisEnabled && common.RDB != nil {
+		rdb = wrapRedis(common.RDB)
+	}
+
+	checkAndPublishQuotaThresholds(ctx, quotaThresholdParams{
+		UserId:            relayInfo.UserId,
+		IdentityAccountID: relayInfo.IdentityAccountID,
+		QuotaConsumed:     int64(consumed),
+		UsedTokensAfter:   usedAfter,
+		LimitTokens:       limitTokens,
+	}, rdb, pub)
 }
 
 func checkAndSendQuotaNotify(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int) {
