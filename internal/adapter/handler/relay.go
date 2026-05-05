@@ -17,6 +17,7 @@ import (
 	"github.com/LurusTech/lurus-hub/internal/pkg/logger"
 	"github.com/LurusTech/lurus-hub/internal/pkg/metrics"
 	"github.com/LurusTech/lurus-hub/internal/pkg/resilience"
+	"github.com/LurusTech/lurus-hub/internal/pkg/tracing"
 	"github.com/LurusTech/lurus-hub/internal/adapter/middleware"
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
 	"github.com/LurusTech/lurus-hub/internal/app/governance"
@@ -261,6 +262,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		relayStart := time.Now()
 		providerName := constant.GetChannelTypeName(channel.Type)
 
+		// Start LLM span (child of the HTTP request span from tracing.Middleware).
+		// noop tracer is used when OTel is not initialised — no overhead.
+		genAISystem := tracing.ChannelTypeToGenAISystem(channel.Type)
+		_, llmSpan := tracing.StartLLMSpan(c.Request.Context(), genAISystem, relayInfo.OriginModelName)
+		defer llmSpan.End()
+
 		switch relayFormat {
 		case types.RelayFormatOpenAIRealtime:
 			newAPIError = relay.WssHelper(c, relayInfo)
@@ -279,6 +286,19 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			status = "error"
 		}
 		metrics.RecordRelayRequest(providerName, relayInfo.OriginModelName, status, relayDuration)
+
+		// Annotate LLM span with usage and status after relay completes.
+		// costCNY is estimated from pre-consumed quota; final settlement happens async.
+		{
+			var relayErr error
+			if newAPIError != nil {
+				relayErr = newAPIError.Err
+			}
+			costCNY := float64(relayInfo.FinalPreConsumedQuota) / common.QuotaPerUnit
+			tracing.SetGenAIAttributes(llmSpan,
+				relayInfo.GetEstimatePromptTokens(), 0,
+				costCNY, nil, relayErr)
+		}
 
 		if newAPIError == nil {
 			channelBreakers.RecordSuccess(channel.Id)
