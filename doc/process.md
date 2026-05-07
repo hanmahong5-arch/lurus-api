@@ -358,3 +358,22 @@ Sprint 进展: 5 个 review 状态 story (7-1, 7-4, 7-2 ADR, 8-1, 8-2). 下一�
 **Live data 待操作员**: 3 条 SQL 写在 story 文档里，跑 PROD `consume_logs` 即可
 DoD 缺 PROD 用量数据；纯码审计完成
 
+
+
+## 2026-05-07 (cont.) · 7-5 chaos drill + SLO dashboard
+
+**Goal**: 让 Phase 1 的 12 个 review story 可被运维真实验证（不只是声明已完成）
+
+**Files**:
+- `scripts/stage-smoke.sh` — 11 检查项跑遍所有 review story 的 DoD，env 缺失则 skip
+- `scripts/chaos-drill.sh` — 5xx 注入 / slow-loris / cost spike 三场景，PROD URL 自动拒绝
+- `deploy/grafana/newhub-slo.json` — 12 panel 仪表板：avail / p95 / 网关 overhead / breaker / 计费 health
+- `deploy/grafana/newhub-alerts.yaml` — 11 alert / 5 group：page / ticket / info 三级
+- `story-7-5-chaos-drill-slo-dashboard.md` — operator runbook + SLO 定义
+
+**SLO 目标**：avail 99.5% / p95 < 3s / 网关 overhead < 50ms（北极星指标）
+breaker stuck open > 30m → ticket / flapping > 5/10m → info
+platform breaker open > 5m → page
+
+**部署侧**: 7 commits f5cfa126..20b23add 推到 origin/main，CI 手动触发了 docker-image-main.yml (run 25491707513) — 历史模式显示该 workflow 不自动跑 push 触发。
+bash -n syntax check 通过 · JSON valid · DoD 缺第一次 STAGE 真跑

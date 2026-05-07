@@ -104,7 +104,9 @@ development_status:
   7-2.4-pg-managed-migration:       backlog          # Phase 2.x — pending 5+ paying tenants
   7-3-relay-data-plane-scale-out:   backlog
   7-4-quota-real-backpressure:      review           # ✅ audit + Retry-After generalization; awaiting STAGE verify
-  7-5-chaos-drill-slo-dashboard:    backlog
+  7-5-chaos-drill-slo-dashboard:    review           # ✅ stage-smoke.sh + chaos-drill.sh + grafana dashboard + 11 alerts
+                                                     #    story-7-5-chaos-drill-slo-dashboard.md
+                                                     #    awaiting first STAGE drill run
 
   # Epic 8: Newapi/Newhub Consolidation (P0) [renamed 2026-05-05 per 8-1 audit]
   # Audit revealed two parallel forks, not a derivation chain.
@@ -168,7 +170,10 @@ active_sprint:
     - 8-2.4-nats-usage-milestone-port    # ✅ review (added 2026-05-07)
     - 8-2.3.1-image-url-extraction       # ✅ review (added 2026-05-07)
     - 9-1-tier3-usage-audit              # ✅ review (added 2026-05-07; pending PROD SQL)
+    - 7-5-chaos-drill-slo-dashboard      # ✅ review (added 2026-05-07; smoke + chaos + dashboard)
   next_recommended:
+    - STAGE deploy main-20b23add + run scripts/stage-smoke.sh   # validates 12 review stories live
+    - Import deploy/grafana/newhub-slo.json + apply newhub-alerts.yaml
     - PROD usage SQL for 9-1             # 5 min, unblocks 9-2 announce
     - STAGE deploy all 11 review stories # validate Retry-After + IsUpstreamFailure + NATS events live
     - 8-2 port PR (待 Anita confirm Option A)
