@@ -1,0 +1,1032 @@
+import React, { Fragment, useState } from 'react';
+import HFShell from '../../../components/hifi/HFShell';
+
+/* HiFi 13 — Flows: multi-step wizards & incident response. Ported from hifi/hf13-flows.jsx. */
+
+const FLOWS = [
+  ['newChannel', 'New Channel', 4],
+  ['newToken', 'New Token', 3],
+  ['incident', 'Incident Response', 4],
+  ['retry', 'Retry Chain Visualizer', 1],
+];
+
+const Stepper = ({ steps, cur }) => (
+  <div
+    style={{
+      padding: '20px 40px',
+      borderBottom: '1px solid var(--hf-rule)',
+      background: 'var(--hf-paper)',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+    }}
+  >
+    {steps.map((s, i) => (
+      <Fragment key={i}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontFamily: 'var(--hf-mono)',
+              fontSize: 11,
+              fontWeight: 600,
+              background:
+                i + 1 < cur
+                  ? 'var(--hf-ok)'
+                  : i + 1 === cur
+                    ? 'var(--hf-accent)'
+                    : 'var(--hf-sunken)',
+              color: i + 1 <= cur ? '#fff' : 'var(--hf-ink-3)',
+              border:
+                '1px solid ' +
+                (i + 1 <= cur ? 'transparent' : 'var(--hf-rule)'),
+            }}
+          >
+            {i + 1 < cur ? '✓' : i + 1}
+          </div>
+          <span
+            className='strong'
+            style={{
+              fontSize: 12,
+              color: i + 1 === cur ? 'var(--hf-ink)' : 'var(--hf-ink-3)',
+            }}
+          >
+            {s}
+          </span>
+        </div>
+        {i < steps.length - 1 && (
+          <div style={{ flex: 1, height: 1, background: 'var(--hf-rule)' }} />
+        )}
+      </Fragment>
+    ))}
+  </div>
+);
+
+const NewChannelStep = ({ step }) => {
+  if (step === 1) {
+    return (
+      <div>
+        <div className='lbl'>step 1 of 4</div>
+        <h1 className='display' style={{ fontSize: 28, margin: '4px 0 4px' }}>
+          Pick a vendor
+        </h1>
+        <div className='muted' style={{ marginBottom: 22 }}>
+          we'll handle the protocol differences for you
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: 12,
+          }}
+        >
+          {[
+            'OpenAI',
+            'Anthropic',
+            'Google Vertex',
+            'Azure',
+            'AWS Bedrock',
+            'Zhipu',
+            'SiliconFlow',
+            'custom',
+          ].map((v, i) => (
+            <div
+              key={i}
+              className='panel'
+              style={{
+                padding: 16,
+                cursor: 'pointer',
+                border:
+                  i === 0
+                    ? '2px solid var(--hf-accent)'
+                    : '1px solid var(--hf-rule)',
+              }}
+            >
+              <div className='display' style={{ fontSize: 15 }}>
+                {v}
+              </div>
+              <div
+                className='faint mono'
+                style={{ fontSize: 10, marginTop: 4 }}
+              >
+                {i === 0
+                  ? '18 models · OAI-compatible'
+                  : i < 7
+                    ? 'native protocol'
+                    : 'OAI-compatible URL'}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (step === 2) {
+    const fields = [
+      ['channel name', 'openai/main-2', 'identifier · alphanumeric'],
+      ['base url', 'https://api.openai.com/v1', 'override for proxies'],
+      [
+        'api keys',
+        'sk-•••••••• ••••••••  ⊕ add another',
+        '4 keys · round-robin',
+      ],
+      ['organization id', 'org-acme-prod', 'optional'],
+      ['custom headers', '— none —', 'optional'],
+    ];
+    return (
+      <div>
+        <div className='lbl'>step 2 of 4</div>
+        <h1 className='display' style={{ fontSize: 28, margin: '4px 0 4px' }}>
+          Credentials & endpoint
+        </h1>
+        <div className='muted' style={{ marginBottom: 22 }}>
+          encrypted at rest · never logged
+        </div>
+        <div className='panel' style={{ padding: 22 }}>
+          {fields.map((r, i) => (
+            <div
+              key={i}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '160px 1fr 200px',
+                padding: '14px 0',
+                borderBottom:
+                  i < fields.length - 1 ? '1px dashed var(--hf-rule)' : 0,
+                alignItems: 'center',
+                gap: 14,
+              }}
+            >
+              <span className='lbl'>{r[0]}</span>
+              <span className='strong mono' style={{ fontSize: 12 }}>
+                {r[1]}
+              </span>
+              <span className='faint mono' style={{ fontSize: 10 }}>
+                {r[2]}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+          <button type='button' className='btn'>
+            ▶ test connection
+          </button>
+          <span className='pill' style={{ alignSelf: 'center' }}>
+            <span className='dot ok' /> 142ms · 18 models discovered
+          </span>
+        </div>
+      </div>
+    );
+  }
+  if (step === 3) {
+    const rows = [
+      ['gpt-4o-2024-11-20', 'gpt-4o', true],
+      ['gpt-4o-mini-2024-07-18', 'gpt-4o-mini', true],
+      ['gpt-4o-realtime', 'gpt-4o-realtime', true],
+      ['o1-preview', 'o1-preview', true],
+      ['text-embedding-3-large', 'embedding', true],
+      ['dall-e-3', '— skip —', false],
+    ];
+    return (
+      <div>
+        <div className='lbl'>step 3 of 4</div>
+        <h1 className='display' style={{ fontSize: 28, margin: '4px 0 4px' }}>
+          Map models
+        </h1>
+        <div className='muted' style={{ marginBottom: 22 }}>
+          vendor model → your alias · we filled this in
+        </div>
+        <div className='panel'>
+          <table className='t'>
+            <thead>
+              <tr>
+                <th></th>
+                <th>vendor model</th>
+                <th></th>
+                <th>your alias</th>
+                <th>auto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i}>
+                  <td>
+                    <input type='checkbox' defaultChecked={r[2]} />
+                  </td>
+                  <td className='mono strong'>{r[0]}</td>
+                  <td className='faint'>→</td>
+                  <td>
+                    <div
+                      className='field'
+                      style={{ width: 200, height: 24, fontSize: 11 }}
+                    >
+                      {r[1]}
+                    </div>
+                  </td>
+                  <td>{r[2] && <span className='tag info'>auto</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+  // step 4
+  const summary = [
+    ['vendor', 'OpenAI'],
+    ['channel name', 'openai/main-2'],
+    ['base url', 'api.openai.com/v1'],
+    ['keys', '4 (round-robin)'],
+    ['models enabled', '5 of 18'],
+    ['routing weight', '1.0 · primary'],
+    ['groups', 'default, vip'],
+    ['fallback to', 'openai/main, openai/backup'],
+  ];
+  return (
+    <div>
+      <div className='lbl'>step 4 of 4</div>
+      <h1 className='display' style={{ fontSize: 28, margin: '4px 0 4px' }}>
+        Review & enable
+      </h1>
+      <div className='muted' style={{ marginBottom: 22 }}>
+        pre-flight summary
+      </div>
+      <div className='panel' style={{ padding: 22 }}>
+        {summary.map((r, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '180px 1fr',
+              padding: '10px 0',
+              borderBottom:
+                i < summary.length - 1 ? '1px dashed var(--hf-rule)' : 0,
+            }}
+          >
+            <span className='lbl'>{r[0]}</span>
+            <span className='strong' style={{ fontSize: 13 }}>
+              {r[1]}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div
+        className='panel'
+        style={{
+          padding: 14,
+          marginTop: 14,
+          background: 'var(--hf-paper)',
+          borderLeft: '2px solid var(--hf-ok)',
+        }}
+      >
+        <span className='strong'>Pre-flight passed.</span>{' '}
+        <span className='muted'>
+          42ms ttft · 18 models · keys all reachable
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const NewTokenStep = ({ step }) => {
+  if (step === 3) {
+    return (
+      <div style={{ textAlign: 'center', padding: '40px 0' }}>
+        <div
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: '50%',
+            background: 'var(--hf-ok)',
+            color: '#fff',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 24,
+            marginBottom: 16,
+          }}
+        >
+          ✓
+        </div>
+        <h1 className='display' style={{ fontSize: 28, margin: '0 0 8px' }}>
+          Token created
+        </h1>
+        <div className='muted'>copy this once · it won't be shown again</div>
+        <div
+          className='panel-paper'
+          style={{
+            display: 'inline-block',
+            padding: '14px 22px',
+            marginTop: 22,
+          }}
+        >
+          <span
+            className='mono strong'
+            style={{ fontSize: 14, letterSpacing: '0.04em' }}
+          >
+            sk-7z2e9f8a1c4b6d0e3f5a8b9c1d2e4f6a
+          </span>
+          <button type='button' className='btn sm' style={{ marginLeft: 12 }}>
+            copy
+          </button>
+        </div>
+        <div style={{ marginTop: 24 }}>
+          <button type='button' className='btn'>
+            view in playground →
+          </button>
+        </div>
+      </div>
+    );
+  }
+  const fields =
+    step === 1
+      ? [
+          ['name', 'lurus-edit · prod'],
+          ['models', 'gpt-4o, claude-3.5-sonnet'],
+          ['environment', 'production'],
+          ['team', 'lurus-edit'],
+        ]
+      : [
+          ['monthly cap', '$200.00'],
+          ['rate limit · rpm', '60'],
+          ['rate limit · tpm', '200,000'],
+          ['expires', 'never'],
+          ['allowed ips', 'any'],
+        ];
+  return (
+    <>
+      <div className='lbl'>step {step} of 3</div>
+      <h1 className='display' style={{ fontSize: 28, margin: '4px 0 22px' }}>
+        {step === 1 ? 'What is this token for?' : 'Set limits'}
+      </h1>
+      <div className='panel' style={{ padding: 22 }}>
+        {fields.map((r, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '180px 1fr',
+              padding: '12px 0',
+              borderBottom:
+                i < fields.length - 1 ? '1px dashed var(--hf-rule)' : 0,
+              alignItems: 'center',
+            }}
+          >
+            <span className='lbl'>{r[0]}</span>
+            <span className='strong mono' style={{ fontSize: 12 }}>
+              {r[1]}
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+};
+
+const IncidentScreen = () => {
+  const events = [
+    [
+      '14:01:55',
+      'detected',
+      'success rate dropped to 0% · auto-detected',
+      'err',
+    ],
+    [
+      '14:02:11',
+      'failover engaged',
+      'traffic routed to openai/main · auto',
+      'info',
+    ],
+    ['14:03:00', 'paged on-call', 'andy@ acknowledged · 14:03:42', 'info'],
+    [
+      '14:05:18',
+      'investigation',
+      'Andy · checking upstream status page',
+      'ink',
+    ],
+    [
+      '14:08:30',
+      'mitigation',
+      'rotated 2 stale keys · waiting for confirmation',
+      'warn',
+    ],
+    [
+      '14:13:45',
+      'monitoring',
+      'success rate climbing · 38% and rising',
+      'warn',
+    ],
+  ];
+  return (
+    <div style={{ padding: '24px 32px' }}>
+      <div className='lbl'>incident · INC-2026-0512</div>
+      <h1 className='display' style={{ fontSize: 28, margin: '4px 0 4px' }}>
+        openai/backup · totally down
+      </h1>
+      <div className='muted' style={{ marginBottom: 22 }}>
+        started 14:01:55 · 12m ago · sev1 · 6 tenants affected
+      </div>
+
+      <div
+        style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 18 }}
+      >
+        <div>
+          <div className='panel'>
+            <div
+              style={{
+                padding: '14px 18px',
+                borderBottom: '1px solid var(--hf-rule)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <span className='dot err' />{' '}
+              <span className='strong'>timeline</span>
+              <span style={{ flex: 1 }} />
+              <button type='button' className='btn sm'>
+                post update
+              </button>
+            </div>
+            {events.map((e, i) => (
+              <div
+                key={i}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '80px 110px 1fr',
+                  padding: '12px 18px',
+                  borderBottom:
+                    i < events.length - 1 ? '1px solid var(--hf-rule)' : 0,
+                  gap: 14,
+                  alignItems: 'flex-start',
+                }}
+              >
+                <span className='mono muted' style={{ fontSize: 11 }}>
+                  {e[0]}
+                </span>
+                <span className={'tag ' + (e[3] === 'ink' ? '' : e[3])}>
+                  {e[1]}
+                </span>
+                <span style={{ fontSize: 12, lineHeight: 1.5 }}>{e[2]}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className='panel' style={{ marginTop: 14, padding: 18 }}>
+            <div className='lbl'>success rate · last 15min</div>
+            <svg
+              viewBox='0 0 600 100'
+              style={{ width: '100%', height: 100, marginTop: 10 }}
+            >
+              <line
+                x1='0'
+                y1='20'
+                x2='600'
+                y2='20'
+                stroke='var(--hf-rule)'
+                strokeDasharray='2 4'
+              />
+              <line
+                x1='0'
+                y1='50'
+                x2='600'
+                y2='50'
+                stroke='var(--hf-rule)'
+                strokeDasharray='2 4'
+              />
+              <line
+                x1='0'
+                y1='80'
+                x2='600'
+                y2='80'
+                stroke='var(--hf-rule)'
+                strokeDasharray='2 4'
+              />
+              <polyline
+                fill='none'
+                stroke='var(--hf-err)'
+                strokeWidth='2'
+                points='0,15 30,15 50,15 70,15 100,90 130,95 160,98 190,95 220,90 250,82 280,70 310,55 340,42 370,32 400,25 430,22 460,20 490,18 530,16 560,15 600,15'
+              />
+              <text
+                x='0'
+                y='14'
+                fontSize='10'
+                fontFamily='var(--hf-mono)'
+                fill='var(--hf-ink-3)'
+              >
+                100%
+              </text>
+              <text
+                x='0'
+                y='98'
+                fontSize='10'
+                fontFamily='var(--hf-mono)'
+                fill='var(--hf-ink-3)'
+              >
+                0%
+              </text>
+            </svg>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className='panel' style={{ padding: 16 }}>
+            <div className='lbl'>impact</div>
+            <div
+              className='display'
+              style={{ fontSize: 28, marginTop: 4, color: 'var(--hf-err)' }}
+            >
+              1,420
+            </div>
+            <div className='muted' style={{ fontSize: 11 }}>
+              requests rerouted · $42.80 est revenue saved
+            </div>
+          </div>
+          <div className='panel' style={{ padding: 16 }}>
+            <div className='lbl'>tenants · 6</div>
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 4,
+                marginTop: 8,
+              }}
+            >
+              {[
+                'acme',
+                'contoso',
+                'globex',
+                'initech',
+                'foobar',
+                'umbrella',
+              ].map((t) => (
+                <span key={t} className='pill' style={{ fontSize: 10 }}>
+                  {t}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className='panel' style={{ padding: 16 }}>
+            <div className='lbl'>on-call</div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                marginTop: 8,
+              }}
+            >
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  background: 'var(--hf-accent)',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontFamily: 'var(--hf-display)',
+                  fontWeight: 600,
+                }}
+              >
+                A
+              </div>
+              <div>
+                <div className='strong' style={{ fontSize: 12 }}>
+                  Andy Liu
+                </div>
+                <div className='faint mono' style={{ fontSize: 10 }}>
+                  ack 14:03:42
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className='panel' style={{ padding: 16 }}>
+            <div className='lbl'>actions</div>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6,
+                marginTop: 10,
+              }}
+            >
+              <button type='button' className='btn'>
+                silence alert · 30m
+              </button>
+              <button type='button' className='btn'>
+                post status update
+              </button>
+              <button type='button' className='btn'>
+                disable channel
+              </button>
+              <button type='button' className='btn primary'>
+                resolve incident
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const RetryScreen = () => (
+  <div style={{ padding: '32px 40px' }}>
+    <div className='lbl'>request flow visualizer</div>
+    <h1 className='display' style={{ fontSize: 28, margin: '4px 0 4px' }}>
+      req_1f4a...e90c
+    </h1>
+    <div className='muted' style={{ marginBottom: 28 }}>
+      3 attempts · ended successfully · 4.2s total
+    </div>
+
+    <div className='panel' style={{ padding: 28 }}>
+      <svg viewBox='0 0 800 280' style={{ width: '100%', height: 320 }}>
+        <defs>
+          <marker
+            id='arr'
+            viewBox='0 0 8 8'
+            refX='6'
+            refY='4'
+            markerWidth='6'
+            markerHeight='6'
+            orient='auto'
+          >
+            <path d='M0,0 L8,4 L0,8 Z' fill='var(--hf-ink-3)' />
+          </marker>
+        </defs>
+        <g fontFamily='var(--hf-mono)' fontSize='11'>
+          <rect
+            x='20'
+            y='120'
+            width='100'
+            height='40'
+            fill='var(--hf-paper)'
+            stroke='var(--hf-rule-strong)'
+          />
+          <text
+            x='70'
+            y='138'
+            textAnchor='middle'
+            fill='var(--hf-ink)'
+            fontWeight='500'
+          >
+            client
+          </text>
+          <text
+            x='70'
+            y='152'
+            textAnchor='middle'
+            fill='var(--hf-ink-3)'
+            fontSize='9'
+          >
+            acme · prod
+          </text>
+
+          <rect
+            x='180'
+            y='120'
+            width='100'
+            height='40'
+            fill='var(--hf-paper)'
+            stroke='var(--hf-rule-strong)'
+          />
+          <text
+            x='230'
+            y='138'
+            textAnchor='middle'
+            fill='var(--hf-ink)'
+            fontWeight='500'
+          >
+            lurus gateway
+          </text>
+          <text
+            x='230'
+            y='152'
+            textAnchor='middle'
+            fill='var(--hf-ink-3)'
+            fontSize='9'
+          >
+            router
+          </text>
+
+          <rect
+            x='360'
+            y='20'
+            width='160'
+            height='60'
+            fill='rgba(238,111,94,0.1)'
+            stroke='var(--hf-err)'
+          />
+          <text
+            x='440'
+            y='40'
+            textAnchor='middle'
+            fill='var(--hf-err)'
+            fontWeight='500'
+          >
+            attempt 1 · 504
+          </text>
+          <text
+            x='440'
+            y='58'
+            textAnchor='middle'
+            fill='var(--hf-ink-3)'
+            fontSize='9'
+          >
+            openai/main · 2.1s
+          </text>
+          <text
+            x='440'
+            y='72'
+            textAnchor='middle'
+            fill='var(--hf-ink-3)'
+            fontSize='9'
+          >
+            upstream_timeout
+          </text>
+
+          <rect
+            x='360'
+            y='120'
+            width='160'
+            height='60'
+            fill='rgba(224,160,64,0.1)'
+            stroke='var(--hf-warn)'
+          />
+          <text
+            x='440'
+            y='140'
+            textAnchor='middle'
+            fill='var(--hf-warn)'
+            fontWeight='500'
+          >
+            attempt 2 · 429
+          </text>
+          <text
+            x='440'
+            y='158'
+            textAnchor='middle'
+            fill='var(--hf-ink-3)'
+            fontSize='9'
+          >
+            openai/backup · 0.4s
+          </text>
+          <text
+            x='440'
+            y='172'
+            textAnchor='middle'
+            fill='var(--hf-ink-3)'
+            fontSize='9'
+          >
+            rate_limit · backoff 1s
+          </text>
+
+          <rect
+            x='360'
+            y='220'
+            width='160'
+            height='60'
+            fill='rgba(90,204,146,0.1)'
+            stroke='var(--hf-ok)'
+          />
+          <text
+            x='440'
+            y='240'
+            textAnchor='middle'
+            fill='var(--hf-ok)'
+            fontWeight='500'
+          >
+            attempt 3 · 200
+          </text>
+          <text
+            x='440'
+            y='258'
+            textAnchor='middle'
+            fill='var(--hf-ink-3)'
+            fontSize='9'
+          >
+            azure/eu · 1.6s
+          </text>
+          <text
+            x='440'
+            y='272'
+            textAnchor='middle'
+            fill='var(--hf-ink-3)'
+            fontSize='9'
+          >
+            847 tokens · $0.0042
+          </text>
+
+          <rect
+            x='600'
+            y='220'
+            width='120'
+            height='60'
+            fill='rgba(90,204,146,0.1)'
+            stroke='var(--hf-ok)'
+          />
+          <text
+            x='660'
+            y='240'
+            textAnchor='middle'
+            fill='var(--hf-ok)'
+            fontWeight='500'
+          >
+            delivered
+          </text>
+          <text
+            x='660'
+            y='258'
+            textAnchor='middle'
+            fill='var(--hf-ink-3)'
+            fontSize='9'
+          >
+            to client
+          </text>
+          <text
+            x='660'
+            y='272'
+            textAnchor='middle'
+            fill='var(--hf-ink-3)'
+            fontSize='9'
+          >
+            total 4.2s
+          </text>
+        </g>
+
+        <g
+          stroke='var(--hf-ink-3)'
+          strokeWidth='1.2'
+          fill='none'
+          markerEnd='url(#arr)'
+        >
+          <line x1='120' y1='140' x2='180' y2='140' />
+          <line x1='280' y1='135' x2='360' y2='50' />
+          <line
+            x1='280'
+            y1='140'
+            x2='360'
+            y2='150'
+            stroke='var(--hf-rule-strong)'
+            strokeDasharray='3 3'
+          />
+          <line
+            x1='280'
+            y1='145'
+            x2='360'
+            y2='250'
+            stroke='var(--hf-rule-strong)'
+            strokeDasharray='3 3'
+          />
+          <line
+            x1='520'
+            y1='50'
+            x2='280'
+            y2='142'
+            stroke='var(--hf-err)'
+            strokeDasharray='2 3'
+          />
+          <line
+            x1='520'
+            y1='150'
+            x2='280'
+            y2='148'
+            stroke='var(--hf-warn)'
+            strokeDasharray='2 3'
+          />
+          <line x1='520' y1='250' x2='600' y2='250' stroke='var(--hf-ok)' />
+          <line x1='600' y1='245' x2='120' y2='160' stroke='var(--hf-ok)' />
+        </g>
+      </svg>
+    </div>
+
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: 14,
+        marginTop: 18,
+      }}
+    >
+      {[
+        ['attempts', '3', 'var(--hf-accent)'],
+        ['retries', '2', 'var(--hf-warn)'],
+        ['final', '200 ok', 'var(--hf-ok)'],
+        ['cost', '$0.0042', 'var(--hf-ink)'],
+      ].map(([l, v, c], i) => (
+        <div key={i} className='panel' style={{ padding: 14 }}>
+          <div className='lbl'>{l}</div>
+          <div
+            className='display'
+            style={{ fontSize: 22, color: c, marginTop: 2 }}
+          >
+            {v}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+const HFFlows = () => {
+  const [flow, setFlow] = useState('newChannel');
+  const [step, setStep] = useState(1);
+  const meta = FLOWS.find((f) => f[0] === flow);
+
+  return (
+    <HFShell
+      active='channels'
+      crumbs={['flows', meta[1]]}
+      actions={
+        flow !== 'incident' && flow !== 'retry' ? (
+          <>
+            <button
+              type='button'
+              className='btn'
+              onClick={() => setStep(Math.max(1, step - 1))}
+            >
+              ← back
+            </button>
+            <button
+              type='button'
+              className='btn primary'
+              onClick={() => setStep(Math.min(meta[2], step + 1))}
+            >
+              {step === meta[2] ? 'finish' : 'next →'}
+            </button>
+          </>
+        ) : null
+      }
+    >
+      <div
+        style={{
+          display: 'flex',
+          gap: 0,
+          padding: '14px 24px',
+          borderBottom: '1px solid var(--hf-rule)',
+          background: 'var(--hf-paper)',
+        }}
+      >
+        {FLOWS.map(([k, l]) => (
+          <button
+            key={k}
+            type='button'
+            onClick={() => {
+              setFlow(k);
+              setStep(1);
+            }}
+            style={{
+              padding: '6px 14px',
+              border: 0,
+              background: 'transparent',
+              cursor: 'pointer',
+              fontFamily: 'var(--hf-mono)',
+              fontSize: 11,
+              color: flow === k ? 'var(--hf-ink)' : 'var(--hf-ink-3)',
+              borderBottom:
+                flow === k
+                  ? '2px solid var(--hf-accent)'
+                  : '2px solid transparent',
+              marginBottom: -15,
+              paddingBottom: 17,
+            }}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {flow === 'newChannel' && (
+        <>
+          <Stepper
+            steps={['vendor', 'credentials', 'models', 'review']}
+            cur={step}
+          />
+          <div style={{ padding: '32px 40px' }}>
+            <NewChannelStep step={step} />
+          </div>
+        </>
+      )}
+      {flow === 'newToken' && (
+        <>
+          <Stepper steps={['name & scope', 'limits', 'done']} cur={step} />
+          <div style={{ padding: '32px 40px' }}>
+            <NewTokenStep step={step} />
+          </div>
+        </>
+      )}
+      {flow === 'incident' && <IncidentScreen />}
+      {flow === 'retry' && <RetryScreen />}
+    </HFShell>
+  );
+};
+
+export default HFFlows;

@@ -60,7 +60,11 @@ const PageLayout = () => {
     '/pricing',
   ];
 
-  const shouldHideFooter = cardProPages.includes(location.pathname);
+  // v2 hi-fi screens render their own shell (sidebar + topbar) — bypass the
+  // legacy HeaderBar/SiderBar/Footer to avoid double-chrome.
+  const isV2Route = location.pathname.startsWith('/console/v2');
+
+  const shouldHideFooter = cardProPages.includes(location.pathname) || isV2Route;
 
   const shouldInnerPadding =
     location.pathname.includes('/console') &&
@@ -118,6 +122,16 @@ const PageLayout = () => {
       i18n.changeLanguage(savedLang);
     }
   }, [i18n]);
+
+  // v2 routes render full-bleed without legacy chrome.
+  if (isV2Route) {
+    return (
+      <>
+        <App />
+        <ToastContainer />
+      </>
+    );
+  }
 
   return (
     <Layout

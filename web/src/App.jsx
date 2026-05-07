@@ -52,6 +52,25 @@ const About = lazy(() => import('./pages/About'));
 const UserAgreement = lazy(() => import('./pages/UserAgreement'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 
+// v2 hi-fi (editorial dev-tool aesthetic) — see web/src/styles/hifi-tokens.css.
+// Standalone shell, bypassed by PageLayout's legacy chrome for /console/v2/*.
+const V2Log = lazy(() => import('./pages/v2/Log'));
+const V2Channel = lazy(() => import('./pages/v2/Channel'));
+const V2Dashboard = lazy(() => import('./pages/v2/Dashboard'));
+const V2Token = lazy(() => import('./pages/v2/Token'));
+const V2Playground = lazy(() => import('./pages/v2/Playground'));
+const V2CmdK = lazy(() => import('./pages/v2/CommandPalette'));
+const V2Models = lazy(() => import('./pages/v2/Models'));
+const V2Chat = lazy(() => import('./pages/v2/Chat'));
+const V2Tenants = lazy(() => import('./pages/v2/Tenants'));
+const V2Pricing = lazy(() => import('./pages/v2/Pricing'));
+const V2Billing = lazy(() => import('./pages/v2/Billing'));
+const V2Settings = lazy(() => import('./pages/v2/Settings'));
+const V2Flows = lazy(() => import('./pages/v2/Flows'));
+const V2DesignSystem = lazy(() => import('./pages/v2/DesignSystem'));
+const V2States = lazy(() => import('./pages/v2/States'));
+const V2Variants = lazy(() => import('./pages/v2/Variants'));
+
 function App() {
   const location = useLocation();
   const [statusState] = useContext(StatusContext);
@@ -98,8 +117,18 @@ function App() {
           }
         />
         <Route path='/forbidden' element={<Forbidden />} />
+        {/* ─── Aggressive: legacy console paths redirect to v2 ─── */}
+        {/* Legacy still reachable at /console/legacy/* for fallback during transition. */}
+        <Route path='/console/models' element={<Navigate to='/console/v2/models' replace />} />
+        <Route path='/console/channel' element={<Navigate to='/console/v2/channel' replace />} />
+        <Route path='/console/token' element={<Navigate to='/console/v2/token' replace />} />
+        <Route path='/console/playground' element={<Navigate to='/console/v2/playground' replace />} />
         <Route
-          path='/console/models'
+          path='/console/deployment'
+          element={<Navigate to='/console/v2/models?tab=deployment' replace />}
+        />
+        <Route
+          path='/console/legacy/models'
           element={
             <AdminRoute>
               <ModelPage />
@@ -107,15 +136,27 @@ function App() {
           }
         />
         <Route
-          path='/console/deployment'
-          element={<Navigate to='/console/models?tab=deployment' replace />}
-        />
-        <Route
-          path='/console/channel'
+          path='/console/legacy/channel'
           element={
             <AdminRoute>
               <Channel />
             </AdminRoute>
+          }
+        />
+        <Route
+          path='/console/legacy/token'
+          element={
+            <PrivateRoute>
+              <Token />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/legacy/playground'
+          element={
+            <PrivateRoute>
+              <Playground />
+            </PrivateRoute>
           }
         />
         <Route
@@ -124,22 +165,6 @@ function App() {
             <AdminRoute>
               <OpenRouterSync />
             </AdminRoute>
-          }
-        />
-        <Route
-          path='/console/token'
-          element={
-            <PrivateRoute>
-              <Token />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path='/console/playground'
-          element={
-            <PrivateRoute>
-              <Playground />
-            </PrivateRoute>
           }
         />
         <Route
@@ -223,8 +248,11 @@ function App() {
             </PrivateRoute>
           }
         />
+        {/* Aggressive: /console + /console/log → v2. Legacy at /console/legacy/*. */}
+        <Route path='/console/log' element={<Navigate to='/console/v2/log' replace />} />
+        <Route path='/console' element={<Navigate to='/console/v2/dashboard' replace />} />
         <Route
-          path='/console/log'
+          path='/console/legacy/log'
           element={
             <PrivateRoute>
               <Log />
@@ -232,7 +260,7 @@ function App() {
           }
         />
         <Route
-          path='/console'
+          path='/console/legacy/dashboard'
           element={
             <PrivateRoute>
               <Suspense fallback={<Loading></Loading>} key={location.pathname}>
@@ -323,6 +351,41 @@ function App() {
             </PrivateRoute>
           }
         />
+        {/* ─── v2 hi-fi screens (editorial dev-tool aesthetic) ─── */}
+        <Route
+          path='/console/v2'
+          element={<Navigate to='/console/v2/dashboard' replace />}
+        />
+        {[
+          ['dashboard', V2Dashboard],
+          ['log', V2Log],
+          ['channel', V2Channel],
+          ['token', V2Token],
+          ['playground', V2Playground],
+          ['cmdk', V2CmdK],
+          ['models', V2Models],
+          ['chat', V2Chat],
+          ['tenants', V2Tenants],
+          ['pricing', V2Pricing],
+          ['billing', V2Billing],
+          ['settings', V2Settings],
+          ['flows', V2Flows],
+          ['design-system', V2DesignSystem],
+          ['states', V2States],
+          ['variants', V2Variants],
+        ].map(([slug, Component]) => (
+          <Route
+            key={slug}
+            path={`/console/v2/${slug}`}
+            element={
+              <PrivateRoute>
+                <Suspense fallback={<Loading />} key={location.pathname}>
+                  <Component />
+                </Suspense>
+              </PrivateRoute>
+            }
+          />
+        ))}
         <Route path='*' element={<NotFound />} />
       </Routes>
     </SetupCheck>

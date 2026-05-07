@@ -1,6 +1,9 @@
 /* ==================== Tailwind CSS 配置 ==================== */
 @layer tailwind-base, semi, tailwind-components, tailwind-utils;
 
+/* Hi-Fi tokens — scoped under `.hf`, no collision with Tailwind/Semi. */
+@import './styles/hifi-tokens.css';
+
 @layer tailwind-base {
   @tailwind base;
 }
