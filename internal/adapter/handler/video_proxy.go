@@ -8,10 +8,11 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/LurusTech/lurus-hub/internal/pkg/constant"
-	"github.com/LurusTech/lurus-hub/internal/pkg/logger"
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
 	"github.com/LurusTech/lurus-hub/internal/app"
+	"github.com/LurusTech/lurus-hub/internal/pkg/common"
+	"github.com/LurusTech/lurus-hub/internal/pkg/constant"
+	"github.com/LurusTech/lurus-hub/internal/pkg/logger"
 
 	"github.com/gin-gonic/gin"
 )
@@ -45,6 +46,27 @@ func VideoProxy(c *gin.Context) {
 			"error": gin.H{
 				"message": "Task not found",
 				"type":    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Ownership check — only the task owner (or an admin/root) may proxy the
+	// resulting video. Without this, any authenticated tenant could fetch any
+	// other tenant's generated video by guessing or scraping task_id.
+	// Ported from 2b-svc-newapi commit da3cb48f (2026-03-31).
+	requesterID := c.GetInt("id")
+	requesterRole := c.GetInt("role")
+	isPrivileged := requesterRole >= common.RoleAdminUser
+	if !isPrivileged && task.UserId != requesterID {
+		logger.LogWarn(c.Request.Context(), fmt.Sprintf(
+			`{"event":"video_proxy_forbidden","task_id":"%s","task_owner":%d,"requester":%d}`,
+			taskID, task.UserId, requesterID,
+		))
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": gin.H{
+				"message": "access denied",
+				"type":    "forbidden",
 			},
 		})
 		return
