@@ -268,6 +268,17 @@ func HardDeleteUserById(id int) error {
 	return err
 }
 
+// DisableUserById flips a user's status to UserStatusDisabled. Used by the
+// cost-spike protection middleware as the corrective action when the 5-min
+// quota window is exceeded — keeps the runaway loop from draining the wallet
+// further until an admin reviews. Idempotent.
+func DisableUserById(id int) error {
+	if id == 0 {
+		return errors.New("id 为空！")
+	}
+	return DB.Model(&User{}).Where("id = ?", id).Update("status", common.UserStatusDisabled).Error
+}
+
 func (user *User) Insert() error {
 	user.Quota = common.QuotaForNewUser
 

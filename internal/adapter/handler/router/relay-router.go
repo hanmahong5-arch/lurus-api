@@ -70,6 +70,9 @@ func SetRelayRouter(router *gin.Engine) {
 
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.TokenAuth())
+	// Cost-spike protection runs after auth (needs user id) and before
+	// entitlement/rate-limit so a runaway loop can't keep racking up checks.
+	relayV1Router.Use(middleware.CostSpikeLimit())
 	relayV1Router.Use(middleware.EntitlementCheck())
 	relayV1Router.Use(middleware.ModelRequestRateLimit())
 	{

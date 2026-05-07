@@ -605,6 +605,7 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 				defer rptCancel()
 				common.ReportLLMUsageGRPC(rptCtx, accountID, amountLB)
 				reportQuotaThreshold(rptCtx, relayInfo, totalQuota)
+				RecordCostSpikeWindow(relayInfo.UserId, totalQuota)
 			})
 		} else {
 			// Legacy path: fire-and-forget debit (no pre-auth)
@@ -618,6 +619,7 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 				}
 				common.ReportLLMUsageGRPC(debitCtx, accountID, amountLB)
 				reportQuotaThreshold(debitCtx, relayInfo, totalQuota)
+				RecordCostSpikeWindow(relayInfo.UserId, totalQuota)
 			})
 		}
 	}

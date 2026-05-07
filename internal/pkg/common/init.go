@@ -93,6 +93,9 @@ func InitEnv() {
 	RelayMaxIdleConns = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS", 500)
 	RelayMaxIdleConnsPerHost = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS_PER_HOST", 100)
 
+	CostSpikeProtectionEnabled = GetEnvOrDefaultBool("COST_SPIKE_PROTECTION_ENABLED", true)
+	CostSpikeHardLimitPer5Min = GetEnvOrDefault("COST_SPIKE_HARD_LIMIT_PER_5MIN", 50000)
+
 	// Initialize string variables with GetEnvOrDefaultString
 	GeminiSafetySetting = GetEnvOrDefaultString("GEMINI_SAFETY_SETTING", "BLOCK_NONE")
 	CohereSafetySetting = GetEnvOrDefaultString("COHERE_SAFETY_SETTING", "NONE")

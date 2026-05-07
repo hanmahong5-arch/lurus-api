@@ -181,6 +181,15 @@ var (
 
 var RateLimitKeyExpirationDuration = 20 * time.Minute
 
+// CostSpikeProtection — per-user 5-minute sliding window safety net. Catches
+// agent loops or runaway scripts that burn through quota faster than the
+// monthly cap can intervene. On breach, the user account is auto-disabled.
+// Knobs (env): COST_SPIKE_PROTECTION_ENABLED, COST_SPIKE_HARD_LIMIT_PER_5MIN.
+var (
+	CostSpikeProtectionEnabled = true
+	CostSpikeHardLimitPer5Min  = 50000 // quota units (~0.1 USD/5min at typical ratios)
+)
+
 const (
 	UserStatusEnabled  = 1 // don't use 0, 0 is the default value!
 	UserStatusDisabled = 2 // also don't use 0
