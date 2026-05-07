@@ -99,7 +99,9 @@ func TestEnforceTenantQuota_UnderLimit_Allows(t *testing.T) {
 	}
 }
 
-// TestEnforceTenantQuota_OverLimit_Denies verifies that used+requested > MaxQuota is denied.
+// TestEnforceTenantQuota_OverLimit_Denies verifies that used+requested > MaxQuota is denied
+// AND that the returned error carries RetryAfterUnix pointing at next month UTC start
+// so the relay error responder can emit a Retry-After header.
 func TestEnforceTenantQuota_OverLimit_Denies(t *testing.T) {
 	db := setupServiceTestDB(t)
 	tenantID := seedTestTenant(t, 1_000_000)
@@ -114,6 +116,50 @@ func TestEnforceTenantQuota_OverLimit_Denies(t *testing.T) {
 	err := enforceTenantQuota(tenantID, 200_000)
 	if err == nil {
 		t.Fatal("expected error when over limit, got nil")
+	}
+
+	// Retry-After hint must point at next-month UTC start.
+	now := time.Now().UTC()
+	expected := time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, time.UTC).Unix()
+	if err.RetryAfterUnix != expected {
+		t.Errorf("RetryAfterUnix = %d, expected next-month start %d", err.RetryAfterUnix, expected)
+	}
+	if err.RetryAfterUnix <= now.Unix() {
+		t.Errorf("RetryAfterUnix (%d) must be in the future relative to now (%d)", err.RetryAfterUnix, now.Unix())
+	}
+}
+
+// TestNextMonthStartUnix verifies year-boundary normalization (Dec → next year Jan).
+func TestNextMonthStartUnix(t *testing.T) {
+	cases := []struct {
+		name string
+		in   time.Time
+		want time.Time
+	}{
+		{
+			name: "mid-month → 1st of next month",
+			in:   time.Date(2026, 5, 15, 10, 30, 0, 0, time.UTC),
+			want: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "December → January next year",
+			in:   time.Date(2026, 12, 25, 23, 59, 59, 0, time.UTC),
+			want: time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "first second of month",
+			in:   time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+			want: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := nextMonthStartUnix(tc.in)
+			if got != tc.want.Unix() {
+				t.Errorf("nextMonthStartUnix(%v) = %d (%v), want %d (%v)",
+					tc.in, got, time.Unix(got, 0).UTC(), tc.want.Unix(), tc.want)
+			}
+		})
 	}
 }
 

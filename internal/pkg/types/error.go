@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -362,6 +363,41 @@ func IsSkipRetryError(err *NewAPIError) bool {
 	}
 
 	return err.skipRetry
+}
+
+// IsUpstreamFailure reports whether err is attributable to the upstream
+// provider (or network) rather than the caller. Used by the per-channel
+// circuit breaker so that user-side errors (4xx, client cancellation) do not
+// trip a healthy channel and starve other tenants of capacity.
+//
+// True:  channel:* errors, upstream timeouts (408/504/524), 5xx, unclassified.
+// False: nil, ctx.Canceled, 4xx (other than the upstream-timeout statuses).
+//
+// Default for unclassified status codes is true (fail-safe — better to cool
+// a possibly-fine channel than to miss a real outage).
+func IsUpstreamFailure(err *NewAPIError) bool {
+	if err == nil {
+		return false
+	}
+	if IsChannelError(err) {
+		return true
+	}
+	if err.Err != nil && errors.Is(err.Err, context.Canceled) {
+		return false
+	}
+	switch err.StatusCode {
+	case http.StatusRequestTimeout, // 408 — upstream took too long
+		http.StatusGatewayTimeout, // 504
+		524:                       // CF origin timeout
+		return true
+	}
+	if err.StatusCode/100 == 5 {
+		return true
+	}
+	if err.StatusCode/100 == 4 {
+		return false
+	}
+	return true
 }
 
 func ErrOptionWithSkipRetry() NewAPIErrorOptions {

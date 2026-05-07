@@ -57,7 +57,7 @@ func enforceTenantQuota(tenantID string, preConsumedQuota int) *types.NewAPIErro
 	if used+int64(preConsumedQuota) > tenant.MaxQuota {
 		common.SysLogf(`{"event":"tenant_quota_denied","tenant_id":"%s","current_used":%d,"max_quota":%d,"requested":%d,"decision":"denied"}`,
 			tenantID, used, tenant.MaxQuota, preConsumedQuota)
-		return types.NewErrorWithStatusCode(
+		apiErr := types.NewErrorWithStatusCode(
 			fmt.Errorf("tenant monthly quota exceeded: used %d, max %d, requested %d",
 				used, tenant.MaxQuota, preConsumedQuota),
 			types.ErrorCodeTenantQuotaExceeded,
@@ -65,6 +65,17 @@ func enforceTenantQuota(tenantID string, preConsumedQuota int) *types.NewAPIErro
 			types.ErrOptionWithSkipRetry(),
 			types.ErrOptionWithNoRecordErrorLog(),
 		)
+		// Hint clients when the monthly quota window resets (next month UTC start),
+		// surfaced as Retry-After by the relay error responder.
+		apiErr.RetryAfterUnix = nextMonthStartUnix(time.Now().UTC())
+		return apiErr
 	}
 	return nil
+}
+
+// nextMonthStartUnix returns the Unix timestamp at 00:00 UTC on the first day
+// of the calendar month after now. Wraps year boundary correctly via time.Date
+// month normalization (Dec → Jan next year).
+func nextMonthStartUnix(now time.Time) int64 {
+	return time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, time.UTC).Unix()
 }

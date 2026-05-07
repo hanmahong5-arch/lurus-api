@@ -130,6 +130,16 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 				return
 			}
 
+			// Surface RetryAfterUnix as Retry-After for any error that carries it
+			// (e.g. tenant monthly quota exceeded → next-month rollover).
+			// Skip when the deadline is already past — absence of header tells the
+			// client to retry immediately, which is the desired RFC 7231 semantics.
+			if newAPIError.RetryAfterUnix > 0 {
+				if secs := newAPIError.RetryAfterUnix - time.Now().Unix(); secs > 0 {
+					c.Header("Retry-After", strconv.FormatInt(secs, 10))
+				}
+			}
+
 			switch relayFormat {
 			case types.RelayFormatOpenAIRealtime:
 				helper.WssError(c, ws, newAPIError.ToOpenAIError())
@@ -310,7 +320,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			return
 		}
 
-		channelBreakers.RecordFailure(channel.Id)
+		// Only count provider/network failures toward the breaker. 4xx user errors
+		// and client cancellation must not trip a healthy channel.
+		if types.IsUpstreamFailure(newAPIError) {
+			channelBreakers.RecordFailure(channel.Id)
+		}
 		hub.RecordRelayOutcome(channel.Id, false, relayDuration,
 			c.GetString("tenant_id"),
 			relayInfo.OriginModelName, 0, 0, 0, 0)
