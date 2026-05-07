@@ -7,13 +7,14 @@ import (
 	"net/http"
 	"strings"
 
+	relaycommon "github.com/LurusTech/lurus-hub/internal/adapter/provider/common"
+	"github.com/LurusTech/lurus-hub/internal/app"
+	"github.com/LurusTech/lurus-hub/internal/app/relay/helper"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/pkg/constant"
 	"github.com/LurusTech/lurus-hub/internal/pkg/dto"
 	"github.com/LurusTech/lurus-hub/internal/pkg/logger"
-	relaycommon "github.com/LurusTech/lurus-hub/internal/adapter/provider/common"
-	"github.com/LurusTech/lurus-hub/internal/app/relay/helper"
-	"github.com/LurusTech/lurus-hub/internal/app"
+	hubnats "github.com/LurusTech/lurus-hub/internal/pkg/nats"
 	"github.com/LurusTech/lurus-hub/internal/pkg/setting/model_setting"
 	"github.com/LurusTech/lurus-hub/internal/pkg/types"
 
@@ -22,6 +23,16 @@ import (
 
 func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types.NewAPIError) {
 	info.InitChannelMeta(c)
+
+	// Tee response bytes through a capped buffer so we can extract the upstream
+	// image URL after adaptors stream their JSON back to the client. The bytes
+	// the user sees remain byte-identical; only an in-memory mirror (≤64 KiB)
+	// is retained for post-flight parsing. Restored on return so we never leave
+	// a wrapped writer on c if a later middleware also writes.
+	captured := NewBufferedResponseWriter(c.Writer, CapturedBodyMaxBytes)
+	originalWriter := c.Writer
+	c.Writer = captured
+	defer func() { c.Writer = originalWriter }()
 
 	imageReq, ok := info.Request.(*dto.ImageRequest)
 	if !ok {
@@ -137,5 +148,26 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	}
 
 	postConsumeQuota(c, info, usage.(*dto.Usage), logContent...)
+
+	// Notify downstream consumers (notification module / admin dashboard) that
+	// an image was generated. Fire-and-forget. ImageURL is extracted from the
+	// captured response body — adaptors normalize provider output to OpenAI
+	// shape `{"data":[{"url":...}]}` before writing, so the extractor finds
+	// the URL for OpenAI/DALL-E, Replicate, Ali, Jimeng, Gemini, and Zhipu
+	// uniformly. On parse miss / cap-truncated body the URL is "" and the
+	// consumer falls back to prompt+model rendering.
+	imageURL := ExtractImageURL(captured.Bytes())
+	hubnats.PublishImageGenerated(c.Request.Context(),
+		info.UserId, info.OriginModelName, imagePromptForEvent(request), imageURL)
 	return nil
+}
+
+// imagePromptForEvent extracts a concise prompt string for the NATS event.
+// Falls back to empty when the request shape doesn't carry a top-level prompt
+// (some image-edit endpoints use multipart form instead).
+func imagePromptForEvent(req *dto.ImageRequest) string {
+	if req == nil {
+		return ""
+	}
+	return req.Prompt
 }

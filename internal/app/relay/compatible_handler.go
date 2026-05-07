@@ -484,4 +484,11 @@ func postConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage 
 	}
 	governance.EnrichLogParams(ctx, relayInfo, &logParams)
 	repo.RecordConsumeLog(ctx, relayInfo.UserId, logParams)
+
+	// Update the user's lifetime token counter and emit a milestone event if
+	// this request crosses one of the tracked thresholds (1k/10k/100k/1M).
+	// No-op when totalTokens is 0 or Redis is unavailable.
+	if totalTokens > 0 {
+		app.CheckAndPublishUsageMilestone(ctx.Request.Context(), relayInfo.UserId, totalTokens)
+	}
 }
