@@ -1,0 +1,43 @@
+# Custom PostgreSQL image with wal-g for continuous WAL archiving + base backups.
+#
+# Base: postgres:15 (debian-bookworm-slim).
+# Adds: wal-g binary at /usr/local/bin/wal-g.
+#
+# Why a custom image: wal-g must be reachable from PG's archive_command,
+# which runs as the postgres process. Bundling at build time avoids a
+# brittle entrypoint-time download.
+#
+# Build:
+#   docker build -t lurus-postgres:walg-15 -f Dockerfile.postgres-walg .
+# (driven automatically by docker-compose `build:` stanza)
+
+FROM postgres:15
+
+ARG WALG_VERSION=v3.0.0
+# Use ubuntu-22.04 build — works on debian-bookworm (same glibc family).
+ARG WALG_TARBALL=wal-g-pg-ubuntu-22.04-amd64.tar.gz
+
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        ca-certificates curl \
+        # PG-side tools used by restore drill
+        gnupg \
+    ; \
+    curl -fsSL "https://github.com/wal-g/wal-g/releases/download/${WALG_VERSION}/${WALG_TARBALL}" \
+        -o /tmp/walg.tar.gz; \
+    tar -xzf /tmp/walg.tar.gz -C /tmp; \
+    install -m 0755 /tmp/wal-g-pg-ubuntu-22.04-amd64 /usr/local/bin/wal-g; \
+    /usr/local/bin/wal-g --version; \
+    rm -rf /tmp/walg.tar.gz /tmp/wal-g-pg-ubuntu-22.04-amd64; \
+    apt-get purge -y curl; \
+    apt-get autoremove -y; \
+    rm -rf /var/lib/apt/lists/*
+
+# archive_command wrapper — graceful no-op when WALG_S3_PREFIX is empty so a
+# fresh deploy can boot before backups are provisioned.
+COPY archive-wal.sh /usr/local/bin/archive-wal.sh
+RUN chmod 0755 /usr/local/bin/archive-wal.sh
+
+# Standard PG entrypoint preserved — archive_command + envs supplied via
+# docker-compose, not the image. Keep image stateless.
