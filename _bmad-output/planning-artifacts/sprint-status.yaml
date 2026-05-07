@@ -1,7 +1,7 @@
-# Sprint Status - Lurus API
-# Updated: 2026-02-13
-# Project: Lurus API
-# Project Key: LURUS-API
+# Sprint Status - Lurus Hub
+# Updated: 2026-05-05
+# Project: Lurus Hub
+# Project Key: LURUS-HUB
 # Tracking System: file-system
 
 # STATUS DEFINITIONS:
@@ -9,10 +9,25 @@
 # Epic:  backlog → in-progress → done
 # Story: backlog → ready-for-dev → in-progress → review → done
 
-generated: 2026-02-13
-project: Lurus API
-project_key: LURUS-API
+generated: 2026-05-05
+project: Lurus Hub
+project_key: LURUS-HUB
 tracking_system: file-system
+
+# ============================================================
+# NORTH STAR METRICS (replaces previous infra-only SC)
+# ============================================================
+north_star_metrics:
+  product:
+    paying_tenants_M12:        { current: 0,    target: 20  }      # 付费租户数
+    monthly_active_api_keys:   { current: null, target: 100 }      # 每租户 MoM 活跃 key
+    ttft_minutes:              { current: null, target: 5   }      # 注册 → 首次成功调用
+    cost_savings_via_insights: { current: 0,    target: "15% avg per tenant" }
+  reliability_baseline:
+    monthly_uptime:            { current: "~98%",  target: "99.5%" }
+    gateway_p95_overhead_ms:   { current: 80,     target: 50 }
+  governance:
+    forking_burden_hours_pm:   { current: null,  target: "<2h/month after E8" }
 
 # GOVERNANCE NOTE:
 # ================
@@ -76,6 +91,99 @@ development_status:
   6-10-p2-context-background-cleanup: done  # Story doc: story-6-10-context-background-cleanup.md
 
   # ============================================================
-  # ACTIVE SPRINT - Ready for new Epic planning
+  # PHASE 1 — 加固期 (2026-Q2, Active)
   # ============================================================
-  # (No active stories - awaiting next sprint planning)
+
+  # Epic 7: Reliability Hard Floor (P0)
+  epic-7: in-progress
+  7-1-per-provider-circuit-breaker: review           # ✅ audit + IsUpstreamFailure filter; awaiting STAGE chaos drill
+  7-2-postgres-ha:                  review           # ✅ ADR (lurus/doc/decisions/2026-05-07-newhub-pg-ha.md); split to 7-2.1~7-2.4
+  7-2.1-pg-wal-g-backups:           review           # ✅ Dockerfile + compose + runbook + drill; STAGE deploy + drill pending
+  7-2.2-pg-restore-runbook-drill:   backlog          # Phase 1.0 — 0.5 day
+  7-2.3-pg-streaming-replica:       backlog          # Phase 1.1 — pending 2nd host
+  7-2.4-pg-managed-migration:       backlog          # Phase 2.x — pending 5+ paying tenants
+  7-3-relay-data-plane-scale-out:   backlog
+  7-4-quota-real-backpressure:      review           # ✅ audit + Retry-After generalization; awaiting STAGE verify
+  7-5-chaos-drill-slo-dashboard:    backlog
+
+  # Epic 8: Newapi/Newhub Consolidation (P0) [renamed 2026-05-05 per 8-1 audit]
+  # Audit revealed two parallel forks, not a derivation chain.
+  # Recommendation: Option A — retire newapi, consolidate to newhub.
+  epic-8: in-progress
+  8-1-newapi-fork-audit:            review           # ✅ deliverable: doc/decisions/2026-05-05-newapi-newhub-fork-audit.md
+  # — Below stories drafted assuming Option A; rewrite if B chosen, drop if C.
+  8-2-newapi-original-port-list:    review           # ✅ deliverable: story-8-2-newapi-port-list.md (4 P0/P1 ports identified, ~2 days work)
+  8-2.1-cost-spike-port:            review           # ✅ port done; story-8-2.1-cost-spike-port.md; STAGE breach test pending
+  8-2.2-auth-hardening-port:        review           # ✅ video_proxy ownership fix; story-8-2.2-auth-hardening-port.md
+                                                     #    (audit was overstated — only 1 real gap, fixed)
+  8-2.3-nats-image-event-port:      review           # ✅ port done; story-8-2.3-nats-image-event-port.md
+  8-2.3.1-image-url-extraction:     review           # ✅ port done; story-8-2.3.1-image-url-extraction.md
+                                                     #    BufferedResponseWriter (64KiB cap) + ExtractImageURL 3-tier walker
+  8-2.4-nats-usage-milestone-port:  review           # ✅ port done; story-8-2.4-nats-usage-milestone-port.md
+                                                     #    decision: new event type (not merged with quota.threshold)
+  8-3-provider-parity-audit:        blocked          # blocked by 8-2
+  8-4-cutover-plan:                 blocked          # blocked by 8-3
+  8-5-newapi-archive-yaml-revise:   blocked          # blocked by 8-4 cutover
+
+  # Epic 9: Modality Slim-Down (P1)
+  epic-9: in-progress
+  9-1-tier3-usage-audit:            review           # ✅ code audit done; story-9-1-tier3-usage-audit.md
+                                                     #    7,082 LOC + 8 ChannelTypes + 2 DB tables identified
+                                                     #    awaiting live usage SQL on PROD before marking done
+  9-2-tier3-deprecate-announce:     backlog          # blocked by 9-1 live usage numbers
+  9-3-tier3-code-removal:           backlog          # blocked by 9-2 (90-day window)
+
+  # ============================================================
+  # PHASE 2 — 入口期 (2026-Q3, Backlog)
+  # ============================================================
+  epic-10: backlog                                   # 5-Minute Time-to-First-Token
+  epic-11: backlog                                   # v1 Web UI Sunset
+  epic-12: backlog                                   # 套餐计费分层
+
+  # ============================================================
+  # PHASE 3 — 差异化期 (2026-Q4, Backlog)
+  # ============================================================
+  epic-13: backlog                                   # ClickHouse Insights Plane
+  epic-14: backlog                                   # PII Audit & Compliance
+  epic-15: backlog                                   # 智能路由
+
+  # ============================================================
+  # PHASE 4 — 外溢期 (2027-Q1+, Direction Only)
+  # ============================================================
+  # 公开 SaaS / Stripe 直付 / 与 Helicone 差异化 — 待 Phase 3 收尾后规划
+
+# ============================================================
+# ACTIVE SPRINT (Sprint 1 of Q2)
+# ============================================================
+active_sprint:
+  id: 2026-Q2-S1
+  window: "2026-05-05 ~ 2026-06-02"
+  goal: "并行启动 Phase 1：E7-1 熔断器落地 + E8-1 fork 审计"
+  stories:
+    - 7-1-per-provider-circuit-breaker  # ✅ review
+    - 8-1-newapi-fork-audit              # ✅ review
+    - 8-2-newapi-original-port-list      # ✅ review (added 2026-05-07)
+    - 7-2-postgres-ha-adr                # ✅ review (added 2026-05-07; split to sub-stories)
+    - 7-4-quota-real-backpressure        # ✅ review (added 2026-05-07)
+    - 8-2.4-nats-usage-milestone-port    # ✅ review (added 2026-05-07)
+    - 8-2.3.1-image-url-extraction       # ✅ review (added 2026-05-07)
+    - 9-1-tier3-usage-audit              # ✅ review (added 2026-05-07; pending PROD SQL)
+  next_recommended:
+    - PROD usage SQL for 9-1             # 5 min, unblocks 9-2 announce
+    - STAGE deploy all 11 review stories # validate Retry-After + IsUpstreamFailure + NATS events live
+    - 8-2 port PR (待 Anita confirm Option A)
+    - 7-2.1 PG WAL-G STAGE drill (Phase 1.0, 0.5 day)
+
+# ============================================================
+# OPEN STRATEGIC DECISIONS (need Anita confirmation)
+# ============================================================
+open_decisions:
+  D1_fork_strategy:    pending   # 8-1 audit 颠覆原假设；现需选 Option A/B/C
+                                 # see: doc/decisions/2026-05-05-newapi-newhub-fork-audit.md
+                                 # Q1: Option A/B/C? (recommend A)
+                                 # Q2: 切流时间窗口? (recommend 2026-07 月初)
+                                 # Q3: newapi repo 归档 vs 只读保留? (recommend 归档+90d 只读)
+                                 # Q4: lurus.yaml 修订? (recommend yes, 由 8-5 完成)
+  D2_external_saas:    accepted  # "2026 内部为主，Q4 起准备外部 SaaS"
+  D3_tier3_modality:   accepted  # "砍 MJ/Suno/Realtime/Music/Video" — 由 E9 执行
+  D4_insights_backend: accepted  # "Q3 自建 ClickHouse；先 Langfuse OSS 跑 PoC"
