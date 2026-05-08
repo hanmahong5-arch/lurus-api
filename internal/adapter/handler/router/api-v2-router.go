@@ -3,6 +3,7 @@ package router
 import (
 	"github.com/LurusTech/lurus-hub/internal/adapter/handler"
 	"github.com/LurusTech/lurus-hub/internal/adapter/middleware"
+	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,6 +22,17 @@ func SetApiV2Router(router *gin.Engine) {
 		apiV2.GET("/auth/session-info", handler.GetSessionInfo)
 		apiV2.POST("/oauth/logout", handler.ZitadelLogout)
 		apiV2.POST("/oauth/refresh", handler.RefreshAccessToken)
+
+		// ----------------------------------------------------------------
+		// Zita SDK login path (ADR-0011 Layer C). Coexists with the
+		// legacy Zitadel-direct routes above during migration. Frontend
+		// rewires to this URL in the next session; legacy deletion follows.
+		// ----------------------------------------------------------------
+
+		apiV2.GET("/auth/zita-login", handler.ZitaLogin)
+		if common.ZitaClient != nil {
+			apiV2.GET("/me/zita", common.ZitaClient.AuthMiddleware(), handler.GetZitaIdentity)
+		}
 
 		// Tenant-scoped user endpoint (session auth — called by frontend in V2 mode)
 		apiV2.GET("/:tenant_slug/user/me", middleware.UserAuth(), handler.GetSelf)

@@ -30,6 +30,14 @@ jobs:
           path: lurus-proto-go
           fetch-depth: 1
 
+      - name: Check out zita-sdk-go (pinned, pre-alpha)
+        uses: actions/checkout@v4
+        with:
+          repository: hanmahong5-arch/zita-sdk-go
+          ref: e2611da
+          path: zita-sdk-go
+          fetch-depth: 1
+
       - name: Determine version
         id: version
         run: |

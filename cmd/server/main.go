@@ -521,6 +521,11 @@ func InitResources(ctx context.Context) error {
 		}
 	}
 
+	// Initialize zita SDK client (Layer B/C of ADR-0011 — replaces
+	// direct Zitadel coupling per ADR-0005). Optional: nil ZitaClient
+	// when env not set, legacy Zitadel path remains as fallback.
+	common.InitZitaClient()
+
 	// Initialize Zitadel authentication (multi-tenant OAuth)
 	// 初始化 Zitadel 认证（多租户 OAuth）
 	err = middleware.InitZitadelAuth()
