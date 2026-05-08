@@ -377,3 +377,25 @@ platform breaker open > 5m → page
 
 **部署侧**: 7 commits f5cfa126..20b23add 推到 origin/main，CI 手动触发了 docker-image-main.yml (run 25491707513) — 历史模式显示该 workflow 不自动跑 push 触发。
 bash -n syntax check 通过 · JSON valid · DoD 缺第一次 STAGE 真跑
+
+## 2026-05-08 · zita-sdk-go Layer C kickoff (ADR-0011)
+
+**Goal**: 把 newhub 从直连 Zitadel 切到统一 zita SDK；platform Layer A/B 当日完成 (4 模块迁完 + sdk MVP 推 origin/main)，newhub Layer C 起第一刀
+
+**Files (4 commits, d9b5f8d1..d407fc53)**:
+- `internal/pkg/common/zita_client.go` — `ZitaClient` global + `InitZitaClient` (env 缺失则 nil，不阻断 boot)
+- `internal/adapter/handler/zita_login.go` — `GET /api/v2/auth/zita-login`，open-redirect guard 限 *.lurus.cn
+- `internal/adapter/handler/me_zita.go` — `GET /api/v2/me/zita` 诊断端点（SDK middleware 验签 + AccountID 回显）
+- `web/src/components/auth/ZitadelRedirect.jsx` + `helpers/utils.jsx` — "登录"按钮 + 401 fallback 切到 zita-login
+- `Dockerfile` + `.github/workflows/docker-image-main.yml` — checkout zita-sdk-go full sha (短 sha 被 actions/checkout 当 branch)
+- `deploy/k8s/r6-stage/deployment.yaml` — `IDENTITY_PUBLIC_URL=https://identity.lurus.cn` + 修 image repo (`lurus-api` → `lurus-newhub`，老 tag 还卡在 4-23 stale image)
+
+**E2E 验证**:
+- curl: 注册 anitazita1778227195 → cookie .lurus.cn → `/api/v2/me/zita` 返 `{"account_id":7}` ✅
+- 浏览器: 同样链路 + cookie store + 跨子域行为符合 SDK 假设 ✅
+
+**Platform 侧待修**（已转告 platform session）:
+- `/login?return_to=...` return_to 参数被忽略，登录后跳自家 `/hub` 而非 newhub
+- `/api/v1/auth/login-or-register` 还是 TODO，前端按钮 UX 撒谎
+
+**留给明天**: oauth.go 951 LOC + zitadel_auth.go 300 LOC + 4 test 文件清理；user 表加 `lurus_account_id` 列 migration；老 v2 路由删除
