@@ -29,8 +29,10 @@ spec:
       containers:
         - name: lurus-newhub
           # NOTE: STAGE tracks the floating "main" tag with imagePullPolicy=Always.
-          # Pin to ghcr.io/hanmahong5-arch/lurus-api:main-<sha7> before promoting to PROD.
-          image: ghcr.io/hanmahong5-arch/lurus-api:main
+          # Pin to ghcr.io/hanmahong5-arch/lurus-newhub:main-<sha7> before promoting to PROD.
+          # GHCR repository name follows GitHub repo name (hanmahong5-arch/lurus-newhub);
+          # the legacy `lurus-api` tag still exists with stale 4-23 image.
+          image: ghcr.io/hanmahong5-arch/lurus-newhub:main
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
