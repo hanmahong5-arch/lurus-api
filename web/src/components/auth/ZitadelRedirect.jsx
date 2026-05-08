@@ -1,36 +1,26 @@
 import { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
-import { getTenantSlug } from '../../helpers';
 import Loading from '../common/ui/Loading';
 import { Card, Typography } from '@douyinfe/semi-ui';
 
-const DEFAULT_TENANT = 'lurus';
-
-const ZitadelRedirect = ({ register = false }) => {
-  const { tenantSlug: routeSlug } = useParams();
-  const [searchParams] = useSearchParams();
+// register prop kept for backward compat with the route declaration in
+// App.jsx; platform identity.lurus.cn renders a unified "登录/注册" UI
+// so the same redirect target serves both flows. tenantSlug routing
+// dropped — Layer C of ADR-0011 routes login through identity, which
+// resolves the account globally rather than per-tenant.
+const ZitadelRedirect = (_props) => {
   const [showFallback, setShowFallback] = useState(false);
 
   useEffect(() => {
-    // Priority: route param > query param > localStorage > default
-    const slug =
-      routeSlug ||
-      searchParams.get('tenant') ||
-      getTenantSlug() ||
-      DEFAULT_TENANT;
+    // After identity finishes the login dance the browser comes back
+    // to the v2 dashboard with the lurus_session cookie set on the
+    // parent .lurus.cn domain.
+    const returnTo = `${window.location.origin}/console/v2/dashboard`;
+    const url = `/api/v2/auth/zita-login?return_to=${encodeURIComponent(returnTo)}`;
 
-    let url = `/api/v2/${slug}/auth/login?redirect_url=/oauth/zitadel`;
-    if (register) {
-      url += '&register=true';
-    }
-
-    // Show fallback option after 3 seconds
     const timer = setTimeout(() => setShowFallback(true), 3000);
-
     window.location.href = url;
-
     return () => clearTimeout(timer);
-  }, [register, routeSlug, searchParams]);
+  }, []);
 
   return (
     <div className='flex flex-col items-center justify-center min-h-screen bg-gray-50'>

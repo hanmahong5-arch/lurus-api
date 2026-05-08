@@ -150,16 +150,11 @@ export function showError(error) {
     if (error.name === 'AxiosError') {
       switch (error.response.status) {
         case 401:
-          // Clear user state and redirect to OAuth login. The fallback used
-          // to be /login/password (a legacy route), but now React Router
-          // parses it as tenantSlug="password" and the API rejects with
-          // "tenant not found". Send the user through ZitadelRedirect
-          // (/login) which falls back to DEFAULT_TENANT.
+          // Clear user state and bounce through zita SDK (Layer C of
+          // ADR-0011). identity.lurus.cn renders the unified login page
+          // and writes lurus_session on .lurus.cn parent domain.
           localStorage.removeItem('user');
-          {
-            const slug = localStorage.getItem('tenant_slug') || 'lurus';
-            window.location.href = `/api/v2/${slug}/auth/login?redirect_url=/oauth/zitadel`;
-          }
+          window.location.href = `/api/v2/auth/zita-login?return_to=${encodeURIComponent(window.location.href)}`;
           break;
         case 429:
           Toast.error('错误：请求次数过多，请稍后再试！');
