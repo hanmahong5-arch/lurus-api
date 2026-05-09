@@ -189,6 +189,33 @@ var (
 		},
 		[]string{"channel_id"},
 	)
+
+	// RelayOverheadDuration measures newhub-side latency before the first
+	// upstream attempt (requestStart → first channel_select). SLO target:
+	// how much delay newhub itself adds. Excludes upstream wall time.
+	RelayOverheadDuration = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "relay_overhead_duration_seconds",
+			Help:      "Newhub overhead before first upstream call (excludes upstream wall time)",
+			Buckets:   []float64{.0005, .001, .002, .005, .01, .025, .05, .1, .25, .5, 1},
+		},
+	)
+
+	// RelayTotalDuration measures end-to-end Relay() handler duration including
+	// retries and upstream wall time. Labeled per provider/model so SLOs can be
+	// sliced by which upstream is degrading.
+	RelayTotalDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "relay_total_duration_seconds",
+			Help:      "End-to-end Relay() handler duration including retries and upstream wall time",
+			Buckets:   []float64{.05, .1, .25, .5, 1, 2.5, 5, 10, 30, 60, 120},
+		},
+		[]string{"provider", "model", "status"},
+	)
 )
 
 // RecordRelayRequest records a relay request with its outcome
@@ -245,4 +272,16 @@ func RecordCircuitBreakerTrip(channelID string) {
 // RecordCircuitBreakerRejection increments the rejection counter.
 func RecordCircuitBreakerRejection(channelID string) {
 	CircuitBreakerRejections.WithLabelValues(channelID).Inc()
+}
+
+// RecordRelayOverhead records newhub-side overhead before first upstream call.
+// SLO target: P99 < 50ms.
+func RecordRelayOverhead(durationSec float64) {
+	RelayOverheadDuration.Observe(durationSec)
+}
+
+// RecordRelayTotal records end-to-end Relay() handler duration.
+// status must be "success" or "error".
+func RecordRelayTotal(provider, model, status string, durationSec float64) {
+	RelayTotalDuration.WithLabelValues(provider, model, status).Observe(durationSec)
 }

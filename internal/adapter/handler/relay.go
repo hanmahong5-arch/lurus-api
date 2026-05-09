@@ -86,6 +86,8 @@ func geminiRelayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewA
 }
 
 func Relay(c *gin.Context, relayFormat types.RelayFormat) {
+	// Capture request start before any work; bounds end-to-end latency.
+	requestStart := time.Now()
 
 	requestId := c.GetString(common.RequestIdKey)
 	//group := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
@@ -95,6 +97,24 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		newAPIError *types.NewAPIError
 		ws          *websocket.Conn
 	)
+
+	// Total-duration defer. Declared first so LIFO runs it LAST,
+	// after the error-response defer below sets the final status.
+	defer func() {
+		provider := constant.GetChannelTypeName(c.GetInt("channel_type"))
+		if provider == "" {
+			provider = "unknown"
+		}
+		model := c.GetString("original_model")
+		if model == "" {
+			model = "unknown"
+		}
+		status := "success"
+		if newAPIError != nil {
+			status = "error"
+		}
+		metrics.RecordRelayTotal(provider, model, status, time.Since(requestStart).Seconds())
+	}()
 
 	if relayFormat == types.RelayFormatOpenAIRealtime {
 		var err error
@@ -237,6 +257,10 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 
 	for ; retryParam.GetRetry() <= common.RetryTimes; retryParam.IncreaseRetry() {
+		// One-shot overhead — newhub-side latency budget, excludes retries.
+		if retryParam.GetRetry() == 0 {
+			metrics.RecordRelayOverhead(time.Since(requestStart).Seconds())
+		}
 		channelSelectStart := time.Now()
 		channel, channelErr := getChannel(c, relayInfo, retryParam)
 		metrics.ChannelSelectDuration.Observe(time.Since(channelSelectStart).Seconds())
