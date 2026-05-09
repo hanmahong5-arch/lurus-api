@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import TenantSwitcher from './TenantSwitcher';
 
 // Single source of truth: pathname suffix → nav item id.
 // HFShell uses this to auto-highlight the active item when caller doesn't
@@ -216,62 +217,7 @@ const HFShell = ({ active, crumbs = [], actions, children }) => {
         ))}
 
         <div className='footer'>
-          <div
-            style={{
-              fontSize: 9,
-              color: 'var(--hf-ink-4)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.14em',
-              marginBottom: 4,
-            }}
-          >
-            tenant
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              marginBottom: 8,
-            }}
-          >
-            <span className='dot ok' />{' '}
-            <span className='strong'>acme · prod</span>
-            <span className='faint' style={{ marginLeft: 'auto' }}>
-              ▾
-            </span>
-          </div>
-          <div
-            style={{
-              fontSize: 9,
-              color: 'var(--hf-ink-4)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.14em',
-            }}
-          >
-            budget · this month
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              marginTop: 2,
-            }}
-          >
-            <span className='strong'>$8,420 / 10k</span>
-            <span className='acc'>84%</span>
-          </div>
-          <div
-            style={{ height: 3, background: 'var(--hf-sunken)', marginTop: 4 }}
-          >
-            <div
-              style={{
-                height: '100%',
-                width: '84%',
-                background: 'var(--hf-accent)',
-              }}
-            />
-          </div>
+          <TenantSwitcher />
         </div>
       </aside>
 

@@ -17,6 +17,20 @@
 }
 
 /* ==================== 全局基础样式 ==================== */
+/* ==================== Lurus Hub brand tokens ==================== */
+:root {
+  --paper: #F5F2E8;
+  --bg: #E8E4D6;
+  --ink: #14130F;
+  --rule: #D6D2C2;
+  --accent: #FF5D1F;
+  --ok: #1F7A4F;
+  --warn: #B8821F;
+  --err: #B3392B;
+  --info: #2D4A8A;
+}
+
+/* ==================== Layout variables ==================== */
 :root {
   --sidebar-width: 180px;
   --sidebar-width-collapsed: 60px;
