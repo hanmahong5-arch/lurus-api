@@ -142,7 +142,11 @@ export const useHeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
     localStorage.removeItem('user');
     localStorage.removeItem('tenant_slug');
     try {
-      await API.post('/api/v2/oauth/logout');
+      // Layer C symmetric logout: clears Hub session AND expires the
+      // platform-shared lurus_session cookie. Without the second step the
+      // next /login navigation re-bootstraps from the still-valid platform
+      // cookie, so the "退出" button looks like a no-op to the user.
+      await API.post('/api/v2/auth/zita-logout');
     } catch (e) {
       // Session may already be expired; continue with local cleanup
     }

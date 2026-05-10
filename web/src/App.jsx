@@ -70,6 +70,7 @@ const V2Flows = lazy(() => import('./pages/v2/Flows'));
 const V2DesignSystem = lazy(() => import('./pages/v2/DesignSystem'));
 const V2States = lazy(() => import('./pages/v2/States'));
 const V2Variants = lazy(() => import('./pages/v2/Variants'));
+const V2AccountDisabled = lazy(() => import('./pages/v2/AccountDisabled'));
 
 function App() {
   const location = useLocation();
@@ -355,6 +356,16 @@ function App() {
         <Route
           path='/console/v2'
           element={<Navigate to='/console/v2/dashboard' replace />}
+        />
+        {/* Account-disabled landing — public so suspended visitors don't
+            bounce off PrivateRoute back into the bridge loop. */}
+        <Route
+          path='/console/v2/account-disabled'
+          element={
+            <Suspense fallback={<Loading />}>
+              <V2AccountDisabled />
+            </Suspense>
+          }
         />
         {[
           ['dashboard', V2Dashboard],

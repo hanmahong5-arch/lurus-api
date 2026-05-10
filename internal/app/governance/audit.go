@@ -24,8 +24,9 @@ const (
 	ActionChannelEnabled      = "channel.enabled"
 	ActionChannelTagDisabled  = "channel.tag_disabled"
 
-	ActionAuthFailed     = "auth.failed"
-	ActionAuthIPRejected = "auth.ip_rejected"
+	ActionAuthFailed       = "auth.failed"
+	ActionAuthIPRejected   = "auth.ip_rejected"
+	ActionAuthBootstrapped = "auth.bootstrapped"
 
 	ActionSensitiveBlocked = "security.sensitive_blocked"
 )

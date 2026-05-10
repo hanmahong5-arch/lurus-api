@@ -129,6 +129,14 @@ func TopupRateLimit() func(c *gin.Context) {
 	return rateLimitFactory(5, 60, "TU")
 }
 
+// BootstrapRateLimit caps zita-bootstrap to 5/min/IP. A leaked SDK cookie
+// would otherwise let an attacker spam-create newhub users by replaying it
+// from many client identities; capping here bounds the auto-create blast
+// radius without affecting normal first-login latency.
+func BootstrapRateLimit() func(c *gin.Context) {
+	return rateLimitFactory(5, 60, "BS")
+}
+
 func setRateLimitResponseHeaders(c *gin.Context, limit int, remaining int, retryAfterSec int64) {
 	c.Writer.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfterSec))
 	c.Writer.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", limit))

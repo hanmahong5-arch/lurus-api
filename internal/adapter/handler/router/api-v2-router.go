@@ -30,9 +30,13 @@ func SetApiV2Router(router *gin.Engine) {
 		// ----------------------------------------------------------------
 
 		apiV2.GET("/auth/zita-login", handler.ZitaLogin)
+		// Logout must be unauthenticated — the gin session may already be
+		// expired (the whole point is to clear it + the platform cookie).
+		apiV2.GET("/auth/zita-logout", handler.ZitaLogout)
+		apiV2.POST("/auth/zita-logout", handler.ZitaLogout)
 		if common.ZitaClient != nil {
 			apiV2.GET("/me/zita", common.ZitaClient.AuthMiddleware(), handler.GetZitaIdentity)
-			apiV2.POST("/auth/zita-bootstrap", common.ZitaClient.AuthMiddleware(), handler.ZitaBootstrap)
+			apiV2.POST("/auth/zita-bootstrap", middleware.BootstrapRateLimit(), common.ZitaClient.AuthMiddleware(), handler.ZitaBootstrap)
 		}
 
 		// Tenant-scoped user endpoint (session auth — called by frontend in V2 mode)

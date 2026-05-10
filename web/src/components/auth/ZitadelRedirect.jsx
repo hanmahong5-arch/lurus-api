@@ -42,7 +42,17 @@ const ZitadelRedirect = (_props) => {
           );
           return;
         }
-      } catch (_) {
+      } catch (err) {
+        // 403 = account disabled. Bouncing back to identity-login would loop
+        // (bootstrap rejects on every retry). Surface the terminal state
+        // explicitly so the user can contact support or switch accounts.
+        if (err?.response?.status === 403) {
+          if (cancelled) return;
+          window.location.replace(
+            window.location.origin + '/console/v2/account-disabled'
+          );
+          return;
+        }
         // 401 / network — fall through to identity redirect.
       }
       if (cancelled) return;

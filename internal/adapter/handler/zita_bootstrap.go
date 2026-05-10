@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/app/governance"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 
 	"github.com/gin-contrib/sessions"
@@ -49,6 +51,7 @@ func ZitaBootstrap(c *gin.Context) {
 	}
 
 	user, err := repo.GetUserByLurusAccountID(id.AccountID)
+	autoCreated := false
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		user, err = autoCreateBridgedUser(id.AccountID)
 		if err != nil {
@@ -59,6 +62,7 @@ func ZitaBootstrap(c *gin.Context) {
 			})
 			return
 		}
+		autoCreated = true
 		common.SysLog(fmt.Sprintf("zita-bootstrap: auto-created user %s (id=%d, lurus_account_id=%d)", user.Username, user.Id, id.AccountID))
 	} else if err != nil {
 		common.SysError(fmt.Sprintf("zita-bootstrap: lookup failed (account_id=%d): %v", id.AccountID, err))
@@ -93,6 +97,20 @@ func ZitaBootstrap(c *gin.Context) {
 		return
 	}
 
+	// Audit trail — append-only, must be emitted on every successful bridge so
+	// the compliance log can answer "who logged in via the SDK bridge, when,
+	// from which IP, was a new newhub account auto-provisioned." Missing this
+	// at launch is unrecoverable (events cannot be backfilled after the fact).
+	details, _ := json.Marshal(map[string]any{
+		"lurus_account_id": id.AccountID,
+		"auto_created":     autoCreated,
+	})
+	governance.RecordAuditEvent(governance.NewAuditEvent(
+		c, governance.ActorUser, user.Id,
+		governance.ActionAuthBootstrapped, governance.ResourceUser, user.Id,
+		string(details),
+	))
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
@@ -124,6 +142,14 @@ func autoCreateBridgedUser(accountID int64) (*repo.User, error) {
 		LurusAccountID: &accountID,
 	}
 	if err := user.Insert(); err != nil {
+		// Concurrent first-login race: another in-flight bootstrap (e.g. user
+		// opened two tabs simultaneously) already won the unique-index check
+		// on lurus_account_id. Probe by the same key — if the row now exists,
+		// we lost the race cleanly and can return the winner. Otherwise the
+		// failure is genuine (DB down, schema drift) and propagates up.
+		if existing, lookupErr := repo.GetUserByLurusAccountID(accountID); lookupErr == nil {
+			return existing, nil
+		}
 		return nil, err
 	}
 	// Re-read by lurus_account_id to pick up DB-assigned id and defaults
