@@ -119,18 +119,75 @@ Without SLA, auto-routing transfers risk to the customer with no compensation. E
 
 **Hard rule**: Full auto-routing is never default, even at W8+. Opt-in is permanent.
 
-## Open questions (block W4 start)
+## Resolved decisions
 
-1. **Pricing model** — flat rate per request vs. token pass-through with markup. Decision determines routing incentive alignment.
-   - **Owner**: product. **Required by**: W3 end (2026-05-22).
-2. **Customer DSL syntax** — YAML rule engine vs. JSON Schema vs. visual builder. Implementation complexity differs ~5×.
+### Q1 — Pricing model (resolved 2026-05-09)
+
+**Decision: subscription unlocks newhub capability tiers + wallet pass-through with fixed markup% for LLM consumption.**
+
+Platform owns the financial primitives (wallet, subscriptions, VIP, entitlements). Newhub does NOT duplicate them. Instead:
+
+- **Subscription (platform-managed)** unlocks newhub features per tier:
+  - Routing mode access (`strict` / `family-pinned` / `quality-tier` / `shadow`)
+  - Quality SLA tier (refund clause stringency)
+  - Audit log retention (30 / 90 / 365 days)
+  - Support tier (community / business-hours / 24×7)
+  - Internal Lurus services = enterprise-tier subscription + `internal_tenant: true` tag
+- **Wallet (platform-managed)** debits per request: `cost_to_customer = upstream_cost_cny × (1 + markup%)`. Markup% is contractual (e.g. 15%); no hidden margin.
+
+**Why this complements platform without duplication:**
+
+1. Zero financial-primitive duplication — platform stays sovereign on money, newhub declares capability requirements via entitlement keys.
+2. Solves the routing incentive problem in §1 (Cost Optimizer): our margin comes from subscription + markup%, decoupled from per-request LLM cost. When auto-routing saves cost, customer's wallet drains slower → customer wins; our margin unchanged → no incentive to silently degrade quality.
+3. CFO-predictable: subscription = fixed monthly (budget anchor); wallet = metered with monthly burn alerts (already in `RecordQuotaConsumed`).
+4. Differentiation from upstream New API: New API is pure token-metering; we sell tiered capability packages. Same 10K tokens costs differently per tier (because tier includes SLA + audit + support), enabling SaaS pricing not commodity API pricing.
+
+**Cross-team dependency on platform:** platform must expose the following entitlement keys, queried via `GetEntitlementsGRPC`:
+- `newhub.routing.modes` → set of allowed routing modes
+- `newhub.quality.sla_tier` → `none | bronze | silver | gold`
+- `newhub.audit.retention_days` → int
+- `newhub.support.tier` → `community | business | enterprise`
+
+Coordination required with platform session before W4. Filed as platform-side request.
+
+### Q5 — Enterprise vs. cloud build profile (resolved 2026-05-09)
+
+**Decision: single codebase, build-tag gating (`//go:build enterprise`); two binaries; three deployment profiles. Hard fork deferred until product-market fit divergence is clear (target re-evaluation: Q4 2026).**
+
+```go
+//go:build enterprise
+// only register channels with LegalRisk == None; grey-area
+// adapter source files excluded from compilation entirely.
+
+//go:build !enterprise
+// register all channels including grey-area
+```
+
+| Profile | Binary | Audience | Billing |
+|---------|--------|----------|---------|
+| `internal` | enterprise | Lurus internal products (Kova / Lucrum / Switch / Creator) | Subsidized cross-charge |
+| `enterprise` | enterprise | External enterprise customers | Subscription + wallet markup% |
+| `cloud` | cloud | External individual developers / overseas | Wallet markup% (higher %, self-serve onboarding) |
+
+**Rationale:**
+- **Independence preserved**: each edition has coherent value prop, distinct SLA, different sales motion. Enterprise binary doesn't contain grey-channel adapter code at all — customer can audit the binary (not just the source repo) for ToS cleanliness.
+- **Complementarity preserved**: internal Lurus products use the enterprise binary with subsidized internal-tenant tags, so the same hardened relay backbone serves the entire Lurus portfolio. One backbone, many fronts.
+- **Reversibility**: build-tag separation is reversible; hard fork is not. We don't yet know whether cloud has real demand vs. brainstorm-only — keep optionality.
+- **Single relay-core maintenance**: bug fixes, observability, routing logic written once, applied to both binaries. Hard fork would double maintenance and let quality diverge.
+
+**Re-evaluation triggers** for hard fork:
+- Cloud edition reaches >30% of newhub revenue, OR
+- Enterprise customer audit explicitly demands separate repo (not just separate binary), OR
+- Cloud feature velocity blocks enterprise stability (or vice versa) for >2 sprints
+
+## Remaining open questions
+
+3. **Customer DSL syntax** — YAML rule engine vs. JSON Schema vs. visual builder. Implementation complexity differs ~5×.
    - **Owner**: design. **Required by**: W5 start (2026-05-30).
-3. **Classifier hosting** — in-process tiny model (Phi-3 / Qwen-0.5B), sidecar container, or shared classification service? Affects per-request latency, dependency footprint, cost.
+4. **Classifier hosting** — in-process tiny model (Phi-3 / Qwen-0.5B), sidecar container, or shared classification service? Affects per-request latency, dependency footprint, cost.
    - **Owner**: infra. **Required by**: W6 start (2026-06-06).
-4. **Quality benchmark bootstrap** — standard benchmarks (HumanEval, MMLU) cover code/general but not customer-specific tasks. How do we get golden eval sets per customer without making it a sales blocker?
+5. **Quality benchmark bootstrap** — standard benchmarks (HumanEval, MMLU) cover code/general but not customer-specific tasks. How do we get golden eval sets per customer without making it a sales blocker?
    - **Owner**: customer success + product. **Required by**: W7 start (2026-06-13).
-5. **Enterprise vs. cloud build profile** — does the same routing engine compile into both products with grey-area channels stripped at build time, or do they diverge entirely? Affects W4 architecture decisions.
-   - **Owner**: architecture. **Required by**: W4 start (2026-05-23).
 
 ## Notes on related decisions
 
