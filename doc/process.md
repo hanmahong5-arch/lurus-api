@@ -1,9 +1,27 @@
 # Development Progress / 开发进度
 
-> Last Updated: 2026-02-25
+> Last Updated: 2026-05-10
 > Archive: doc/archive/process_v20260205.md (entries before 2026-02-04)
 > **New Rule**: 每条目 ≤ 15 行（HARD LIMIT），只记录已完成工作的极简摘要
 
+---
+
+## 2026-05-10: Layer C bridge endpoint — POST /api/v2/auth/zita-bootstrap
+
+昨晚遗留问题: entity.User 加了 LurusAccountID 但 GORM AutoMigrate 看的是 repo.User，
+column 实际从未落地。今日修复+落实 bridge endpoint。
+
+- `repo.User`: 加 `LurusAccountID *int64`（与 entity.User 同步；双 User 待整合）
+- `migrations/011`: 手动 psql 跑掉，DB column + partial unique index 落地
+- `repo.GetUserByLurusAccountID`: tenant-isolation-bypass lookup
+- `handler.ZitaBootstrap`: SDK cookie → find-or-create user (`lurus_<account_id>`)
+  → set V1 gin session → return user JSON for localStorage
+- `ZitadelRedirect.jsx`: POST bridge 替换昨晚合成的假 user
+
+Verification: `go build → OK`；`bun run build → OK`；STAGE 401 from SDK middleware
+without cookie (route registered, image `main-20260510-9a01764` live).
+**未验证**: 浏览器端真实 SDK cookie 的 e2e — 需手动登录 test-newhub 触发。
+Pending: 删 oauth.go/zitadel_auth.go (~1.2k LOC) 等浏览器 e2e 通过后再做。
 ---
 
 ## 2026-02-25: 计费系统安全威胁模型修复（P0+P1）
