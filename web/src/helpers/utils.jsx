@@ -150,11 +150,21 @@ export function showError(error) {
     if (error.name === 'AxiosError') {
       switch (error.response.status) {
         case 401:
-          // Clear user state and bounce through zita SDK (Layer C of
-          // ADR-0011). identity.lurus.cn renders the unified login page
-          // and writes lurus_session on .lurus.cn parent domain.
-          localStorage.removeItem('user');
-          window.location.href = `/api/v2/auth/zita-login?return_to=${encodeURIComponent(window.location.href)}`;
+          // Loop guard during Layer C transition: ZitadelRedirect
+          // synthesizes a localStorage user from the SDK cookie, but
+          // legacy v2 APIs still use ZitadelAuth middleware which
+          // requires a Bearer JWT (not the SDK cookie). 401s from those
+          // APIs are expected until Layer C cleanup ships. Auto-redirecting
+          // to zita-login here would loop: dashboard → 401 → zita-login →
+          // identity (has session) → bounce back → 401 → ...
+          // If user is set, the cookie is valid — show toast and let the
+          // user keep navigating. If not, kick to /login (ZitadelRedirect
+          // there will probe cookie or redirect to identity).
+          if (localStorage.getItem('user')) {
+            Toast.error('部分 API 暂未对接 SDK 会话（Layer C 进行中）');
+          } else {
+            window.location.href = '/login';
+          }
           break;
         case 429:
           Toast.error('错误：请求次数过多，请稍后再试！');
