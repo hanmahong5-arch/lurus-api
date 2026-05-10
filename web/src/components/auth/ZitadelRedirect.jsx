@@ -15,30 +15,28 @@ const ZitadelRedirect = (_props) => {
     let cancelled = false;
     let timer;
 
-    // Probe existing platform session via SDK middleware before redirecting
-    // to identity. If the cookie is valid we are already authenticated —
-    // synthesize a minimum localStorage 'user' to satisfy PrivateRoute and
-    // navigate to dashboard. Without this bootstrap, after identity bounces
-    // back PrivateRoute kicks to /login → ZitadelRedirect remounts →
-    // window.location to identity → identity bounces (still has session) →
-    // PrivateRoute again → infinite full-page loop.
+    // POST /api/v2/auth/zita-bootstrap: SDK cookie → newhub session +
+    // real user row. Replaces the band-aid that synthesized a fake
+    // localStorage user from /me/zita (no DB binding, no session, every
+    // subsequent V1 API call would 401). The bridge endpoint:
+    //   - validates the platform-issued cookie via zita.AuthMiddleware
+    //   - looks up users WHERE lurus_account_id = ? (auto-creates first
+    //     time the visitor lands on newhub)
+    //   - establishes the V1 gin session that middleware.UserAuth() expects
+    //   - returns the canonical user record for localStorage
     //
-    // Layer C cleanup will replace the synthesized user with a proper
-    // newhub user lookup by lurus_account_id + Bearer token issuance.
+    // On 401/network failure (no platform session yet) we fall through
+    // to the identity login redirect — same as the prior behavior.
     const bootstrap = async () => {
       try {
-        const res = await API.get('/api/v2/me/zita', {
-          skipErrorHandler: true,
-        });
+        const res = await API.post(
+          '/api/v2/auth/zita-bootstrap',
+          {},
+          { skipErrorHandler: true }
+        );
         if (cancelled) return;
-        if (res?.data?.account_id) {
-          const synthUser = {
-            id: res.data.account_id,
-            username: 'zita_session_' + res.data.account_id,
-            role: 1,
-            zita_session: true,
-          };
-          localStorage.setItem('user', JSON.stringify(synthUser));
+        if (res?.data?.success && res.data.data?.id) {
+          localStorage.setItem('user', JSON.stringify(res.data.data));
           window.location.replace(
             window.location.origin + '/console/v2/dashboard'
           );

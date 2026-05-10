@@ -32,6 +32,7 @@ func SetApiV2Router(router *gin.Engine) {
 		apiV2.GET("/auth/zita-login", handler.ZitaLogin)
 		if common.ZitaClient != nil {
 			apiV2.GET("/me/zita", common.ZitaClient.AuthMiddleware(), handler.GetZitaIdentity)
+			apiV2.POST("/auth/zita-bootstrap", common.ZitaClient.AuthMiddleware(), handler.ZitaBootstrap)
 		}
 
 		// Tenant-scoped user endpoint (session auth — called by frontend in V2 mode)

@@ -42,6 +42,11 @@ type User struct {
 	DeletedAt      gorm.DeletedAt `gorm:"index"`
 	Setting        string         `json:"setting" gorm:"type:text;column:setting"`
 	Remark         string         `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
+	// LurusAccountID maps to lurus-platform account integer ID. Nullable for
+	// pre-Layer-C users (created via direct registration); set when the
+	// bridge endpoint binds a newhub user to a platform account. Mirrors
+	// entity.User; both must move together until the duplicate is collapsed.
+	LurusAccountID *int64 `json:"lurus_account_id,omitempty" gorm:"type:bigint;column:lurus_account_id;uniqueIndex"`
 }
 
 func (user *User) ToBaseUser() *UserBase {
@@ -249,6 +254,20 @@ func GetUserById(id int, _ ...bool) (*User, error) {
 	}
 	user := User{Id: id}
 	err := DB.First(&user, "id = ?", id).Error
+	return &user, err
+}
+
+// GetUserByLurusAccountID resolves a newhub user by the lurus-platform
+// account integer id. Returns gorm.ErrRecordNotFound if no user is bound,
+// which the bridge endpoint converts into an auto-create.
+func GetUserByLurusAccountID(accountID int64) (*User, error) {
+	if accountID <= 0 {
+		return nil, errors.New("account_id must be > 0")
+	}
+	var user User
+	err := WithoutTenantIsolation(DB).
+		Where("lurus_account_id = ?", accountID).
+		First(&user).Error
 	return &user, err
 }
 
