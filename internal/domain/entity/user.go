@@ -31,6 +31,12 @@ type User struct {
 	DeletedAt      gorm.DeletedAt `gorm:"index"`
 	Setting        string         `json:"setting" gorm:"type:text;column:setting"`
 	Remark         string         `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
+	// LurusAccountID is the lurus-platform account integer ID. Nullable
+	// because pre-Layer-C users were created via direct registration and
+	// have no platform binding. Bridge endpoint (Layer C) sets it when a
+	// newhub user is first bound to a platform account; uniqueIndex
+	// prevents double-binding.
+	LurusAccountID *int64 `json:"lurus_account_id,omitempty" gorm:"type:bigint;column:lurus_account_id;uniqueIndex"`
 }
 
 func (user *User) ToBaseUser() *UserBase {
