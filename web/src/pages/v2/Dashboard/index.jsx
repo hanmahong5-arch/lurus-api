@@ -1,111 +1,115 @@
-import React, { Fragment, useState } from 'react';
+import React, { Fragment, useCallback, useEffect, useState } from 'react';
 import HFShell from '../../../components/hifi/HFShell';
+import { API, showError } from '../../../helpers';
 
-/*
- * HiFi 3 — Dashboard real-time + cost drilldown.
- * Ported from design canvas hifi/hf3-dashboard.jsx (2026-05-07).
- */
+const QUOTA_PER_USD = 500_000;
 
-const BUBBLES = [
-  { m: 'gpt-4o-mini', x: 0.18, y: 0.2, r: 14, c: 'var(--hf-ok)' },
-  { m: 'claude-3.5-haiku', x: 0.22, y: 0.3, r: 8, c: 'var(--hf-ok)' },
-  { m: 'gemini-1.5-flash', x: 0.14, y: 0.1, r: 6, c: 'var(--hf-ok)' },
-  { m: 'gpt-4o', x: 0.55, y: 0.65, r: 14, c: 'var(--hf-accent)' },
-  { m: 'claude-3.5-sonnet', x: 0.68, y: 0.72, r: 20, c: 'var(--hf-accent)' },
-  { m: 'gemini-1.5-pro', x: 0.52, y: 0.58, r: 11, c: 'var(--hf-info)' },
-  { m: 'gpt-4o-realtime', x: 0.85, y: 0.92, r: 6, c: 'var(--hf-err)' },
-  { m: 'claude-3-opus', x: 0.88, y: 0.95, r: 5, c: 'var(--hf-err)' },
+const useTenantSlug = () => {
+  const [slug, setSlug] = useState('default');
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem('tenant_slug');
+      if (s) setSlug(s);
+    } catch (_) {}
+  }, []);
+  return slug;
+};
+
+const quotaToUSD = (q) => (q / QUOTA_PER_USD).toFixed(2);
+
+const fmtTs = (ts) => {
+  if (!ts) return '—';
+  try {
+    return new Date(ts).toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch (_) {
+    return ts;
+  }
+};
+
+// KPI cards that don't have real-time data yet — shown with a placeholder value.
+const STATIC_KPIS = [
+  { l: 'qps', c: 'var(--hf-accent)' },
+  { l: 'ttft p50', c: 'var(--hf-ok)' },
+  { l: 'error rate', c: 'var(--hf-err)' },
 ];
 
-const KPIS = [
-  {
-    l: 'qps',
-    v: '398',
-    d: '+12.4%',
-    t: [4, 5, 7, 6, 8, 9, 11, 10, 12, 11, 13, 12, 14],
-    c: 'var(--hf-accent)',
-  },
-  {
-    l: 'ttft p50',
-    v: '412ms',
-    d: '−8ms',
-    t: [9, 10, 9, 8, 9, 8, 8, 7, 8, 7, 8, 8, 7],
-    c: 'var(--hf-ok)',
-  },
-  {
-    l: 'error rate',
-    v: '0.81%',
-    d: '+0.22pp',
-    t: [2, 3, 2, 3, 4, 5, 6, 8, 9, 11, 12, 10, 8],
-    c: 'var(--hf-err)',
-  },
-  {
-    l: 'spend / hr',
-    v: '$1,051',
-    d: '+$48',
-    t: [6, 6, 7, 8, 8, 9, 10, 10, 11, 10, 11, 12, 11],
-    c: 'var(--hf-ink)',
-  },
-];
-
-const SIGNALS = [
-  {
-    sev: 'err',
-    t: 'openai/backup down · 12m',
-    s: '0% success · failover engaged',
-  },
-  {
-    sev: 'warn',
-    t: 'vertex/asia error rate ↑12%',
-    s: 'sustained 8m · upstream_timeout',
-  },
-  {
-    sev: 'warn',
-    t: 'tenant `acme` near monthly cap',
-    s: '$8,420 / $10,000 · projected exceed in 3.2d',
-  },
-  {
-    sev: 'info',
-    t: 'gpt-4o-2024-11-20 newly available',
-    s: 'auto-add to openai/main · review',
-  },
-];
-
-const DRILL_COLS = [
-  {
-    lvl: 'tenants',
-    items: [
-      ['acme', 8420, 'var(--hf-accent)'],
-      ['contoso', 6210, 'var(--hf-info)'],
-      ['globex', 4180, 'var(--hf-ok)'],
-      ['initech', 3122, 'var(--hf-ink-2)'],
-      ['+9 more', 2250, 'var(--hf-ink-3)'],
-    ],
-  },
-  {
-    lvl: 'models',
-    items: [
-      ['gpt-4o', 9120, 'var(--hf-accent)'],
-      ['claude-3.5-sonnet', 6840, 'var(--hf-info)'],
-      ['gemini-1.5-pro', 3120, 'var(--hf-ok)'],
-      ['gpt-4o-mini', 2480, 'var(--hf-ink-2)'],
-      ['+12 more', 2622, 'var(--hf-ink-3)'],
-    ],
-  },
-  {
-    lvl: 'products',
-    items: [
-      ['lurus-chat', 11200, 'var(--hf-accent)'],
-      ['lurus-edit', 5210, 'var(--hf-info)'],
-      ['public-api', 4120, 'var(--hf-ok)'],
-      ['internal', 2480, 'var(--hf-ink-2)'],
-      ['unset', 1172, 'var(--hf-ink-3)'],
-    ],
-  },
-];
+// ─── Main page ────────────────────────────────────────────────────────────────
 
 const HFDashboard = () => {
-  const [drill, setDrill] = useState([]);
+  const tenantSlug = useTenantSlug();
+
+  const [me, setMe] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    if (!tenantSlug) return;
+    setLoading(true);
+    try {
+      const [meRes, logsRes] = await Promise.all([
+        API.get(`/api/v2/${tenantSlug}/user/me`),
+        API.get(`/api/v2/${tenantSlug}/logs?page=1&page_size=5`),
+      ]);
+      if (meRes?.data?.success) setMe(meRes.data.data);
+      if (logsRes?.data?.success) {
+        const items = logsRes.data.data?.items ?? logsRes.data.data ?? [];
+        setLogs(Array.isArray(items) ? items : []);
+      }
+    } catch (e) {
+      showError('Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  }, [tenantSlug]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Derive spend KPI from user/me
+  const spendUSD = me ? parseFloat(quotaToUSD(me.used_quota ?? 0)) : null;
+  const remainUSD =
+    me && me.remaining_quota != null
+      ? me.remaining_quota < 0
+        ? '∞'
+        : `$${quotaToUSD(me.remaining_quota)}`
+      : null;
+
+  // Unique models from recent logs for the bubble chart
+  const modelSet = Array.from(
+    new Set(logs.map((l) => l.model || l.ModelName || l.channel_name).filter(Boolean))
+  ).slice(0, 8);
+
+  // Spread bubbles evenly in a predictable layout
+  const BUBBLE_COLORS = [
+    'var(--hf-ok)',
+    'var(--hf-accent)',
+    'var(--hf-info)',
+    'var(--hf-ok)',
+    'var(--hf-ink-2)',
+    'var(--hf-accent)',
+    'var(--hf-info)',
+    'var(--hf-err)',
+  ];
+  const bubbles = modelSet.map((m, i) => {
+    const angle = (i / Math.max(modelSet.length, 1)) * Math.PI * 2;
+    const rx = 0.3 + 0.22 * Math.cos(angle);
+    const ry = 0.3 + 0.22 * Math.sin(angle);
+    return { m, x: Math.max(0.05, Math.min(0.9, rx)), y: Math.max(0.05, Math.min(0.9, ry)), r: 12, c: BUBBLE_COLORS[i % BUBBLE_COLORS.length] };
+  });
+
+  // Fallback static bubbles when no log data
+  const FALLBACK_BUBBLES = [
+    { m: 'gpt-4o-mini', x: 0.18, y: 0.2, r: 14, c: 'var(--hf-ok)' },
+    { m: 'claude-3.5-sonnet', x: 0.55, y: 0.65, r: 20, c: 'var(--hf-accent)' },
+    { m: 'gemini-1.5-pro', x: 0.52, y: 0.58, r: 11, c: 'var(--hf-info)' },
+  ];
+  const displayBubbles = bubbles.length > 0 ? bubbles : FALLBACK_BUBBLES;
 
   return (
     <HFShell
@@ -113,22 +117,15 @@ const HFDashboard = () => {
       crumbs={['workspace', 'dashboard']}
       actions={
         <>
-          <span className='lbl'>
-            <span
-              className='live-dot'
-              style={{
-                display: 'inline-block',
-                verticalAlign: 'middle',
-                marginRight: 6,
-              }}
-            />
-            live · 2s tick
+          <span className='muted mono' style={{ fontSize: 11 }}>
+            {loading
+              ? 'loading…'
+              : me
+              ? `${me.request_count ?? 0} requests · $${spendUSD?.toFixed(2) ?? '—'} spent`
+              : ''}
           </span>
-          <button type='button' className='btn'>
-            tenant: all ▾
-          </button>
-          <button type='button' className='btn'>
-            last 24h ▾
+          <button type='button' className='btn' onClick={fetchData}>
+            refresh
           </button>
         </>
       }
@@ -139,13 +136,23 @@ const HFDashboard = () => {
             at a glance
           </div>
           <h1>
-            Today, so far{' '}
-            <span className='muted' style={{ fontWeight: 400 }}>
-              · $1,051 / hour
-            </span>
+            {loading ? (
+              'Loading…'
+            ) : me ? (
+              <>
+                {me.display_name || me.username || 'Your workspace'}{' '}
+                <span className='muted' style={{ fontWeight: 400 }}>
+                  · {remainUSD} remaining
+                </span>
+              </>
+            ) : (
+              'Dashboard'
+            )}
           </h1>
           <div className='sub'>
-            aggregating 8 channels · 54 models · 23 tenants
+            {me
+              ? `${me.token_count ?? 0} active tokens · ${me.request_count ?? 0} total requests`
+              : 'Usage overview for your workspace'}
           </div>
         </div>
       </div>
@@ -158,39 +165,111 @@ const HFDashboard = () => {
           gap: 14,
         }}
       >
-        {KPIS.map((k, i) => (
+        {/* ── KPI: Total spend (real) ── */}
+        <div className='panel' style={{ gridColumn: 'span 3', padding: 18 }}>
+          <div className='lbl'>total spend</div>
+          <div className='display' style={{ fontSize: 32, marginTop: 4 }}>
+            {loading ? '…' : me ? `$${spendUSD.toFixed(2)}` : '—'}
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-end',
+              marginTop: 8,
+            }}
+          >
+            <span className='mono muted' style={{ fontSize: 10 }}>
+              all time · quota units
+            </span>
+          </div>
+        </div>
+
+        {/* ── KPI: Remaining quota (real) ── */}
+        <div className='panel' style={{ gridColumn: 'span 3', padding: 18 }}>
+          <div className='lbl'>remaining quota</div>
+          <div className='display' style={{ fontSize: 32, marginTop: 4 }}>
+            {loading ? '…' : remainUSD ?? '—'}
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-end',
+              marginTop: 8,
+            }}
+          >
+            <span className='mono muted' style={{ fontSize: 10 }}>
+              {me && me.remaining_quota >= 0 ? 'until top-up' : 'unlimited plan'}
+            </span>
+          </div>
+        </div>
+
+        {/* ── KPI: Total requests (real) ── */}
+        <div className='panel' style={{ gridColumn: 'span 3', padding: 18 }}>
+          <div className='lbl'>total requests</div>
+          <div className='display' style={{ fontSize: 32, marginTop: 4 }}>
+            {loading ? '…' : me ? (me.request_count ?? 0).toLocaleString() : '—'}
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-end',
+              marginTop: 8,
+            }}
+          >
+            <span className='mono muted' style={{ fontSize: 10 }}>
+              all time
+            </span>
+          </div>
+        </div>
+
+        {/* ── KPI: Active tokens (real) ── */}
+        <div className='panel' style={{ gridColumn: 'span 3', padding: 18 }}>
+          <div className='lbl'>active tokens</div>
+          <div className='display' style={{ fontSize: 32, marginTop: 4 }}>
+            {loading ? '…' : me ? (me.token_count ?? 0) : '—'}
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-end',
+              marginTop: 8,
+            }}
+          >
+            <span className='mono muted' style={{ fontSize: 10 }}>
+              in this workspace
+            </span>
+          </div>
+        </div>
+
+        {/* ── Static KPI cards (no real-time data yet) ── */}
+        {STATIC_KPIS.map((k, i) => (
           <div
             key={i}
             className='panel'
-            style={{ gridColumn: 'span 3', padding: 18 }}
+            style={{ gridColumn: 'span 4', padding: 18, opacity: 0.65 }}
           >
             <div className='lbl'>{k.l}</div>
-            <div className='display' style={{ fontSize: 32, marginTop: 4 }}>
-              {k.v}
+            <div className='display' style={{ fontSize: 32, marginTop: 4, color: 'var(--hf-ink-3)' }}>
+              —
             </div>
             <div
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-end',
                 marginTop: 8,
+                fontSize: 10,
+                color: 'var(--hf-ink-3)',
+                fontFamily: 'var(--hf-mono)',
               }}
             >
-              <span className='mono muted' style={{ fontSize: 10 }}>
-                {k.d} · 1h
-              </span>
-              <span className='spark'>
-                {k.t.map((v, j) => (
-                  <i
-                    key={j}
-                    style={{ height: v * 1.4 + 'px', background: k.c }}
-                  />
-                ))}
-              </span>
+              realtime metrics coming soon
             </div>
           </div>
         ))}
 
+        {/* ── Model bubble chart ── */}
         <div className='panel' style={{ gridColumn: 'span 7', padding: 18 }}>
           <div
             style={{
@@ -200,19 +279,19 @@ const HFDashboard = () => {
             }}
           >
             <div>
-              <div className='lbl'>model performance · cost vs latency</div>
+              <div className='lbl'>model usage · recent activity</div>
               <div className='display' style={{ fontSize: 18, marginTop: 2 }}>
-                Where to spend, where to swap
+                {logs.length > 0 ? 'Models from your last 5 requests' : 'No recent requests'}
               </div>
             </div>
             <span className='faint mono' style={{ fontSize: 10 }}>
-              circle area = qps · last 24h
+              {logs.length > 0 ? 'from recent logs' : 'sample layout'}
             </span>
           </div>
           <div
             style={{
               position: 'relative',
-              height: 320,
+              height: 260,
               marginTop: 18,
               borderLeft: '1px solid var(--hf-rule)',
               borderBottom: '1px solid var(--hf-rule)',
@@ -240,7 +319,7 @@ const HFDashboard = () => {
                 />
               </Fragment>
             ))}
-            {BUBBLES.map((b, i) => (
+            {displayBubbles.map((b, i) => (
               <div
                 key={i}
                 style={{
@@ -258,7 +337,7 @@ const HFDashboard = () => {
                 }}
               />
             ))}
-            {BUBBLES.filter((b) => b.r >= 10).map((b, i) => (
+            {displayBubbles.map((b, i) => (
               <div
                 key={i}
                 className='mono'
@@ -274,168 +353,78 @@ const HFDashboard = () => {
                 {b.m}
               </div>
             ))}
-            <div
-              className='lbl'
-              style={{ position: 'absolute', left: 0, bottom: -22 }}
-            >
-              p95 latency →
-            </div>
-            <div
-              className='lbl'
-              style={{
-                position: 'absolute',
-                left: -24,
-                top: 0,
-                transform: 'rotate(-90deg)',
-                transformOrigin: 'left top',
-              }}
-            >
-              $ / 1k tok →
-            </div>
           </div>
         </div>
 
+        {/* ── Recent activity table ── */}
         <div className='panel' style={{ gridColumn: 'span 5', padding: 18 }}>
           <div className='lbl' style={{ marginBottom: 10 }}>
-            active signals
+            recent activity
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {SIGNALS.map((a, i) => (
+          {loading && (
+            <div className='muted' style={{ fontSize: 12 }}>
+              Loading…
+            </div>
+          )}
+          {!loading && logs.length === 0 && (
+            <div className='muted' style={{ fontSize: 12 }}>
+              No recent requests found.
+            </div>
+          )}
+          {!loading && logs.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
               <div
-                key={i}
                 style={{
-                  display: 'flex',
-                  gap: 10,
-                  padding: '8px 10px',
-                  borderLeft: '2px solid var(--hf-' + a.sev + ')',
-                  background: 'var(--hf-paper)',
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr auto',
+                  padding: '4px 0 6px',
+                  borderBottom: '1px solid var(--hf-rule)',
+                  marginBottom: 4,
                 }}
               >
-                <div style={{ flex: 1 }}>
-                  <div className='strong' style={{ fontSize: 12 }}>
-                    {a.t}
-                  </div>
-                  <div
-                    className='muted mono'
-                    style={{ fontSize: 10, marginTop: 2 }}
-                  >
-                    {a.s}
-                  </div>
-                </div>
-                <button type='button' className='btn ghost sm'>
-                  →
-                </button>
+                <span className='lbl' style={{ fontSize: 10 }}>time</span>
+                <span className='lbl' style={{ fontSize: 10 }}>model</span>
+                <span className='lbl' style={{ fontSize: 10, textAlign: 'right' }}>cost</span>
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div className='panel' style={{ gridColumn: 'span 12', padding: 18 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
-            <div className='lbl'>cost drilldown</div>
-            <div className='mono muted' style={{ fontSize: 11 }}>
-              all
-              {drill.map((d, i) => (
-                <span key={i}>
-                  {' '}
-                  › <b style={{ color: 'var(--hf-ink)' }}>{d}</b>
-                </span>
-              ))}
-            </div>
-            {drill.length > 0 && (
-              <button
-                type='button'
-                className='btn ghost sm'
-                onClick={() => setDrill([])}
-              >
-                reset
-              </button>
-            )}
-            <span style={{ flex: 1 }} />
-            <span className='display' style={{ fontSize: 24 }}>
-              $24,182.40
-            </span>
-            <span className='muted' style={{ fontSize: 11 }}>
-              this month
-            </span>
-          </div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr 1fr',
-              gap: 14,
-              marginTop: 14,
-            }}
-          >
-            {DRILL_COLS.map((col, ci) => (
-              <div key={ci}>
-                <div className='lbl' style={{ marginBottom: 8 }}>
-                  {col.lvl}
-                </div>
-                {col.items.map((it, i) => {
-                  const total = col.items.reduce((s, x) => s + x[1], 0);
-                  const pct = ((it[1] / total) * 100).toFixed(1);
-                  return (
-                    <div
-                      key={i}
-                      onClick={() => setDrill([...drill, it[0]].slice(0, 3))}
+              {logs.map((log, i) => {
+                const model = log.model || log.ModelName || log.channel_name || '—';
+                const cost = log.quota != null ? `$${quotaToUSD(log.quota)}` : '—';
+                const ts = fmtTs(log.created_at || log.CreatedAt || null);
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr auto',
+                      padding: '7px 0',
+                      borderBottom: i < logs.length - 1 ? '1px dashed var(--hf-rule)' : 0,
+                      fontSize: 11,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <span className='mono muted' style={{ fontSize: 10 }}>
+                      {ts}
+                    </span>
+                    <span
+                      className='mono'
                       style={{
-                        padding: '8px 0',
-                        borderBottom: '1px dashed var(--hf-rule)',
-                        cursor: 'pointer',
+                        fontSize: 10,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        paddingRight: 6,
                       }}
                     >
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                        }}
-                      >
-                        <span>{it[0]}</span>
-                        <span className='mono strong'>
-                          ${it[1].toLocaleString()}
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          marginTop: 4,
-                        }}
-                      >
-                        <div
-                          style={{
-                            height: 4,
-                            flex: 1,
-                            background: 'var(--hf-sunken)',
-                          }}
-                        >
-                          <div
-                            style={{
-                              height: '100%',
-                              width: pct + '%',
-                              background: it[2],
-                            }}
-                          />
-                        </div>
-                        <span
-                          className='mono faint'
-                          style={{
-                            fontSize: 10,
-                            width: 36,
-                            textAlign: 'right',
-                          }}
-                        >
-                          {pct}%
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
+                      {model}
+                    </span>
+                    <span className='mono strong' style={{ fontSize: 10 }}>
+                      {cost}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </HFShell>

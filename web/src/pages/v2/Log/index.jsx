@@ -1,114 +1,49 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import HFShell from '../../../components/hifi/HFShell';
+import { API, showError } from '../../../helpers';
 
 /*
- * HiFi 1 — Log Trace + Error Clustering.
- * Ported from design canvas hifi/hf1-log.jsx (2026-05-07).
- * Data is hardcoded — wire to real /api/log endpoints in a follow-up story.
+ * v2 Log page — wired to GET /api/v2/:tenant_slug/logs.
+ * TTFT and upstream channel are not returned by the API; displayed as —.
  */
 
-const ROWS = [
-  {
-    ts: '14:02:11.481',
-    dur: 1843,
-    ttft: 412,
-    model: 'gpt-4o-mini',
-    up: 'openai/main',
-    tok: '1.2k→847',
-    cost: 0.0042,
-    status: 200,
-    tenant: 'acme',
-  },
-  {
-    ts: '14:02:09.220',
-    dur: 922,
-    ttft: 188,
-    model: 'claude-3.5-sonnet',
-    up: 'anthropic/eu',
-    tok: '0.8k→312',
-    cost: 0.009,
-    status: 200,
-    tenant: 'contoso',
-  },
-  {
-    ts: '14:02:07.014',
-    dur: 4810,
-    ttft: null,
-    model: 'gpt-4o',
-    up: 'openai/main',
-    tok: '2.4k→ —',
-    cost: 0,
-    status: 502,
-    tenant: 'acme',
-  },
-  {
-    ts: '14:02:05.901',
-    dur: 1102,
-    ttft: 295,
-    model: 'gemini-1.5-pro',
-    up: 'vertex/asia',
-    tok: '0.9k→621',
-    cost: 0.0031,
-    status: 200,
-    tenant: 'globex',
-  },
-  {
-    ts: '14:02:03.555',
-    dur: 680,
-    ttft: 140,
-    model: 'gpt-4o-mini',
-    up: 'openai/main',
-    tok: '0.4k→210',
-    cost: 0.0011,
-    status: 200,
-    tenant: 'acme',
-  },
-  {
-    ts: '14:02:01.118',
-    dur: 6021,
-    ttft: null,
-    model: 'gpt-4o',
-    up: 'openai/main',
-    tok: '3.1k→ —',
-    cost: 0,
-    status: 504,
-    tenant: 'acme',
-  },
-  {
-    ts: '14:01:58.802',
-    dur: 1521,
-    ttft: 322,
-    model: 'claude-3.5-sonnet',
-    up: 'anthropic/eu',
-    tok: '1.0k→480',
-    cost: 0.0072,
-    status: 200,
-    tenant: 'contoso',
-  },
-  {
-    ts: '14:01:56.011',
-    dur: 411,
-    ttft: 98,
-    model: 'gemini-1.5-flash',
-    up: 'vertex/asia',
-    tok: '0.3k→112',
-    cost: 0.0004,
-    status: 200,
-    tenant: 'globex',
-  },
-  {
-    ts: '14:01:54.220',
-    dur: 2102,
-    ttft: 510,
-    model: 'gpt-4o',
-    up: 'openai/main',
-    tok: '1.8k→680',
-    cost: 0.0118,
-    status: 429,
-    tenant: 'initech',
-  },
-];
+const QUOTA_PER_USD = 500_000;
 
+const useTenantSlug = () => {
+  const [slug, setSlug] = useState('default');
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem('tenant_slug');
+      if (s) setSlug(s);
+    } catch (_) {}
+  }, []);
+  return slug;
+};
+
+const fmtTime = (unixSec) => {
+  if (!unixSec) return '—';
+  const d = new Date(unixSec * 1000);
+  return d.toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    fractionalSecondDigits: 3,
+  });
+};
+
+const fmtTok = (prompt, completion) => {
+  const p = prompt ? `${(prompt / 1000).toFixed(1)}k` : '0';
+  const c = completion ? `${(completion / 1000).toFixed(1)}k` : '—';
+  return `${p}→${c}`;
+};
+
+const fmtCost = (quota) => {
+  if (!quota) return '—';
+  const usd = quota / QUOTA_PER_USD;
+  return `$${usd.toFixed(4)}`;
+};
+
+// Static data kept for cluster/live tabs (no backend endpoints for these yet)
 const CLUSTERS = [
   {
     count: 142,
@@ -148,16 +83,6 @@ const CLUSTERS = [
   },
 ];
 
-const WATERFALL = [
-  { l: 'gateway', a: 0, w: 18, c: 'var(--hf-ink-3)', t: '18ms' },
-  { l: 'auth', a: 18, w: 8, c: 'var(--hf-ink-3)', t: '8ms' },
-  { l: 'router', a: 26, w: 14, c: 'var(--hf-ink-3)', t: '14ms' },
-  { l: 'dns', a: 40, w: 32, c: 'var(--hf-info)', t: '32ms' },
-  { l: 'tcp+tls', a: 72, w: 88, c: 'var(--hf-info)', t: '88ms' },
-  { l: 'upstream', a: 160, w: 410, c: 'var(--hf-err)', t: '410ms · timeout' },
-  { l: 'meter+log', a: 570, w: 22, c: 'var(--hf-ink-3)', t: '22ms' },
-];
-
 const LIVE_ROWS = [
   ['14:02:11.481', '200', 'gpt-4o-mini', '847t', '$0.0042', 'acme'],
   ['14:02:11.122', '200', 'claude-3.5-sonnet', '312t', '$0.0090', 'contoso'],
@@ -169,10 +94,83 @@ const LIVE_ROWS = [
   ['14:02:08.991', '200', 'gemini-1.5-flash', '112t', '$0.0004', 'globex'],
 ];
 
+const PAGE_SIZE = 50;
+
 const HFLog = () => {
+  const tenantSlug = useTenantSlug();
+
   const [tab, setTab] = useState('trace');
-  const [selRow, setSelRow] = useState(2);
-  const [filters, setFilters] = useState(['model:gpt-4o', 'status:5xx']);
+  const [selRow, setSelRow] = useState(0);
+
+  // Logs state
+  const [logs, setLogs] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+
+  // Filter state
+  const [filterModel, setFilterModel] = useState('');
+  const [filterToken, setFilterToken] = useState('');
+  const [filterStart, setFilterStart] = useState('');
+  const [filterEnd, setFilterEnd] = useState('');
+
+  const fetchLogs = useCallback(async (currentPage, model, token, start, end) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: String(currentPage),
+        page_size: String(PAGE_SIZE),
+      });
+      if (model) params.set('model_name', model);
+      if (token) params.set('token_name', token);
+      if (start) params.set('start_time', String(Math.floor(new Date(start).getTime() / 1000)));
+      if (end) params.set('end_time', String(Math.floor(new Date(end).getTime() / 1000)));
+
+      const res = await API.get(`/api/v2/${tenantSlug}/logs?${params.toString()}`);
+      if (res?.data?.success) {
+        const d = res.data.data;
+        setLogs(d.logs ?? []);
+        setTotal(d.total ?? 0);
+        setSelRow(0);
+      } else {
+        showError(res?.data?.message || 'Failed to load logs');
+      }
+    } catch (_) {
+      // error toast shown by API interceptor
+    } finally {
+      setLoading(false);
+    }
+  }, [tenantSlug]);
+
+  // Fetch on mount and whenever tenantSlug changes
+  useEffect(() => {
+    if (tenantSlug) fetchLogs(page, filterModel, filterToken, filterStart, filterEnd);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantSlug]);
+
+  const applyFilters = () => {
+    setPage(1);
+    fetchLogs(1, filterModel, filterToken, filterStart, filterEnd);
+  };
+
+  const goPage = (next) => {
+    setPage(next);
+    fetchLogs(next, filterModel, filterToken, filterStart, filterEnd);
+  };
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const selectedLog = logs[selRow];
+
+  const inputStyle = {
+    fontFamily: 'var(--hf-mono)',
+    fontSize: 11,
+    padding: '4px 8px',
+    border: '1px solid var(--hf-rule)',
+    background: 'var(--hf-sunken)',
+    color: 'var(--hf-ink)',
+    borderRadius: 2,
+    outline: 'none',
+  };
 
   return (
     <HFShell
@@ -180,106 +178,73 @@ const HFLog = () => {
       crumbs={['my account', 'usage & logs']}
       actions={
         <>
-          <span className='lbl'>
-            <span
-              className='live-dot'
-              style={{
-                display: 'inline-block',
-                verticalAlign: 'middle',
-                marginRight: 6,
-              }}
-            />
-            live · 2s
+          <span className='muted mono' style={{ fontSize: 11 }}>
+            {loading ? 'loading…' : `${total} requests`}
           </span>
-          <button type='button' className='btn'>
-            last 1h ▾
-          </button>
-          <button type='button' className='btn primary'>
-            export
-          </button>
         </>
       }
     >
-      <div className='hf-page-head'>
-        <div>
-          <div className='lbl' style={{ marginBottom: 6 }}>
-            requests
-          </div>
-          <h1>
-            206 errors{' '}
-            <span className='muted' style={{ fontWeight: 400 }}>
-              across 12,481 requests
-            </span>
-          </h1>
-          <div className='sub'>
-            streaming · last 1 hour · meilisearch indexed
-          </div>
-        </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 28 }}>
-          {[
-            ['avg ttft', '412ms', 'var(--hf-ok)'],
-            ['p95 dur', '2.10s', 'var(--hf-ink)'],
-            ['error rate', '1.65%', 'var(--hf-err)'],
-            ['hot model', 'gpt-4o', 'var(--hf-ink)'],
-          ].map(([l, v, c], i) => (
-            <div key={i}>
-              <div className='lbl'>{l}</div>
-              <div
-                className='display'
-                style={{ fontSize: 22, color: c, marginTop: 2 }}
-              >
-                {v}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
+      {/* Filter bar */}
       <div
         style={{
-          padding: '14px 28px',
+          padding: '10px 28px',
           display: 'flex',
           alignItems: 'center',
           gap: 10,
           borderBottom: '1px solid var(--hf-rule)',
           background: 'var(--hf-paper)',
+          flexWrap: 'wrap',
         }}
       >
-        <div className='field' style={{ flex: 1, height: 34 }}>
-          <span className='faint'>⌕</span>
-          {filters.map((f, i) => (
-            <span
-              key={i}
-              className='pill'
-              style={{ background: 'var(--hf-sunken)' }}
-            >
-              {f}
-              <button
-                type='button'
-                onClick={() => setFilters(filters.filter((_, j) => j !== i))}
-                style={{
-                  border: 0,
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  color: 'var(--hf-ink-3)',
-                  padding: 0,
-                  marginLeft: 2,
-                }}
-              >
-                ×
-              </button>
-            </span>
-          ))}
-          <span style={{ color: 'var(--hf-ink-4)' }}>add filter…</span>
-          <span style={{ marginLeft: 'auto', color: 'var(--hf-ink-4)' }}>
-            meili · 12ms
-          </span>
-        </div>
-        <button type='button' className='btn'>
-          save query
+        <input
+          style={{ ...inputStyle, width: 160 }}
+          placeholder='model name…'
+          value={filterModel}
+          onChange={(e) => setFilterModel(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+        />
+        <input
+          style={{ ...inputStyle, width: 140 }}
+          placeholder='token name…'
+          value={filterToken}
+          onChange={(e) => setFilterToken(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+        />
+        <input
+          style={{ ...inputStyle, width: 160 }}
+          type='datetime-local'
+          title='start time'
+          value={filterStart}
+          onChange={(e) => setFilterStart(e.target.value)}
+        />
+        <span className='muted' style={{ fontSize: 11 }}>→</span>
+        <input
+          style={{ ...inputStyle, width: 160 }}
+          type='datetime-local'
+          title='end time'
+          value={filterEnd}
+          onChange={(e) => setFilterEnd(e.target.value)}
+        />
+        <button type='button' className='btn primary' onClick={applyFilters}>
+          search
+        </button>
+        <button
+          type='button'
+          className='btn ghost'
+          onClick={() => {
+            setFilterModel('');
+            setFilterToken('');
+            setFilterStart('');
+            setFilterEnd('');
+            setPage(1);
+            fetchLogs(1, '', '', '', '');
+          }}
+        >
+          clear
         </button>
       </div>
 
+      {/* Tabs */}
       <div
         style={{
           display: 'flex',
@@ -289,8 +254,8 @@ const HFLog = () => {
         }}
       >
         {[
-          ['trace', 'Trace stream', '12,481'],
-          ['cluster', 'Error clusters', '4'],
+          ['trace', 'Requests', total || ''],
+          ['cluster', 'Error clusters', CLUSTERS.length],
           ['live', 'Live tail', '⏵'],
         ].map(([k, l, c]) => (
           <button
@@ -321,261 +286,223 @@ const HFLog = () => {
         ))}
       </div>
 
+      {/* ── Trace tab ── */}
       {tab === 'trace' && (
         <div
           style={{
-            display: 'grid',
-            gridTemplateColumns: '1.5fr 1fr',
-            minHeight: 0,
-            height: 'calc(100vh - 296px)',
+            display: 'flex',
+            flexDirection: 'column',
+            height: 'calc(100vh - 270px)',
           }}
         >
           <div
             style={{
-              borderRight: '1px solid var(--hf-rule)',
-              overflow: 'auto',
+              display: 'grid',
+              gridTemplateColumns: '1.5fr 1fr',
+              minHeight: 0,
+              flex: 1,
             }}
           >
-            <table className='t'>
-              <thead>
-                <tr>
-                  <th>timestamp</th>
-                  <th>dur</th>
-                  <th>ttft</th>
-                  <th>model</th>
-                  <th>upstream</th>
-                  <th>tenant</th>
-                  <th>tok</th>
-                  <th>$</th>
-                  <th>code</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ROWS.map((r, i) => (
-                  <tr
-                    key={i}
-                    onClick={() => setSelRow(i)}
-                    style={{
-                      background: selRow === i ? 'var(--hf-sunken)' : undefined,
-                      cursor: 'pointer',
-                      borderLeft:
-                        selRow === i
-                          ? '2px solid var(--hf-accent)'
-                          : '2px solid transparent',
-                    }}
-                  >
-                    <td className='mono muted'>{r.ts}</td>
-                    <td className='mono'>
-                      {r.dur}
-                      <span className='faint'>ms</span>
-                    </td>
-                    <td className='mono'>{r.ttft ? r.ttft + 'ms' : '—'}</td>
-                    <td className='strong'>{r.model}</td>
-                    <td className='mono muted'>{r.up}</td>
-                    <td className='mono'>{r.tenant}</td>
-                    <td className='mono muted'>{r.tok}</td>
-                    <td className='mono'>
-                      {r.cost ? '$' + r.cost.toFixed(4) : '—'}
-                    </td>
-                    <td>
-                      <span
-                        className={
-                          'tag ' +
-                          (r.status >= 500
-                            ? 'err'
-                            : r.status >= 400
-                              ? 'warn'
-                              : 'ok')
-                        }
-                      >
-                        {r.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div style={{ overflow: 'auto', background: 'var(--hf-paper)' }}>
+            {/* Log table */}
             <div
               style={{
-                padding: '20px 22px',
-                borderBottom: '1px solid var(--hf-rule)',
+                borderRight: '1px solid var(--hf-rule)',
+                overflow: 'auto',
               }}
             >
-              <div className='lbl' style={{ marginBottom: 4 }}>
-                request · {ROWS[selRow].ts}
-              </div>
-              <div className='display' style={{ fontSize: 19 }}>
-                POST /v1/chat/completions
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 8,
-                  marginTop: 8,
-                  alignItems: 'center',
-                }}
-              >
-                <span
-                  className={
-                    'tag ' +
-                    (ROWS[selRow].status >= 500
-                      ? 'err'
-                      : ROWS[selRow].status >= 400
-                        ? 'warn'
-                        : 'ok')
-                  }
-                >
-                  {ROWS[selRow].status}
-                </span>
-                <span className='pill'>{ROWS[selRow].model}</span>
-                <span className='pill'>{ROWS[selRow].dur}ms</span>
-                <span className='muted mono' style={{ marginLeft: 'auto' }}>
-                  req_1f4a...e90c
-                </span>
-              </div>
+              {loading && (
+                <div className='muted' style={{ padding: '20px 22px', fontSize: 12 }}>
+                  Loading…
+                </div>
+              )}
+
+              {!loading && logs.length === 0 && (
+                <div className='muted' style={{ padding: '20px 22px', fontSize: 12 }}>
+                  No logs found.
+                </div>
+              )}
+
+              {!loading && logs.length > 0 && (
+                <table className='t'>
+                  <thead>
+                    <tr>
+                      <th>timestamp</th>
+                      <th>dur</th>
+                      <th>ttft</th>
+                      <th>model</th>
+                      <th>upstream</th>
+                      <th>token</th>
+                      <th>tok</th>
+                      <th>$</th>
+                      <th>code</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logs.map((r, i) => (
+                      <tr
+                        key={r.Id ?? i}
+                        onClick={() => setSelRow(i)}
+                        style={{
+                          background: selRow === i ? 'var(--hf-sunken)' : undefined,
+                          cursor: 'pointer',
+                          borderLeft:
+                            selRow === i
+                              ? '2px solid var(--hf-accent)'
+                              : '2px solid transparent',
+                        }}
+                      >
+                        <td className='mono muted'>{fmtTime(r.CreatedAt)}</td>
+                        <td className='mono'>
+                          {r.Duration ?? '—'}
+                          {r.Duration != null && <span className='faint'>ms</span>}
+                        </td>
+                        <td className='mono'>—</td>
+                        <td className='strong'>{r.ModelName || '—'}</td>
+                        <td className='mono muted'>—</td>
+                        <td className='mono muted'>{r.TokenName || '—'}</td>
+                        <td className='mono muted'>{fmtTok(r.PromptTokens, r.CompletionTokens)}</td>
+                        <td className='mono'>{fmtCost(r.Quota)}</td>
+                        <td>
+                          <span className='tag ok'>200</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
 
-            <div style={{ padding: 20 }}>
-              <div className='lbl' style={{ marginBottom: 8 }}>
-                waterfall
-              </div>
-              <div className='panel-paper' style={{ padding: 12 }}>
-                {WATERFALL.map((b, i) => (
+            {/* Detail panel */}
+            <div style={{ overflow: 'auto', background: 'var(--hf-paper)' }}>
+              {selectedLog ? (
+                <>
                   <div
-                    key={i}
                     style={{
-                      display: 'grid',
-                      gridTemplateColumns: '74px 1fr 110px',
-                      alignItems: 'center',
-                      height: 22,
-                      fontSize: 10,
+                      padding: '20px 22px',
+                      borderBottom: '1px solid var(--hf-rule)',
                     }}
                   >
-                    <span className='mono muted'>{b.l}</span>
-                    <span
+                    <div className='lbl' style={{ marginBottom: 4 }}>
+                      request · {fmtTime(selectedLog.CreatedAt)}
+                    </div>
+                    <div className='display' style={{ fontSize: 19 }}>
+                      {selectedLog.ModelName || '—'}
+                    </div>
+                    <div
                       style={{
-                        position: 'relative',
-                        height: 8,
-                        background: 'transparent',
+                        display: 'flex',
+                        gap: 8,
+                        marginTop: 8,
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
                       }}
                     >
-                      <span
-                        style={{
-                          position: 'absolute',
-                          left: 0,
-                          right: 0,
-                          top: 3,
-                          borderTop: '1px dashed var(--hf-rule)',
-                        }}
-                      />
-                      <span
-                        style={{
-                          position: 'absolute',
-                          left: (b.a / 600) * 100 + '%',
-                          width: (b.w / 600) * 100 + '%',
-                          height: 8,
-                          background: b.c,
-                          borderRadius: 1,
-                        }}
-                      />
-                    </span>
-                    <span className='mono muted' style={{ textAlign: 'right' }}>
-                      {b.t}
-                    </span>
+                      <span className='tag ok'>200</span>
+                      {selectedLog.ModelName && (
+                        <span className='pill'>{selectedLog.ModelName}</span>
+                      )}
+                      {selectedLog.Duration != null && (
+                        <span className='pill'>{selectedLog.Duration}ms</span>
+                      )}
+                      {selectedLog.IsStream && (
+                        <span className='pill'>stream</span>
+                      )}
+                    </div>
                   </div>
-                ))}
-              </div>
 
-              <div className='lbl' style={{ margin: '16px 0 8px' }}>
-                request transformation · client → upstream
-              </div>
-              <div
-                className='panel-paper'
-                style={{
-                  padding: 12,
-                  fontFamily: 'var(--hf-mono)',
-                  fontSize: 11,
-                  lineHeight: 1.7,
-                }}
-              >
-                <div>
-                  <span className='muted'>model:</span> gpt-4o{' '}
-                  <span className='faint'>→</span>{' '}
-                  <span className='acc'>gpt-4o-2024-08-06</span>{' '}
-                  <span className='tag info' style={{ marginLeft: 4 }}>
-                    aliased
-                  </span>
-                </div>
-                <div>
-                  <span className='muted'>temperature:</span>{' '}
-                  <span className='faint'>—</span>{' '}
-                  <span className='faint'>→</span> 0.7{' '}
-                  <span className='tag warn' style={{ marginLeft: 4 }}>
-                    injected
-                  </span>
-                </div>
-                <div>
-                  <span className='muted'>max_tokens:</span> 4096
-                </div>
-                <div>
-                  <span className='muted'>messages:</span> 12 entries · 2,408
-                  tokens
-                </div>
-                <div>
-                  <span className='muted'>headers:</span>{' '}
-                  <span className='faint'>
-                    + x-tenant-id, + x-trace-id, − authorization
-                  </span>
-                </div>
-              </div>
-
-              <div className='lbl' style={{ margin: '16px 0 8px' }}>
-                error
-              </div>
-              <pre
-                className='panel-paper mono'
-                style={{
-                  margin: 0,
-                  padding: 12,
-                  fontSize: 10,
-                  color: 'var(--hf-err)',
-                  whiteSpace: 'pre-wrap',
-                }}
-              >
-                {`{
-  "error": {
-    "type": "upstream_timeout",
-    "code": 504,
-    "message": "upstream did not respond within 60s",
-    "upstream": "api.openai.com",
-    "trace_id": "1f4a...e90c"
-  }
-}`}
-              </pre>
-
-              <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
-                <button type='button' className='btn'>
-                  copy as cURL
-                </button>
-                <button type='button' className='btn'>
-                  replay
-                </button>
-                <button type='button' className='btn'>
-                  open in playground
-                </button>
-              </div>
+                  <div style={{ padding: 20 }}>
+                    <div className='lbl' style={{ marginBottom: 8 }}>details</div>
+                    <div className='panel-paper' style={{ padding: 12, fontFamily: 'var(--hf-mono)', fontSize: 11, lineHeight: 1.7 }}>
+                      <div>
+                        <span className='muted'>model:</span>{' '}
+                        {selectedLog.ModelName || '—'}
+                      </div>
+                      <div>
+                        <span className='muted'>token name:</span>{' '}
+                        {selectedLog.TokenName || '—'}
+                      </div>
+                      <div>
+                        <span className='muted'>prompt tokens:</span>{' '}
+                        {selectedLog.PromptTokens ?? '—'}
+                      </div>
+                      <div>
+                        <span className='muted'>completion tokens:</span>{' '}
+                        {selectedLog.CompletionTokens ?? '—'}
+                      </div>
+                      <div>
+                        <span className='muted'>cost:</span>{' '}
+                        {fmtCost(selectedLog.Quota)}
+                      </div>
+                      <div>
+                        <span className='muted'>duration:</span>{' '}
+                        {selectedLog.Duration != null ? `${selectedLog.Duration}ms` : '—'}
+                      </div>
+                      <div>
+                        <span className='muted'>streaming:</span>{' '}
+                        {selectedLog.IsStream ? 'yes' : 'no'}
+                      </div>
+                      {selectedLog.Content && (
+                        <div>
+                          <span className='muted'>note:</span>{' '}
+                          {selectedLog.Content}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                !loading && (
+                  <div className='muted' style={{ padding: '20px 22px', fontSize: 12 }}>
+                    Select a row to view details.
+                  </div>
+                )
+              )}
             </div>
+          </div>
+
+          {/* Pagination */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '10px 28px',
+              borderTop: '1px solid var(--hf-rule)',
+              background: 'var(--hf-paper)',
+              fontSize: 12,
+            }}
+          >
+            <button
+              type='button'
+              className='btn'
+              disabled={page <= 1 || loading}
+              onClick={() => goPage(page - 1)}
+            >
+              ← prev
+            </button>
+            <span className='mono muted'>
+              page {page} of {totalPages}
+            </span>
+            <button
+              type='button'
+              className='btn'
+              disabled={page >= totalPages || loading}
+              onClick={() => goPage(page + 1)}
+            >
+              next →
+            </button>
+            <span className='muted' style={{ marginLeft: 'auto' }}>
+              {total} total · {PAGE_SIZE} per page
+            </span>
           </div>
         </div>
       )}
 
+      {/* ── Cluster tab (static mockup) ── */}
       {tab === 'cluster' && (
         <div style={{ padding: 24 }}>
           <div className='lbl' style={{ marginBottom: 10 }}>
-            206 errors · 4 clusters · last 1h
+            error clusters · demo data
           </div>
           <div className='panel'>
             <table className='t'>
@@ -614,10 +541,7 @@ const HFLog = () => {
                     <td>
                       <span className='spark err' style={{ height: 28 }}>
                         {c.trend.map((v, j) => (
-                          <i
-                            key={j}
-                            style={{ height: Math.max(2, v * 1.0) + 'px' }}
-                          />
+                          <i key={j} style={{ height: Math.max(2, v * 1.0) + 'px' }} />
                         ))}
                       </span>
                     </td>
@@ -632,95 +556,14 @@ const HFLog = () => {
               </tbody>
             </table>
           </div>
-
-          <div className='lbl' style={{ margin: '24px 0 10px' }}>
-            cluster #1 · upstream_timeout · 142 events · 6 tenants affected
-          </div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1.4fr 1fr',
-              gap: 14,
-            }}
-          >
-            <div className='panel' style={{ padding: 16 }}>
-              <div className='lbl'>representative payload</div>
-              <pre
-                className='mono'
-                style={{
-                  margin: '8px 0 0',
-                  fontSize: 10,
-                  color: 'var(--hf-ink-2)',
-                  whiteSpace: 'pre-wrap',
-                }}
-              >
-                {`HTTP/1.1 504 Gateway Timeout
-content-type: application/json
-x-trace-id: 1f4a-e90c-…
-x-upstream: api.openai.com
-
-{
-  "error": {
-    "type": "upstream_timeout",
-    "message": "upstream did not respond within 60s"
-  }
-}`}
-              </pre>
-            </div>
-            <div className='panel' style={{ padding: 16 }}>
-              <div className='lbl'>impact</div>
-              <ul
-                style={{
-                  margin: '8px 0 0',
-                  paddingLeft: 16,
-                  fontSize: 12,
-                  color: 'var(--hf-ink-2)',
-                }}
-              >
-                <li>
-                  tenants: <b>acme</b>, contoso, foobar{' '}
-                  <span className='faint'>(+3)</span>
-                </li>
-                <li>tokens: 23 unique</li>
-                <li>
-                  first seen: <b>14:01:55</b> · last: <b>14:02:09</b>
-                </li>
-                <li>
-                  retry success:{' '}
-                  <span style={{ color: 'var(--hf-ok)' }}>62%</span> on fallback
-                  (azure/eu)
-                </li>
-                <li>
-                  est. revenue impact: <b>$2.40</b>
-                </li>
-              </ul>
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 6,
-                  marginTop: 16,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <button type='button' className='btn acc'>
-                  route around
-                </button>
-                <button type='button' className='btn'>
-                  silence 1h
-                </button>
-                <button type='button' className='btn'>
-                  create incident
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
+      {/* ── Live tail tab (static mockup) ── */}
       {tab === 'live' && (
-        <div style={{ padding: 24, height: 'calc(100vh - 296px)' }}>
+        <div style={{ padding: 24, height: 'calc(100vh - 270px)' }}>
           <div className='lbl' style={{ marginBottom: 8 }}>
-            live tail · streaming
+            live tail · demo data
           </div>
           <div
             style={{
