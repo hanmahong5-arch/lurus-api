@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import TenantSwitcher from './TenantSwitcher';
+import { API } from '../../helpers';
 
 // Single source of truth: pathname suffix → nav item id.
 // HFShell uses this to auto-highlight the active item when caller doesn't
@@ -160,10 +161,44 @@ const NAV_SECTIONS = [
   },
 ];
 
+// Pull the bridged user identity directly from localStorage — set by
+// ZitadelRedirect/zita-bootstrap. The v2 hi-fi shell intentionally
+// avoids the StatusContext/UserContext used by the legacy chrome (those
+// pull a chunk of v1 state we don't need here); a thin localStorage
+// read is enough to surface "who am I" + a logout escape hatch.
+const useBridgedUser = () => {
+  const [user, setUser] = useState(null);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('user');
+      if (raw) setUser(JSON.parse(raw));
+    } catch (e) {
+      // malformed payload — leave user null, the logout button still works
+    }
+  }, []);
+  return user;
+};
+
+const handleLogout = async () => {
+  try {
+    await API.post('/api/v2/auth/zita-logout');
+  } catch (e) {
+    // session may already be expired; the cookie clear still happened
+  }
+  try {
+    localStorage.removeItem('user');
+    localStorage.removeItem('tenant_slug');
+  } catch (e) {
+    // ignore — private mode / disabled storage
+  }
+  window.location.href = '/login';
+};
+
 const HFShell = ({ active, crumbs = [], actions, children }) => {
   const autoActive = useV2ActiveId();
   const activeId = active != null ? active : autoActive;
   const [theme, toggleTheme] = useThemeToggle();
+  const user = useBridgedUser();
   return (
     <div className='hf hf-shell'>
       <aside className='hf-side'>
@@ -243,6 +278,32 @@ const HFShell = ({ active, crumbs = [], actions, children }) => {
               style={{ fontSize: 14, padding: '0 8px' }}
             >
               {theme === 'dark' ? '☀' : '◐'}
+            </button>
+            {user && (
+              <span
+                style={{
+                  fontSize: 12,
+                  color: 'var(--hf-ink-2)',
+                  padding: '0 6px',
+                  maxWidth: 160,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={user.email || user.username}
+              >
+                {user.display_name || user.username}
+              </span>
+            )}
+            <button
+              type='button'
+              className='btn ghost'
+              onClick={user ? handleLogout : () => { window.location.href = '/login'; }}
+              title={user ? 'log out' : 'log in'}
+              aria-label={user ? 'log out' : 'log in'}
+              style={{ fontSize: 12, padding: '0 10px' }}
+            >
+              {user ? 'logout' : 'login'}
             </button>
           </div>
         </div>

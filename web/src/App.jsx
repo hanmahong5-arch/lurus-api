@@ -118,15 +118,16 @@ function App() {
           }
         />
         <Route path='/forbidden' element={<Forbidden />} />
-        {/* ─── Aggressive: legacy console paths redirect to v2 ─── */}
-        {/* Legacy still reachable at /console/legacy/* for fallback during transition. */}
-        <Route path='/console/models' element={<Navigate to='/console/v2/models' replace />} />
-        <Route path='/console/channel' element={<Navigate to='/console/v2/channel' replace />} />
-        <Route path='/console/token' element={<Navigate to='/console/v2/token' replace />} />
-        <Route path='/console/playground' element={<Navigate to='/console/v2/playground' replace />} />
+        {/* /console/* land on the wired v1 pages until the v2-wiring epic
+            ships. The v2 hi-fi mockups remain reachable directly at
+            /console/v2/* for design preview but no longer trap real users. */}
+        <Route path='/console/models' element={<Navigate to='/console/legacy/models' replace />} />
+        <Route path='/console/channel' element={<Navigate to='/console/legacy/channel' replace />} />
+        <Route path='/console/token' element={<Navigate to='/console/legacy/token' replace />} />
+        <Route path='/console/playground' element={<Navigate to='/console/legacy/playground' replace />} />
         <Route
           path='/console/deployment'
-          element={<Navigate to='/console/v2/models?tab=deployment' replace />}
+          element={<Navigate to='/console/legacy/models' replace />}
         />
         <Route
           path='/console/legacy/models'
@@ -249,9 +250,12 @@ function App() {
             </PrivateRoute>
           }
         />
-        {/* Aggressive: /console + /console/log → v2. Legacy at /console/legacy/*. */}
-        <Route path='/console/log' element={<Navigate to='/console/v2/log' replace />} />
-        <Route path='/console' element={<Navigate to='/console/v2/dashboard' replace />} />
+        {/* v2 hi-fi screens are static design mockups (zero API calls); the
+            v2-wiring epic will progressively connect them. Until then, the
+            entry-level redirects land on the wired v1 pages so logged-in
+            users get a functional console instead of a button gallery. */}
+        <Route path='/console/log' element={<Navigate to='/console/legacy/log' replace />} />
+        <Route path='/console' element={<Navigate to='/console/legacy/dashboard' replace />} />
         <Route
           path='/console/legacy/log'
           element={
