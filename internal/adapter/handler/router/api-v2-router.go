@@ -43,6 +43,20 @@ func SetApiV2Router(router *gin.Engine) {
 		apiV2.GET("/:tenant_slug/user/me", middleware.UserAuth(), handler.GetSelf)
 
 		// ================================================================
+		// Tenant-scoped Token Management (session auth)
+		// ================================================================
+
+		tenantTokens := apiV2.Group("/:tenant_slug/tokens")
+		tenantTokens.Use(middleware.UserAuth())
+		{
+			tenantTokens.GET("", handler.ListTokensV2)
+			tenantTokens.POST("", handler.CreateTokenV2)
+			tenantTokens.PUT("/:id", handler.UpdateTokenV2)
+			tenantTokens.DELETE("/:id", handler.DeleteTokenV2)
+			tenantTokens.POST("/:id/rotate", handler.RotateTokenV2)
+		}
+
+		// ================================================================
 		// Switch Public Routes (no authentication required)
 		// ================================================================
 

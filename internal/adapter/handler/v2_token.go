@@ -387,3 +387,54 @@ func DeleteTokenV2(c *gin.Context) {
 		"message": "Token deleted successfully",
 	})
 }
+
+// RotateTokenV2 generates a new key for an existing token, invalidating the old one.
+// Route: POST /api/v2/:tenant_slug/tokens/:id/rotate
+func RotateTokenV2(c *gin.Context) {
+	tenantCtx, err := middleware.GetTenantContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Tenant context not found"})
+		return
+	}
+
+	tokenID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid token ID"})
+		return
+	}
+
+	token, err := repo.GetTokenByIds(tokenID, tenantCtx.UserID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Token not found"})
+		return
+	}
+
+	if token.TenantId != tenantCtx.TenantID {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Access denied"})
+		return
+	}
+
+	newKey, err := app.GenerateTokenKey()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to generate new key"})
+		return
+	}
+
+	if err = token.RotateKey(newKey); err != nil {
+		common.SysError("Failed to rotate token key: " + err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to rotate token key"})
+		return
+	}
+
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorUser, tenantCtx.UserID,
+		governance.ActionTokenUpdated, governance.ResourceToken, tokenID, `{"action":"rotate"}`))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Token key rotated successfully",
+		"data": gin.H{
+			"id":  token.Id,
+			"key": "sk-" + newKey,
+		},
+	})
+}

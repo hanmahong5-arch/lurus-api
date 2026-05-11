@@ -238,6 +238,24 @@ func (token *Token) SelectUpdate() (err error) {
 	return DB.Model(token).Select("accessed_time", "status").Updates(token).Error
 }
 
+// RotateKey replaces the token's key atomically, updating the cache entry.
+func (token *Token) RotateKey(newKey string) (err error) {
+	oldKey := token.Key
+	token.Key = newKey
+	defer func() {
+		if shouldUpdateRedis(true, err) {
+			gopool.Go(func() {
+				_ = cacheDeleteToken(oldKey)
+				if e := cacheSetToken(*token); e != nil {
+					common.SysLog("failed to update token cache after rotation: " + e.Error())
+				}
+			})
+		}
+	}()
+	err = DB.Model(token).Update("key", newKey).Error
+	return err
+}
+
 func (token *Token) Delete() (err error) {
 	defer func() {
 		if shouldUpdateRedis(true, err) {
