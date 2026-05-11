@@ -57,6 +57,34 @@ func SetApiV2Router(router *gin.Engine) {
 		}
 
 		// ================================================================
+		// Tenant-scoped Channel Management (session auth — admin only)
+		// ================================================================
+
+		tenantChannels := apiV2.Group("/:tenant_slug/channels")
+		tenantChannels.Use(middleware.AdminAuth())
+		{
+			tenantChannels.GET("", handler.ListChannelsV2)
+			tenantChannels.GET("/:id", handler.GetChannelV2)
+			tenantChannels.POST("", handler.CreateChannelV2)
+			tenantChannels.PUT("/:id", handler.UpdateChannelV2)
+			tenantChannels.DELETE("/:id", handler.DeleteChannelV2)
+		}
+
+		// ================================================================
+		// Tenant-scoped Logs (session auth)
+		// ================================================================
+
+		tenantLogs := apiV2.Group("/:tenant_slug/logs")
+		tenantLogs.Use(middleware.UserAuth())
+		{
+			tenantLogs.GET("", handler.GetLogsV2)
+			tenantLogs.GET("/all", handler.GetAllLogsV2)
+		}
+
+		// Settings — PUT for profile update (GET already registered above)
+		apiV2.PUT("/:tenant_slug/user/me", middleware.UserAuth(), handler.UpdateSelfV2)
+
+		// ================================================================
 		// Switch Public Routes (no authentication required)
 		// ================================================================
 
