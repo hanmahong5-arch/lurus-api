@@ -2,7 +2,7 @@
 
 **Epic**: 11 (v1 Web UI 退役)
 **Priority**: P1 — blocks 11-3 (v1 sunset)
-**Status**: In Progress — all 6 pages wired (2026-05-11), redirect flip + e2e pending
+**Status**: ✅ DONE (2026-05-12) — all 6 pages wired, redirects flipped, auth TenantContext fixed. e2e against staging ⏳ pending
 **Sized**: 2-3 weeks engineering, single-developer pace
 **Discovered by**: Layer C bridge browser e2e (2026-05-10)
 
@@ -61,8 +61,8 @@ Epic 11 plan reads:
 3. ✅ **Day 6-7**: Logs + Settings — log filter/pagination + profile inline edit (2026-05-11, swarm)
 4. ✅ **Day 8-10**: Tenants — CRUD + enable/disable/suspend + stats drawer (2026-05-11, swarm)
 5. ✅ **Day 11-12**: Dashboard — real KPI cards + recent logs + model bubbles (2026-05-11, swarm)
-6. ⏳ **Day 13-14**: Re-point `/console` redirects back to v2 + remove hotfix
-7. ⏳ **Day 15**: Story 11-3 (v1 sunset) unblocked
+6. ✅ **Day 13-14**: Re-point `/console` redirects back to v2 + fix session TenantContext gap (2026-05-12)
+7. ✅ **Day 15**: Story 11-3 (v1 sunset) unblocked
 
 ## Definition of Done
 
