@@ -202,6 +202,19 @@ func authHelper(c *gin.Context, minRole int) {
 	}
 	repo.InjectTenantContext(c, tenantId, userId)
 
+	// Also set the structured TenantContext so v2 handlers (which call
+	// GetTenantContext) work for users authenticated via session/access-token,
+	// not only via Zitadel JWT.
+	emailVal, _ := c.Get("email")
+	email, _ := emailVal.(string)
+	c.Set("tenant_context", &TenantContext{
+		TenantID:  tenantId,
+		UserID:    userId,
+		Email:     email,
+		Username:  usernameVal,
+		Roles:     []string{},
+	})
+
 	c.Next()
 }
 

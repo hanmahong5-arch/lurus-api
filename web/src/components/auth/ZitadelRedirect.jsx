@@ -37,12 +37,8 @@ const ZitadelRedirect = (_props) => {
         if (cancelled) return;
         if (res?.data?.success && res.data.data?.id) {
           localStorage.setItem('user', JSON.stringify(res.data.data));
-          // Land on the wired v1 dashboard, NOT /console/v2/dashboard. The
-          // v2 hi-fi screens are static design mockups (zero API calls);
-          // dropping a logged-in user there gives them buttons that don't
-          // do anything. Re-point to v2 once the v2-wiring epic ships.
           window.location.replace(
-            window.location.origin + '/console/legacy/dashboard'
+            window.location.origin + '/console/v2/dashboard'
           );
           return;
         }

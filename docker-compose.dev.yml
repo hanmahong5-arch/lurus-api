@@ -1,0 +1,45 @@
+# Local development — infrastructure only.
+# Go backend runs on host (go run ./cmd/server) to resolve local replace directives.
+# Frontend dev server: cd web && bun install && bun run dev (port 5173, proxies to :3000)
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up -d
+#   cp .env.dev .env && go run ./cmd/server
+#   cd web && bun run dev
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: newhub-dev-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    networks:
+      - newhub-dev
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: newhub-dev-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: "123456"
+      POSTGRES_DB: newhub
+    ports:
+      - "5434:5432"
+    volumes:
+      - newhub_dev_pg:/var/lib/postgresql/data
+    networks:
+      - newhub-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d newhub"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  newhub_dev_pg:
+
+networks:
+  newhub-dev:
+    driver: bridge
