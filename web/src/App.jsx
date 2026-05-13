@@ -28,26 +28,20 @@ import Forbidden from './pages/Forbidden';
 import Setting from './pages/Setting';
 import { StatusContext } from './context/Status';
 
-import Channel from './pages/Channel';
 import OpenRouterSync from './pages/OpenRouterSync';
-import Token from './pages/Token';
 import Redemption from './pages/Redemption';
 import TopUp from './pages/TopUp';
-import Log from './pages/Log';
 import Chat from './pages/Chat';
 import Chat2Link from './pages/Chat2Link';
 import Midjourney from './pages/Midjourney';
 import Pricing from './pages/Pricing';
 import Task from './pages/Task';
-import ModelPage from './pages/Model';
-import Playground from './pages/Playground';
 import ZitadelCallback from './components/auth/ZitadelCallback';
 import PersonalSetting from './components/settings/PersonalSetting';
 import Setup from './pages/Setup';
 import SetupCheck from './components/layout/SetupCheck';
 
 const Home = lazy(() => import('./pages/Home'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
 const About = lazy(() => import('./pages/About'));
 const UserAgreement = lazy(() => import('./pages/UserAgreement'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
@@ -118,48 +112,28 @@ function App() {
           }
         />
         <Route path='/forbidden' element={<Forbidden />} />
-        {/* v2 pages fully wired (story-11-2 shipped). Redirect /console/*
-            to the v2 hi-fi surfaces. Legacy routes kept as escape hatch
-            for one sprint post-launch (then sunset per story-11-3). */}
-        <Route path='/console/models' element={<Navigate to='/console/v2/models' replace />} />
-        <Route path='/console/channel' element={<Navigate to='/console/v2/channel' replace />} />
-        <Route path='/console/token' element={<Navigate to='/console/v2/token' replace />} />
-        <Route path='/console/playground' element={<Navigate to='/console/v2/playground' replace />} />
+        {/* v2 pages fully wired (story-11-2). /console/* redirects to the
+            v2 hi-fi surfaces. /console/legacy/* escape-hatch routes
+            removed in story-11-3 (v1 web UI sunset, 2026-05-12). */}
         <Route
-          path='/console/deployment'
+          path='/console/models'
           element={<Navigate to='/console/v2/models' replace />}
         />
         <Route
-          path='/console/legacy/models'
-          element={
-            <AdminRoute>
-              <ModelPage />
-            </AdminRoute>
-          }
+          path='/console/channel'
+          element={<Navigate to='/console/v2/channel' replace />}
         />
         <Route
-          path='/console/legacy/channel'
-          element={
-            <AdminRoute>
-              <Channel />
-            </AdminRoute>
-          }
+          path='/console/token'
+          element={<Navigate to='/console/v2/token' replace />}
         />
         <Route
-          path='/console/legacy/token'
-          element={
-            <PrivateRoute>
-              <Token />
-            </PrivateRoute>
-          }
+          path='/console/playground'
+          element={<Navigate to='/console/v2/playground' replace />}
         />
         <Route
-          path='/console/legacy/playground'
-          element={
-            <PrivateRoute>
-              <Playground />
-            </PrivateRoute>
-          }
+          path='/console/deployment'
+          element={<Navigate to='/console/v2/models' replace />}
         />
         <Route
           path='/console/openrouter-sync'
@@ -250,27 +224,14 @@ function App() {
             </PrivateRoute>
           }
         />
-        {/* v2 pages fully wired — entry-level /console routes go to v2.
-            /console/legacy/* remain as one-sprint escape hatch. */}
-        <Route path='/console/log' element={<Navigate to='/console/v2/log' replace />} />
-        <Route path='/console' element={<Navigate to='/console/v2/dashboard' replace />} />
+        {/* Entry-level /console routes go to v2. */}
         <Route
-          path='/console/legacy/log'
-          element={
-            <PrivateRoute>
-              <Log />
-            </PrivateRoute>
-          }
+          path='/console/log'
+          element={<Navigate to='/console/v2/log' replace />}
         />
         <Route
-          path='/console/legacy/dashboard'
-          element={
-            <PrivateRoute>
-              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-                <Dashboard />
-              </Suspense>
-            </PrivateRoute>
-          }
+          path='/console'
+          element={<Navigate to='/console/v2/dashboard' replace />}
         />
         <Route
           path='/console/midjourney'
