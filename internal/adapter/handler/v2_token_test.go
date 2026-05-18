@@ -22,12 +22,12 @@ func TestListTokensV2_Pagination(t *testing.T) {
 		SeedV2Token(t, ctx, ctx.NormalUser.Id, fmt.Sprintf("Token %d", i))
 	}
 
-	// Test first page (default page_size=20)
-	w := V2RequestAsUser(ctx, ctx.NormalUser, http.MethodGet, "/api/v2/test-tenant/tokens?page=1&page_size=10", nil, nil)
+	// Test first page — handler reads p/size params, returns data.items
+	w := V2RequestAsUser(ctx, ctx.NormalUser, http.MethodGet, "/api/v2/test-tenant/tokens?p=1&size=10", nil, nil)
 	resp := AssertV2Success(t, w)
 	data := resp["data"].(map[string]interface{})
 
-	tokens := data["tokens"].([]interface{})
+	tokens := data["items"].([]interface{})
 	if len(tokens) != 10 {
 		t.Errorf("expected 10 tokens on first page, got %d", len(tokens))
 	}
@@ -43,19 +43,19 @@ func TestListTokensV2_Pagination(t *testing.T) {
 	}
 
 	// Test second page
-	w = V2RequestAsUser(ctx, ctx.NormalUser, http.MethodGet, "/api/v2/test-tenant/tokens?page=2&page_size=10", nil, nil)
+	w = V2RequestAsUser(ctx, ctx.NormalUser, http.MethodGet, "/api/v2/test-tenant/tokens?p=2&size=10", nil, nil)
 	resp = AssertV2Success(t, w)
 	data = resp["data"].(map[string]interface{})
-	tokens = data["tokens"].([]interface{})
+	tokens = data["items"].([]interface{})
 	if len(tokens) != 10 {
 		t.Errorf("expected 10 tokens on second page, got %d", len(tokens))
 	}
 
 	// Test third page (should have 5 tokens)
-	w = V2RequestAsUser(ctx, ctx.NormalUser, http.MethodGet, "/api/v2/test-tenant/tokens?page=3&page_size=10", nil, nil)
+	w = V2RequestAsUser(ctx, ctx.NormalUser, http.MethodGet, "/api/v2/test-tenant/tokens?p=3&size=10", nil, nil)
 	resp = AssertV2Success(t, w)
 	data = resp["data"].(map[string]interface{})
-	tokens = data["tokens"].([]interface{})
+	tokens = data["items"].([]interface{})
 	if len(tokens) != 5 {
 		t.Errorf("expected 5 tokens on third page, got %d", len(tokens))
 	}
