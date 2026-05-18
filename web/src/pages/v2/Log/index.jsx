@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import HFShell from '../../../components/hifi/HFShell';
+import WIPBanner from '../../../components/hifi/WIPBanner';
 import { API, showError } from '../../../helpers';
 
 /*
  * v2 Log page — wired to GET /api/v2/:tenant_slug/logs.
  * TTFT and upstream channel are not returned by the API; displayed as —.
+ * Cluster/Live tail tabs render WIPBanner — backend aggregation/streaming
+ * endpoints don't exist yet (see hardening-swarm-2026-05-18-acceptance.md).
  */
 
 const QUOTA_PER_USD = 500_000;
@@ -42,57 +45,6 @@ const fmtCost = (quota) => {
   const usd = quota / QUOTA_PER_USD;
   return `$${usd.toFixed(4)}`;
 };
-
-// Static data kept for cluster/live tabs (no backend endpoints for these yet)
-const CLUSTERS = [
-  {
-    count: 142,
-    sig: 'upstream_timeout',
-    model: 'gpt-4o',
-    up: 'openai/main',
-    last: '12s',
-    trend: [3, 5, 8, 9, 12, 18, 22, 28, 35, 42, 38, 40, 36, 34],
-    tenants: 6,
-  },
-  {
-    count: 38,
-    sig: 'rate_limit_429',
-    model: 'claude-3-opus',
-    up: 'anthropic/eu',
-    last: '1m',
-    trend: [1, 2, 2, 3, 4, 4, 5, 6, 5, 4, 4, 3, 3, 3],
-    tenants: 2,
-  },
-  {
-    count: 17,
-    sig: 'invalid_api_key',
-    model: 'gemini-1.5-pro',
-    up: 'vertex/asia',
-    last: '4m',
-    trend: [0, 0, 1, 2, 3, 4, 4, 3, 2, 1, 0, 0, 1, 1],
-    tenants: 1,
-  },
-  {
-    count: 9,
-    sig: 'context_overflow',
-    model: 'gpt-4o-mini',
-    up: 'openai/main',
-    last: '11m',
-    trend: [0, 1, 1, 1, 2, 1, 1, 1, 0, 1, 0, 1, 0, 0],
-    tenants: 3,
-  },
-];
-
-const LIVE_ROWS = [
-  ['14:02:11.481', '200', 'gpt-4o-mini', '847t', '$0.0042', 'acme'],
-  ['14:02:11.122', '200', 'claude-3.5-sonnet', '312t', '$0.0090', 'contoso'],
-  ['14:02:10.844', '429', 'claude-3-opus', '—', '—', 'initech'],
-  ['14:02:10.512', '200', 'gemini-1.5-pro', '621t', '$0.0031', 'globex'],
-  ['14:02:10.001', '504', 'gpt-4o', '—', '—', 'acme'],
-  ['14:02:09.770', '200', 'gpt-4o-mini', '210t', '$0.0011', 'acme'],
-  ['14:02:09.422', '200', 'claude-3.5-sonnet', '480t', '$0.0072', 'contoso'],
-  ['14:02:08.991', '200', 'gemini-1.5-flash', '112t', '$0.0004', 'globex'],
-];
 
 const PAGE_SIZE = 50;
 
@@ -255,8 +207,8 @@ const HFLog = () => {
       >
         {[
           ['trace', 'Requests', total || ''],
-          ['cluster', 'Error clusters', CLUSTERS.length],
-          ['live', 'Live tail', '⏵'],
+          ['cluster', 'Error clusters', '—'],
+          ['live', 'Live tail', '—'],
         ].map(([k, l, c]) => (
           <button
             key={k}
@@ -498,136 +450,34 @@ const HFLog = () => {
         </div>
       )}
 
-      {/* ── Cluster tab (static mockup) ── */}
+      {/* ── Cluster tab — no aggregation endpoint yet ── */}
       {tab === 'cluster' && (
         <div style={{ padding: 24 }}>
-          <div className='lbl' style={{ marginBottom: 10 }}>
-            error clusters · demo data
-          </div>
-          <div className='panel'>
-            <table className='t'>
-              <thead>
-                <tr>
-                  <th>count</th>
-                  <th>signature</th>
-                  <th>model</th>
-                  <th>upstream</th>
-                  <th>tenants</th>
-                  <th>trend</th>
-                  <th>last seen</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {CLUSTERS.map((c, i) => (
-                  <tr key={i}>
-                    <td>
-                      <span
-                        className='display'
-                        style={{
-                          fontSize: 22,
-                          color: i === 0 ? 'var(--hf-err)' : 'var(--hf-ink)',
-                        }}
-                      >
-                        {c.count}
-                      </span>
-                    </td>
-                    <td>
-                      <span className='tag err'>{c.sig}</span>
-                    </td>
-                    <td className='strong'>{c.model}</td>
-                    <td className='mono muted'>{c.up}</td>
-                    <td className='mono'>{c.tenants}</td>
-                    <td>
-                      <span className='spark err' style={{ height: 28 }}>
-                        {c.trend.map((v, j) => (
-                          <i key={j} style={{ height: Math.max(2, v * 1.0) + 'px' }} />
-                        ))}
-                      </span>
-                    </td>
-                    <td className='muted'>{c.last} ago</td>
-                    <td>
-                      <button type='button' className='btn ghost'>
-                        inspect →
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <WIPBanner
+            reason='Error clusters need a backend aggregation endpoint that groups logs by error signature. None exists.'
+            todo='Backend: /api/v2/{slug}/logs/clusters (group by error_signature + tenant counts + trend).'
+          />
+          <div
+            className='panel'
+            style={{ marginTop: 14, padding: 24, textAlign: 'center', color: 'var(--hf-ink-3)', fontFamily: 'var(--hf-mono)', fontSize: 12 }}
+          >
+            No error-cluster data — endpoint not implemented.
           </div>
         </div>
       )}
 
-      {/* ── Live tail tab (static mockup) ── */}
+      {/* ── Live tail tab — no streaming endpoint yet ── */}
       {tab === 'live' && (
-        <div style={{ padding: 24, height: 'calc(100vh - 270px)' }}>
-          <div className='lbl' style={{ marginBottom: 8 }}>
-            live tail · demo data
-          </div>
+        <div style={{ padding: 24 }}>
+          <WIPBanner
+            reason='Live tail needs either an SSE/WebSocket stream or a high-frequency polling cursor against /logs. Neither is wired.'
+            todo='Backend: /api/v2/{slug}/logs/stream (SSE) OR cursor param on /logs; UI wires after.'
+          />
           <div
-            style={{
-              background: '#0a0908',
-              color: '#e8e3d4',
-              padding: 18,
-              height: '100%',
-              overflow: 'auto',
-              fontFamily: 'var(--hf-mono)',
-              fontSize: 11,
-              lineHeight: 1.65,
-              border: '1px solid var(--hf-rule-strong)',
-            }}
+            className='panel'
+            style={{ marginTop: 14, padding: 24, textAlign: 'center', color: 'var(--hf-ink-3)', fontFamily: 'var(--hf-mono)', fontSize: 12 }}
           >
-            {LIVE_ROWS.map((r, i) => (
-              <div key={i}>
-                <span style={{ color: '#807a6a' }}>{r[0]}</span>
-                {'  '}
-                <span
-                  style={{
-                    color: r[1].startsWith('2')
-                      ? '#5acc92'
-                      : r[1].startsWith('4')
-                        ? '#e0a040'
-                        : '#ee6f5e',
-                  }}
-                >
-                  {r[1]}
-                </span>
-                {'  '}
-                <span
-                  style={{
-                    color: '#f4f1e8',
-                    display: 'inline-block',
-                    width: 180,
-                  }}
-                >
-                  {r[2]}
-                </span>
-                <span
-                  style={{
-                    color: '#cfcbbd',
-                    display: 'inline-block',
-                    width: 60,
-                    textAlign: 'right',
-                  }}
-                >
-                  {r[3]}
-                </span>
-                {'  '}
-                <span
-                  style={{
-                    color: '#807a6a',
-                    display: 'inline-block',
-                    width: 80,
-                  }}
-                >
-                  {r[4]}
-                </span>
-                {'  '}
-                <span style={{ color: '#a89c80' }}>{r[5]}</span>
-              </div>
-            ))}
-            <div style={{ color: '#ff7a3a' }}>▌</div>
+            No live-tail data — streaming endpoint not implemented.
           </div>
         </div>
       )}

@@ -1,5 +1,6 @@
 import React from 'react';
 import HFShell from '../../../components/hifi/HFShell';
+import WIPBanner from '../../../components/hifi/WIPBanner';
 
 /*
  * HiFi 5 — Playground multi-model compare.
@@ -72,6 +73,10 @@ const HFPlayground = () => {
         </>
       }
     >
+      <WIPBanner
+        reason='Multi-model playground requires a fan-out relay endpoint that does not exist yet.'
+        todo='Backend: /api/v2/{slug}/playground/run; UI wires after.'
+      />
       <div
         style={{
           display: 'grid',

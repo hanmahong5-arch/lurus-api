@@ -1,6 +1,19 @@
-import React, { Fragment, useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import HFShell from '../../../components/hifi/HFShell';
 import { API, showError } from '../../../helpers';
+import {
+  computeQPS,
+  computeLatencyP50,
+  computeLatencyP95,
+  computeLatencyP99,
+  computeErrorRate,
+  computeCostByModel,
+  pickRecent,
+  formatQPS,
+  formatLatencyMs,
+  formatErrorRate,
+  DASHBOARD_REALTIME_WINDOW_SECONDS,
+} from './kpis';
 
 const QUOTA_PER_USD = 500_000;
 
@@ -31,12 +44,89 @@ const fmtTs = (ts) => {
   }
 };
 
-// KPI cards that don't have real-time data yet — shown with a placeholder value.
-const STATIC_KPIS = [
-  { l: 'qps', c: 'var(--hf-accent)' },
-  { l: 'ttft p50', c: 'var(--hf-ok)' },
-  { l: 'error rate', c: 'var(--hf-err)' },
-];
+// Realtime KPI tiles derived from the last DASHBOARD_REALTIME_WINDOW_SECONDS
+// window of /api/v2/{slug}/logs. No dedicated metrics endpoint exists yet;
+// see _bmad-output/planning-artifacts/hardening-swarm-2026-05-18-acceptance.md.
+
+// Shown when the user has zero tokens — Reseller-MVP onboarding TTFT lift,
+// modelled on OpenRouter / Anthropic quickstart pattern.
+const RELAY_BASE_URL = 'https://api.lurus.cn/v1';
+
+const OnboardingCurlBlock = ({ username, tenantSlug }) => {
+  const navigateToTokens = (e) => {
+    e.preventDefault();
+    window.location.href = '/console/v2/token';
+  };
+  const curlExample = `curl ${RELAY_BASE_URL}/chat/completions \\
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "gpt-4o-mini",
+    "messages": [{"role": "user", "content": "Hello from ${username || 'lurus-hub'}!"}]
+  }'`;
+  return (
+    <div
+      role='region'
+      aria-label='get started'
+      style={{
+        margin: '14px 24px 0',
+        padding: '18px 22px',
+        border: '1px solid var(--hf-accent, #c97a3e)',
+        borderRadius: 2,
+        background: 'rgba(201,122,62,0.06)',
+      }}
+    >
+      <div
+        className='lbl'
+        style={{ fontSize: 11, marginBottom: 8, color: 'var(--hf-accent)' }}
+      >
+        get started — first relay call
+      </div>
+      <div
+        className='display'
+        style={{ fontSize: 18, marginBottom: 10 }}
+      >
+        You have <strong>0 tokens</strong> in tenant <code>{tenantSlug}</code>.
+        Create one to make your first call.
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          gap: 10,
+          marginBottom: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <a
+          href='/console/v2/token'
+          onClick={navigateToTokens}
+          className='btn primary'
+          style={{ textDecoration: 'none', padding: '6px 14px' }}
+        >
+          + create token
+        </a>
+        <span className='mono muted' style={{ fontSize: 11, alignSelf: 'center' }}>
+          then paste it into the snippet below
+        </span>
+      </div>
+      <pre
+        style={{
+          background: '#0a0908',
+          color: '#e8e3d4',
+          padding: 14,
+          margin: 0,
+          fontSize: 11,
+          lineHeight: 1.55,
+          fontFamily: 'var(--hf-mono)',
+          overflow: 'auto',
+          border: '1px solid var(--hf-rule-strong)',
+        }}
+      >
+        {curlExample}
+      </pre>
+    </div>
+  );
+};
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
@@ -50,10 +140,14 @@ const HFDashboard = () => {
   const fetchData = useCallback(async () => {
     if (!tenantSlug) return;
     setLoading(true);
+    const startTime =
+      Math.floor(Date.now() / 1000) - DASHBOARD_REALTIME_WINDOW_SECONDS;
     try {
       const [meRes, logsRes] = await Promise.all([
         API.get(`/api/v2/${tenantSlug}/user/me`),
-        API.get(`/api/v2/${tenantSlug}/logs?page=1&page_size=5`),
+        API.get(
+          `/api/v2/${tenantSlug}/logs?page=1&page_size=200&start_time=${startTime}`,
+        ),
       ]);
       if (meRes?.data?.success) setMe(meRes.data.data);
       if (logsRes?.data?.success) {
@@ -80,36 +174,18 @@ const HFDashboard = () => {
         : `$${quotaToUSD(me.remaining_quota)}`
       : null;
 
-  // Unique models from recent logs for the bubble chart
-  const modelSet = Array.from(
-    new Set(logs.map((l) => l.model || l.ModelName || l.channel_name).filter(Boolean))
-  ).slice(0, 8);
+  // Realtime KPIs derived from the fetched 5-minute window.
+  const qps = computeQPS(logs, DASHBOARD_REALTIME_WINDOW_SECONDS);
+  const p50 = computeLatencyP50(logs);
+  const p95 = computeLatencyP95(logs);
+  const p99 = computeLatencyP99(logs);
+  const errorRate = computeErrorRate(logs);
+  const costByModel = computeCostByModel(logs).slice(0, 6);
+  const hasRealtimeData = logs.length > 0;
+  const showOnboarding = !loading && me && (me.token_count ?? 0) === 0;
 
-  // Spread bubbles evenly in a predictable layout
-  const BUBBLE_COLORS = [
-    'var(--hf-ok)',
-    'var(--hf-accent)',
-    'var(--hf-info)',
-    'var(--hf-ok)',
-    'var(--hf-ink-2)',
-    'var(--hf-accent)',
-    'var(--hf-info)',
-    'var(--hf-err)',
-  ];
-  const bubbles = modelSet.map((m, i) => {
-    const angle = (i / Math.max(modelSet.length, 1)) * Math.PI * 2;
-    const rx = 0.3 + 0.22 * Math.cos(angle);
-    const ry = 0.3 + 0.22 * Math.sin(angle);
-    return { m, x: Math.max(0.05, Math.min(0.9, rx)), y: Math.max(0.05, Math.min(0.9, ry)), r: 12, c: BUBBLE_COLORS[i % BUBBLE_COLORS.length] };
-  });
-
-  // Fallback static bubbles when no log data
-  const FALLBACK_BUBBLES = [
-    { m: 'gpt-4o-mini', x: 0.18, y: 0.2, r: 14, c: 'var(--hf-ok)' },
-    { m: 'claude-3.5-sonnet', x: 0.55, y: 0.65, r: 20, c: 'var(--hf-accent)' },
-    { m: 'gemini-1.5-pro', x: 0.52, y: 0.58, r: 11, c: 'var(--hf-info)' },
-  ];
-  const displayBubbles = bubbles.length > 0 ? bubbles : FALLBACK_BUBBLES;
+  // Activity table uses the most-recent slice only.
+  const recentLogs = pickRecent(logs, 5);
 
   return (
     <HFShell
@@ -130,6 +206,9 @@ const HFDashboard = () => {
         </>
       }
     >
+      {showOnboarding && (
+        <OnboardingCurlBlock username={me?.username} tenantSlug={tenantSlug} />
+      )}
       <div className='hf-page-head'>
         <div>
           <div className='lbl' style={{ marginBottom: 6 }}>
@@ -245,115 +324,207 @@ const HFDashboard = () => {
           </div>
         </div>
 
-        {/* ── Static KPI cards (no real-time data yet) ── */}
-        {STATIC_KPIS.map((k, i) => (
+        {/* ── KPI: QPS (derived from last 5min of logs) ── */}
+        <div className='panel' style={{ gridColumn: 'span 4', padding: 18 }}>
+          <div className='lbl'>qps</div>
           <div
-            key={i}
-            className='panel'
-            style={{ gridColumn: 'span 4', padding: 18, opacity: 0.65 }}
+            className='display'
+            style={{
+              fontSize: 32,
+              marginTop: 4,
+              color: hasRealtimeData ? 'var(--hf-accent)' : 'var(--hf-ink-3)',
+            }}
           >
-            <div className='lbl'>{k.l}</div>
-            <div className='display' style={{ fontSize: 32, marginTop: 4, color: 'var(--hf-ink-3)' }}>
-              —
-            </div>
-            <div
-              style={{
-                marginTop: 8,
-                fontSize: 10,
-                color: 'var(--hf-ink-3)',
-                fontFamily: 'var(--hf-mono)',
-              }}
-            >
-              realtime metrics coming soon
-            </div>
+            {loading ? '…' : hasRealtimeData ? formatQPS(qps) : '—'}
           </div>
-        ))}
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 10,
+              color: 'var(--hf-ink-3)',
+              fontFamily: 'var(--hf-mono)',
+            }}
+          >
+            {hasRealtimeData ? 'last 5 min · req/s' : 'no traffic in last 5 min'}
+          </div>
+        </div>
 
-        {/* ── Model bubble chart ── */}
+        {/* ── KPI: Latency P50/P95/P99 (P99 anchors the SLO) ── */}
+        <div className='panel' style={{ gridColumn: 'span 4', padding: 18 }}>
+          <div className='lbl'>latency · ms</div>
+          <div
+            style={{
+              marginTop: 6,
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr 1fr',
+              gap: 8,
+              alignItems: 'baseline',
+            }}
+          >
+            {[
+              ['p50', p50, 'var(--hf-ok)'],
+              ['p95', p95, 'var(--hf-warn, #c08a3e)'],
+              ['p99', p99, 'var(--hf-err)'],
+            ].map(([label, val, color]) => (
+              <div key={label}>
+                <div
+                  className='display'
+                  style={{
+                    fontSize: 22,
+                    color: val != null ? color : 'var(--hf-ink-3)',
+                  }}
+                >
+                  {loading ? '…' : val != null ? formatLatencyMs(val) : '—'}
+                </div>
+                <div
+                  className='mono'
+                  style={{ fontSize: 9, color: 'var(--hf-ink-3)', marginTop: 2 }}
+                >
+                  {label}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 10,
+              color: 'var(--hf-ink-3)',
+              fontFamily: 'var(--hf-mono)',
+            }}
+          >
+            {p99 != null
+              ? 'percentiles · last 5 min · p99 anchors SLO'
+              : 'awaiting requests with latency data'}
+          </div>
+        </div>
+
+        {/* ── KPI: Error rate (derived from log type 5 share) ── */}
+        <div className='panel' style={{ gridColumn: 'span 4', padding: 18 }}>
+          <div className='lbl'>error rate</div>
+          <div
+            className='display'
+            style={{
+              fontSize: 32,
+              marginTop: 4,
+              color:
+                !hasRealtimeData
+                  ? 'var(--hf-ink-3)'
+                  : errorRate > 0.05
+                    ? 'var(--hf-err)'
+                    : 'var(--hf-ok)',
+            }}
+          >
+            {loading ? '…' : hasRealtimeData ? formatErrorRate(errorRate) : '—'}
+          </div>
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 10,
+              color: 'var(--hf-ink-3)',
+              fontFamily: 'var(--hf-mono)',
+            }}
+          >
+            {hasRealtimeData ? 'last 5 min · err / consume+err' : 'no traffic in last 5 min'}
+          </div>
+        </div>
+
+        {/* ── Cost by model · last 5 min (derived from /logs aggregation) ── */}
         <div className='panel' style={{ gridColumn: 'span 7', padding: 18 }}>
           <div
             style={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'baseline',
+              marginBottom: 12,
             }}
           >
             <div>
-              <div className='lbl'>model usage · recent activity</div>
+              <div className='lbl'>cost by model · last 5 min</div>
               <div className='display' style={{ fontSize: 18, marginTop: 2 }}>
-                {logs.length > 0 ? 'Models from your last 5 requests' : 'No recent requests'}
+                {costByModel.length > 0
+                  ? `${costByModel.length} model${costByModel.length === 1 ? '' : 's'} active`
+                  : 'No consume traffic yet'}
               </div>
             </div>
             <span className='faint mono' style={{ fontSize: 10 }}>
-              {logs.length > 0 ? 'from recent logs' : 'sample layout'}
+              {costByModel.length > 0
+                ? 'derived from /logs'
+                : 'awaiting traffic'}
             </span>
           </div>
-          <div
-            style={{
-              position: 'relative',
-              height: 260,
-              marginTop: 18,
-              borderLeft: '1px solid var(--hf-rule)',
-              borderBottom: '1px solid var(--hf-rule)',
-            }}
-          >
-            {[0.25, 0.5, 0.75].map((p, i) => (
-              <Fragment key={i}>
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: p * 100 + '%',
-                    top: 0,
-                    bottom: 0,
-                    borderLeft: '1px dashed var(--hf-rule)',
-                  }}
-                />
-                <div
-                  style={{
-                    position: 'absolute',
-                    bottom: p * 100 + '%',
-                    left: 0,
-                    right: 0,
-                    borderTop: '1px dashed var(--hf-rule)',
-                  }}
-                />
-              </Fragment>
-            ))}
-            {displayBubbles.map((b, i) => (
-              <div
-                key={i}
-                style={{
-                  position: 'absolute',
-                  left: b.x * 100 + '%',
-                  bottom: b.y * 100 + '%',
-                  width: b.r * 2,
-                  height: b.r * 2,
-                  marginLeft: -b.r,
-                  marginBottom: -b.r,
-                  borderRadius: '50%',
-                  background: b.c,
-                  opacity: 0.4,
-                  border: '1.5px solid ' + b.c,
-                }}
-              />
-            ))}
-            {displayBubbles.map((b, i) => (
-              <div
-                key={i}
-                className='mono'
-                style={{
-                  position: 'absolute',
-                  left: 'calc(' + b.x * 100 + '% + ' + (b.r + 6) + 'px)',
-                  bottom: b.y * 100 + '%',
-                  fontSize: 10,
-                  color: 'var(--hf-ink-2)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {b.m}
-              </div>
-            ))}
-          </div>
+          {costByModel.length === 0 && (
+            <div
+              className='muted'
+              style={{
+                fontSize: 11,
+                fontFamily: 'var(--hf-mono)',
+                padding: '24px 0',
+                textAlign: 'center',
+              }}
+            >
+              once a relay call is consumed, the model breakdown lands here.
+            </div>
+          )}
+          {costByModel.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {(() => {
+                const maxQuota = costByModel[0].totalQuota || 1;
+                return costByModel.map((row, i) => {
+                  const pct = (row.totalQuota / maxQuota) * 100;
+                  const usd = (row.totalQuota / QUOTA_PER_USD).toFixed(4);
+                  return (
+                    <div key={row.model}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          marginBottom: 3,
+                          fontSize: 11,
+                        }}
+                      >
+                        <span
+                          className='mono'
+                          style={{
+                            color: 'var(--hf-ink)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            maxWidth: '60%',
+                          }}
+                        >
+                          {row.model}
+                        </span>
+                        <span className='mono muted' style={{ fontSize: 10 }}>
+                          ${usd} · {row.requestCount} req
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          height: 6,
+                          background: 'var(--hf-sunken)',
+                          borderRadius: 1,
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: '100%',
+                            width: pct + '%',
+                            background:
+                              i === 0
+                                ? 'var(--hf-accent)'
+                                : 'var(--hf-info, #2c5fb0)',
+                            transition: 'width 0.4s ease',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          )}
         </div>
 
         {/* ── Recent activity table ── */}
@@ -366,12 +537,12 @@ const HFDashboard = () => {
               Loading…
             </div>
           )}
-          {!loading && logs.length === 0 && (
+          {!loading && recentLogs.length === 0 && (
             <div className='muted' style={{ fontSize: 12 }}>
               No recent requests found.
             </div>
           )}
-          {!loading && logs.length > 0 && (
+          {!loading && recentLogs.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
               <div
                 style={{
@@ -386,7 +557,7 @@ const HFDashboard = () => {
                 <span className='lbl' style={{ fontSize: 10 }}>model</span>
                 <span className='lbl' style={{ fontSize: 10, textAlign: 'right' }}>cost</span>
               </div>
-              {logs.map((log, i) => {
+              {recentLogs.map((log, i) => {
                 const model = log.model || log.ModelName || log.channel_name || '—';
                 const cost = log.quota != null ? `$${quotaToUSD(log.quota)}` : '—';
                 const ts = fmtTs(log.created_at || log.CreatedAt || null);
@@ -397,7 +568,7 @@ const HFDashboard = () => {
                       display: 'grid',
                       gridTemplateColumns: '1fr 1fr auto',
                       padding: '7px 0',
-                      borderBottom: i < logs.length - 1 ? '1px dashed var(--hf-rule)' : 0,
+                      borderBottom: i < recentLogs.length - 1 ? '1px dashed var(--hf-rule)' : 0,
                       fontSize: 11,
                       alignItems: 'center',
                     }}

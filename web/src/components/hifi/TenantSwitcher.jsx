@@ -40,14 +40,9 @@ const MODE_META = {
   },
 };
 
-// Demo fixtures — replaced by real data via props in production.
-const DEMO_TENANTS = [
-  { id: 'acme', name: 'acme · prod', mode: 'Reseller' },
-  { id: 'contoso', name: 'contoso · stage', mode: 'Reseller' },
-  { id: 'personal', name: 'personal workspace', mode: 'Personal' },
-];
-
-const DEMO_QUOTA = { used: 8420, total: 10000, unit: '$' };
+// Quota visualization is still placeholder until Dashboard quota API lands —
+// kept here so the switcher has something to render; not used in HFShell flow.
+const DEMO_QUOTA = { used: 0, total: 0, unit: '$' };
 
 const TenantSwitcher = ({
   mode: modeProp,
@@ -57,12 +52,21 @@ const TenantSwitcher = ({
   onSelect,
 }) => {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState(modeProp ?? 'Reseller');
-  const [tenantName, setTenantName] = useState(
-    tenantNameProp ?? DEMO_TENANTS[0].name
-  );
-  const tenants = tenantsProp ?? DEMO_TENANTS;
+  const [mode, setMode] = useState(modeProp ?? 'Personal');
+  const [tenantName, setTenantName] = useState(tenantNameProp ?? '');
+  // Empty tenants list renders an empty list section — caller (HFShell) is
+  // responsible for surfacing a single-tenant fallback before this point.
+  const tenants = tenantsProp ?? [];
   const quota = quotaProp ?? DEMO_QUOTA;
+
+  // Sync controlled props into local state when caller updates them
+  // (HFShell fetches tenants async — first paint passes empty values).
+  useEffect(() => {
+    if (tenantNameProp !== undefined) setTenantName(tenantNameProp);
+  }, [tenantNameProp]);
+  useEffect(() => {
+    if (modeProp !== undefined) setMode(modeProp);
+  }, [modeProp]);
   const dropRef = useRef(null);
 
   // Close on outside click.

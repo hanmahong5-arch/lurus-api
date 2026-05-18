@@ -1,8 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import HFShell from '../../../components/hifi/HFShell';
+import WIPBanner from '../../../components/hifi/WIPBanner';
 import { API, showError, showSuccess } from '../../../helpers';
 
-/* HiFi 12 — Settings. Profile section wired to GET/PUT /api/v2/:tenant_slug/user/me */
+/*
+ * HiFi 12 — Settings.
+ * Profile: wired to GET/PUT /api/v2/:tenant_slug/user/me
+ * Security/Sessions: partial — /api/v2/client/sessions returns single-session info
+ *   (auth_method + active_tokens + request_count), NOT a device/IP list.
+ *   Multi-device tracking + per-session revoke needs backend session store —
+ *   surfaced via WIPBanner below.
+ * Notifications + Team: mocked; see adr-2026-05-18-budget-alerts.md / -tenant-credit-pool.md.
+ */
 
 const QUOTA_PER_USD = 500_000;
 
@@ -25,28 +34,6 @@ const SECTIONS = [
   ['integrations', 'Integrations', 'webhooks, slack, observability'],
   ['region', 'Region & data', 'where data lives'],
   ['danger', 'Danger zone', 'export, transfer, delete'],
-];
-
-const SESSIONS = [
-  ['MacBook Pro · Shanghai', 'current', '2m ago'],
-  ['iPhone · Shanghai', '', '3h ago'],
-  ['Chrome · Beijing', '', '2d ago'],
-];
-
-const NOTIFICATIONS = [
-  ['budget threshold reached', 'email · slack', true],
-  ['channel goes down', 'email · slack · pagerduty', true],
-  ['error rate spike', 'slack', true],
-  ['weekly usage digest', 'email', true],
-  ['new model available', 'email', false],
-  ['invoice issued', 'email', true],
-];
-
-const TEAM = [
-  ['Andy Liu', 'owner', 'now'],
-  ['Mei Chen', 'admin', '12m'],
-  ['Raj Patel', 'developer', '2h'],
-  ['Lisa Park', 'viewer', '1d'],
 ];
 
 const INTEGRATIONS = [
@@ -127,6 +114,10 @@ const HFSettings = () => {
   const [editField, setEditField] = useState(null); // 'display_name' | 'email'
   const [saving, setSaving] = useState(false);
 
+  // Session state — single-session for now (backend has no device list)
+  const [sessionInfo, setSessionInfo] = useState(null);
+  const [sessionLoading, setSessionLoading] = useState(false);
+
   const fetchProfile = useCallback(async () => {
     setLoadingProfile(true);
     try {
@@ -141,9 +132,29 @@ const HFSettings = () => {
     }
   }, [tenantSlug]);
 
+  const fetchSession = useCallback(async () => {
+    setSessionLoading(true);
+    try {
+      const res = await API.get('/api/v2/client/sessions');
+      if (res?.data?.success) {
+        setSessionInfo(res.data.data);
+      }
+    } catch (_) {
+      // error toast shown by API interceptor
+    } finally {
+      setSessionLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (tenantSlug) fetchProfile();
   }, [fetchProfile, tenantSlug]);
+
+  useEffect(() => {
+    if (section === 'security' && !sessionInfo && !sessionLoading) {
+      fetchSession();
+    }
+  }, [section, sessionInfo, sessionLoading, fetchSession]);
 
   const handleSaveField = async (field, value) => {
     setEditField(null);
@@ -342,42 +353,53 @@ const HFSettings = () => {
                   </button>
                 </div>
               </div>
-              <div className='panel' style={{ padding: 18, marginBottom: 14 }}>
-                <div className='lbl'>active sessions · 3</div>
-                {SESSIONS.map((r, i) => (
+              <WIPBanner
+                reason='Multi-device session tracking is not implemented. The endpoint /api/v2/client/sessions returns only the *current* session (auth_method + active_tokens + request_count), not a per-device list with revoke.'
+                todo='Backend: device session store + DELETE /api/v2/client/sessions/:id; then surface list here.'
+              />
+              <div className='panel' style={{ padding: 18, marginTop: 14, marginBottom: 14 }}>
+                <div className='lbl'>current session</div>
+                {sessionLoading && (
                   <div
-                    key={i}
+                    className='muted'
+                    style={{ fontSize: 12, marginTop: 10 }}
+                  >
+                    Loading…
+                  </div>
+                )}
+                {!sessionLoading && !sessionInfo && (
+                  <div
+                    className='muted'
+                    style={{ fontSize: 12, marginTop: 10 }}
+                  >
+                    Failed to load session info.
+                  </div>
+                )}
+                {!sessionLoading && sessionInfo && (
+                  <div
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: '1fr auto auto auto',
+                      gridTemplateColumns: '1fr auto auto',
                       gap: 12,
-                      padding: '10px 0',
-                      borderBottom:
-                        i < SESSIONS.length - 1
-                          ? '1px dashed var(--hf-rule)'
-                          : 0,
+                      padding: '10px 0 0',
                       alignItems: 'center',
                     }}
                   >
                     <span className='strong' style={{ fontSize: 12 }}>
-                      {r[0]}
-                    </span>
-                    {r[1] && <span className='tag ok'>{r[1]}</span>}
-                    <span className='faint mono' style={{ fontSize: 10 }}>
-                      {r[2]}
-                    </span>
-                    {!r[1] && (
-                      <button
-                        type='button'
-                        className='btn ghost sm'
-                        style={{ color: 'var(--hf-err)' }}
-                        disabled
+                      {sessionInfo.username || '—'}
+                      <span
+                        className='mono muted'
+                        style={{ fontSize: 10, marginLeft: 8 }}
                       >
-                        revoke
-                      </button>
-                    )}
+                        · auth: {sessionInfo.auth_method || 'unknown'}
+                      </span>
+                    </span>
+                    <span className='tag ok'>current</span>
+                    <span className='faint mono' style={{ fontSize: 10 }}>
+                      {(sessionInfo.active_tokens ?? 0)} active tokens
+                    </span>
                   </div>
-                ))}
+                )}
               </div>
             </div>
           )}
@@ -385,58 +407,22 @@ const HFSettings = () => {
           {/* ── Notifications ── */}
           {section === 'notifications' && (
             <div style={{ marginTop: 22 }}>
-              <ComingSoon />
-              <div className='panel' style={{ marginTop: 16 }}>
-                {NOTIFICATIONS.map((r, i, a) => (
-                  <div
-                    key={i}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr auto auto',
-                      padding: '14px 18px',
-                      borderBottom:
-                        i < a.length - 1 ? '1px solid var(--hf-rule)' : 0,
-                      alignItems: 'center',
-                      gap: 14,
-                    }}
-                  >
-                    <div>
-                      <div className='strong' style={{ fontSize: 12 }}>
-                        {r[0]}
-                      </div>
-                      <div className='faint mono' style={{ fontSize: 10 }}>
-                        {r[1]}
-                      </div>
-                    </div>
-                    <button type='button' className='btn ghost sm' disabled>
-                      channels →
-                    </button>
-                    <div
-                      style={{
-                        width: 32,
-                        height: 18,
-                        background: r[2]
-                          ? 'var(--hf-accent)'
-                          : 'var(--hf-rule-strong)',
-                        borderRadius: 9,
-                        position: 'relative',
-                        opacity: 0.6,
-                      }}
-                    >
-                      <div
-                        style={{
-                          position: 'absolute',
-                          width: 14,
-                          height: 14,
-                          background: '#fff',
-                          borderRadius: 7,
-                          top: 2,
-                          left: r[2] ? 16 : 2,
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
+              <WIPBanner
+                reason='Notification subscription store, dispatch path, and threshold rules not yet implemented. Designed in adr-2026-05-18-budget-alerts.md.'
+                todo='Backend: notification_subscription table + /api/v2/{slug}/notifications/subscriptions + Prometheus rule pack.'
+              />
+              <div
+                className='panel'
+                style={{
+                  marginTop: 14,
+                  padding: 24,
+                  textAlign: 'center',
+                  color: 'var(--hf-ink-3)',
+                  fontFamily: 'var(--hf-mono)',
+                  fontSize: 12,
+                }}
+              >
+                No subscriptions — subscription API not implemented.
               </div>
             </div>
           )}
@@ -444,43 +430,22 @@ const HFSettings = () => {
           {/* ── Team ── */}
           {section === 'team' && (
             <div style={{ marginTop: 22 }}>
-              <ComingSoon />
-              <div className='panel' style={{ marginTop: 16 }}>
-                <table className='t'>
-                  <thead>
-                    <tr>
-                      <th>member</th>
-                      <th>role</th>
-                      <th>last seen</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {TEAM.map((r, i) => (
-                      <tr key={i}>
-                        <td>
-                          <span className='strong'>{r[0]}</span>
-                        </td>
-                        <td>
-                          <span className='tag'>{r[1]}</span>
-                        </td>
-                        <td className='faint mono'>{r[2]}</td>
-                        <td>
-                          <button type='button' className='btn ghost sm' disabled>
-                            ⋯
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div
-                  style={{ padding: 14, borderTop: '1px solid var(--hf-rule)' }}
-                >
-                  <button type='button' className='btn primary' disabled>
-                    + invite member
-                  </button>
-                </div>
+              <WIPBanner
+                reason='Team / role management requires tenant membership store + role-permission matrix + invite flow. Not yet implemented.'
+                todo='Backend: tenant_member table + role enum + POST /api/v2/{slug}/team/invite; cascade-revoke on member removal.'
+              />
+              <div
+                className='panel'
+                style={{
+                  marginTop: 14,
+                  padding: 24,
+                  textAlign: 'center',
+                  color: 'var(--hf-ink-3)',
+                  fontFamily: 'var(--hf-mono)',
+                  fontSize: 12,
+                }}
+              >
+                No team members — endpoint not implemented.
               </div>
             </div>
           )}

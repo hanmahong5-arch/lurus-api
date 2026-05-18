@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import HFShell from '../../../components/hifi/HFShell';
+import WIPBanner from '../../../components/hifi/WIPBanner';
 
 /* HiFi 7 — Models catalog. Ported from hifi/hf7-models.jsx (2026-05-07 variants pack). */
 
@@ -175,6 +176,10 @@ const HFModels = () => {
         </>
       }
     >
+      <WIPBanner
+        reason='Models catalog renders a static hi-fi mockup (MODELS const). Live data requires a /api/v2/{slug}/models endpoint that joins channel.models with pricing.'
+        todo='Backend: /api/v2/{slug}/models aggregation; UI wires after.'
+      />
       <div className='hf-page-head'>
         <div>
           <div className='lbl' style={{ marginBottom: 6 }}>

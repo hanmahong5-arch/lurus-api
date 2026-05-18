@@ -179,6 +179,89 @@ const useBridgedUser = () => {
   return user;
 };
 
+const readTenantSlug = () => {
+  try {
+    return localStorage.getItem('tenant_slug') || 'default';
+  } catch (_) {
+    return 'default';
+  }
+};
+
+const inferModeFromRole = (role) => {
+  // Map v1 role ints to TenantSwitcher mode buckets.
+  // role 100 = root, 10 = admin → manage tenant pool; else Personal/EndUser.
+  if (role === 100 || role === 10) return 'Reseller';
+  return 'Personal';
+};
+
+// Real tenants + active tenant for TenantSwitcher.
+// Admin (root) attempts /api/v2/admin/tenants; everyone falls back to a
+// single-item list derived from the bridged user. Empty/error → still
+// renders a non-DEMO list so users never see "acme · prod" placeholder.
+const useRealTenants = (user) => {
+  const [tenants, setTenants] = useState(null);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
+    const slug = readTenantSlug();
+    const fallbackName =
+      user.tenant_name || user.display_name || user.username || slug;
+    const fallback = [
+      {
+        id: slug,
+        name: fallbackName,
+        mode: inferModeFromRole(user.role),
+      },
+    ];
+
+    // Only root (100) can list all tenants. Skip the call otherwise.
+    if (user.role !== 100) {
+      if (!cancelled) setTenants(fallback);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    API.get('/api/v2/admin/tenants?page_size=50', { skipErrorHandler: true })
+      .then((res) => {
+        if (cancelled) return;
+        const rows = res?.data?.data?.tenants;
+        if (!Array.isArray(rows) || rows.length === 0) {
+          setTenants(fallback);
+          return;
+        }
+        setTenants(
+          rows.map((t) => ({
+            id: t.slug || t.id,
+            name: t.name || t.slug || String(t.id),
+            mode: 'Reseller',
+          }))
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setTenants(fallback);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  return tenants;
+};
+
+const switchTenantSlug = (slug) => {
+  try {
+    localStorage.setItem('tenant_slug', slug);
+  } catch (_) {
+    // ignore — private mode
+  }
+  // Trigger a re-fetch of tenant-scoped data by reloading.
+  window.location.reload();
+};
+
 const handleLogout = async () => {
   try {
     await API.post('/api/v2/auth/zita-logout');
@@ -199,6 +282,12 @@ const HFShell = ({ active, crumbs = [], actions, children }) => {
   const activeId = active != null ? active : autoActive;
   const [theme, toggleTheme] = useThemeToggle();
   const user = useBridgedUser();
+  const tenants = useRealTenants(user);
+  const currentSlug = readTenantSlug();
+  const currentTenant =
+    (tenants && tenants.find((t) => t.id === currentSlug)) ||
+    (tenants && tenants[0]) ||
+    null;
   return (
     <div className='hf hf-shell'>
       <aside className='hf-side'>
@@ -252,7 +341,16 @@ const HFShell = ({ active, crumbs = [], actions, children }) => {
         ))}
 
         <div className='footer'>
-          <TenantSwitcher />
+          <TenantSwitcher
+            tenants={tenants ?? []}
+            tenantName={currentTenant?.name ?? ''}
+            mode={currentTenant?.mode ?? 'Personal'}
+            onSelect={(tenantId) => {
+              if (tenantId && tenantId !== currentSlug) {
+                switchTenantSlug(tenantId);
+              }
+            }}
+          />
         </div>
       </aside>
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import HFShell from '../../../components/hifi/HFShell';
+import WIPBanner from '../../../components/hifi/WIPBanner';
 
 /* HiFi 11 — Billing. Ported from hifi/hf11-billing.jsx. */
 
@@ -30,6 +31,10 @@ const HFBilling = () => {
         </>
       }
     >
+      <WIPBanner
+        reason='Invoices ($8,420.40 / INV-2026-05) + spend trend + balance + projected exceed are static fixtures. Real data requires lurus-platform billing integration (Epic 12 SKU model).'
+        todo='Backend: /api/v2/{slug}/billing/* + platform gRPC GetInvoices / GetProjection. Defer until Epic 12 SKU model is decided.'
+      />
       <div className='hf-page-head'>
         <div>
           <div className='lbl' style={{ marginBottom: 6 }}>

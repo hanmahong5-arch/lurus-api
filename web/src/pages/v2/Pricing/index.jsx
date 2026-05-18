@@ -1,5 +1,6 @@
 import React from 'react';
 import HFShell from '../../../components/hifi/HFShell';
+import WIPBanner from '../../../components/hifi/WIPBanner';
 
 /* HiFi 10 — Pricing admin. Ported from hifi/hf10-pricing.jsx. */
 
@@ -36,6 +37,10 @@ const HFPricing = () => {
         </>
       }
     >
+      <WIPBanner
+        reason='Per-model pricing rows and plan multipliers (×0.85/×1.00/×1.10) are static fixtures. Save-changes button writes nowhere; real pricing engine couples to Epic 12 SKU model.'
+        todo='Backend: /api/v2/admin/pricing/* (read+write); plan-multiplier resolution in relay/billing path. Defer until Epic 12.'
+      />
       <div className='hf-page-head'>
         <div>
           <div className='lbl' style={{ marginBottom: 6 }}>

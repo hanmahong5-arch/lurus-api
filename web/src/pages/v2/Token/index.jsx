@@ -557,7 +557,10 @@ const HFToken = () => {
                   <span className={statusClass(st)}>{st}</span>
                 </div>
                 <div className='mono muted' style={{ fontSize: 10, marginTop: 4 }}>
-                  {maskKey(t.Key)} · {relTime(t.AccessedTime)}
+                  {maskKey(t.Key)}
+                </div>
+                <div className='mono faint' style={{ fontSize: 9, marginTop: 2 }}>
+                  created {relTime(t.CreatedTime)} · last used {relTime(t.AccessedTime)}
                 </div>
                 <div className='muted' style={{ fontSize: 11, marginTop: 2 }}>
                   {fmtModels(t)}

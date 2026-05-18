@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import HFShell from '../../../components/hifi/HFShell';
+import WIPBanner from '../../../components/hifi/WIPBanner';
 
 /* HiFi 8 — Chat. Ported from hifi/hf8-chat.jsx (2026-05-07 variants pack). */
 
@@ -50,6 +51,10 @@ const HFChat = () => {
         </>
       }
     >
+      <WIPBanner
+        reason='Conversations are hardcoded mock content (CONV const). Real chat needs a tenant-scoped conversation store and streaming SSE relay — both pending Wave 2 consumer-feature decision.'
+        todo='Pending consumer-feature deletion call (see hardening-swarm-2026-05-18-acceptance.md §Out of Scope).'
+      />
       <div
         style={{
           display: 'grid',

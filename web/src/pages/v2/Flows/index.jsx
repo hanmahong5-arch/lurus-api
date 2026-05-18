@@ -1,5 +1,6 @@
 import React, { Fragment, useState } from 'react';
 import HFShell from '../../../components/hifi/HFShell';
+import WIPBanner from '../../../components/hifi/WIPBanner';
 
 /* HiFi 13 — Flows: multi-step wizards & incident response. Ported from hifi/hf13-flows.jsx. */
 
@@ -966,6 +967,10 @@ const HFFlows = () => {
         ) : null
       }
     >
+      <WIPBanner
+        reason='Flow wizards are static step previews — no backend orchestration endpoint exists. Each flow (newChannel/newToken/incident/retry) would need its own state-machine handler.'
+        todo='Defer until product confirms which flows actually ship; see hardening-swarm-2026-05-18-acceptance.md §Out of Scope.'
+      />
       <div
         style={{
           display: 'flex',
