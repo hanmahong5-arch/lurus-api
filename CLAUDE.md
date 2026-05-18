@@ -1,4 +1,8 @@
-# Lurus Hub (2b-svc-api)
+# Lurus Newhub (2b-svc-newhub)
+
+> **[STATUS 2026-05-12]**: 本目录是 `2b-svc-newhub`（domain: `hub.lurus.cn`，stage on R6: `test-newhub.lurus.cn`）。
+> 原 `2b-svc-api`（lurus-hub）已于 **2026-04-23 REMOVED**，由 newapi 接管直接中转职能。
+> 下方文档保留自旧 lurus-hub（2b-svc-api）时代，供回滚参考。现役 newhub 是多租户 Hub 层（newapi 之上 + Platform 计费），详见 `doc/` 和 `_bmad-output/`。
 
 AI 数据处理枢纽 — Platform 产品组核心成员。在 New API 开源基座上进化：数据处理管道 + 个性化定制中转 + 企业级计费集成。
 

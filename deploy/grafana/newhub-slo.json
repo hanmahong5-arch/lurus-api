@@ -10,7 +10,7 @@
       "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
       "targets": [
         {
-          "expr": "(1 - sum(rate(lurus_hub_requests_total{status=~\"5..\"}[5m])) / sum(rate(lurus_hub_requests_total[5m]))) * 100",
+          "expr": "(1 - sum(rate(lurus_gateway_requests_total{status=~\"5..\"}[5m])) / sum(rate(lurus_gateway_requests_total[5m]))) * 100",
           "legendFormat": "availability"
         }
       ],
@@ -36,7 +36,7 @@
       "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(lurus_hub_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(lurus_gateway_request_duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "p95 ms"
         }
       ],
@@ -61,7 +61,7 @@
       "description": "North-star SLI: how much latency newhub adds on top of the upstream provider. Includes channel-select, auth, billing, NATS publish.",
       "targets": [
         {
-          "expr": "(histogram_quantile(0.95, sum(rate(lurus_hub_request_duration_seconds_bucket[5m])) by (le)) - histogram_quantile(0.95, sum(rate(lurus_hub_relay_duration_seconds_bucket[5m])) by (le))) * 1000",
+          "expr": "(histogram_quantile(0.95, sum(rate(lurus_gateway_request_duration_seconds_bucket[5m])) by (le)) - histogram_quantile(0.95, sum(rate(lurus_gateway_relay_duration_seconds_bucket[5m])) by (le))) * 1000",
           "legendFormat": "overhead ms"
         }
       ],
@@ -83,7 +83,7 @@
       "title": "Active connections",
       "type": "stat",
       "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
-      "targets": [{ "expr": "lurus_hub_active_connections", "legendFormat": "in-flight" }],
+      "targets": [{ "expr": "lurus_gateway_active_connections", "legendFormat": "in-flight" }],
       "fieldConfig": { "defaults": { "unit": "short" } }
     },
 
@@ -93,7 +93,7 @@
       "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
       "targets": [
         {
-          "expr": "sum(rate(lurus_hub_requests_total[5m])) by (status)",
+          "expr": "sum(rate(lurus_gateway_requests_total[5m])) by (status)",
           "legendFormat": "{{status}}"
         }
       ],
@@ -105,9 +105,9 @@
       "type": "timeseries",
       "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "histogram_quantile(0.50, sum(rate(lurus_hub_request_duration_seconds_bucket[5m])) by (le)) * 1000", "legendFormat": "p50" },
-        { "expr": "histogram_quantile(0.95, sum(rate(lurus_hub_request_duration_seconds_bucket[5m])) by (le)) * 1000", "legendFormat": "p95" },
-        { "expr": "histogram_quantile(0.99, sum(rate(lurus_hub_request_duration_seconds_bucket[5m])) by (le)) * 1000", "legendFormat": "p99" }
+        { "expr": "histogram_quantile(0.50, sum(rate(lurus_gateway_request_duration_seconds_bucket[5m])) by (le)) * 1000", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(lurus_gateway_request_duration_seconds_bucket[5m])) by (le)) * 1000", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, sum(rate(lurus_gateway_request_duration_seconds_bucket[5m])) by (le)) * 1000", "legendFormat": "p99" }
       ],
       "fieldConfig": { "defaults": { "unit": "ms" } }
     },
@@ -119,7 +119,7 @@
       "description": "0=closed (healthy), 1=open (rejecting), 2=half-open (probing). Spikes to 1 are normal during chaos; should return to 0 within cool-down.",
       "targets": [
         {
-          "expr": "lurus_hub_circuit_breaker_state",
+          "expr": "lurus_gateway_circuit_breaker_state",
           "legendFormat": "channel={{channel_id}}"
         }
       ],
@@ -136,8 +136,8 @@
       "type": "timeseries",
       "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "sum(rate(lurus_hub_circuit_breaker_trips_total[5m]))", "legendFormat": "trips/s" },
-        { "expr": "sum(rate(lurus_hub_circuit_breaker_rejections_total[5m]))", "legendFormat": "rejections/s" }
+        { "expr": "sum(rate(lurus_gateway_circuit_breaker_trips_total[5m]))", "legendFormat": "trips/s" },
+        { "expr": "sum(rate(lurus_gateway_circuit_breaker_rejections_total[5m]))", "legendFormat": "rejections/s" }
       ]
     },
 
@@ -148,7 +148,7 @@
       "description": "Spike here = users hitting MaxQuota cap. Confirm clients respect Retry-After (no thundering herd as month resets).",
       "targets": [
         {
-          "expr": "sum(rate(lurus_hub_requests_total{status=\"402\"}[5m]))",
+          "expr": "sum(rate(lurus_gateway_requests_total{status=\"402\"}[5m]))",
           "legendFormat": "402/s"
         }
       ]
@@ -160,7 +160,7 @@
       "description": "Sudden 429 spike on a single user = agent loop or runaway script caught by the 5-min sliding window guard. Investigate.",
       "targets": [
         {
-          "expr": "sum(rate(lurus_hub_requests_total{status=\"429\"}[5m]))",
+          "expr": "sum(rate(lurus_gateway_requests_total{status=\"429\"}[5m]))",
           "legendFormat": "429/s"
         }
       ]
@@ -172,7 +172,7 @@
       "gridPos": { "x": 0, "y": 28, "w": 12, "h": 8 },
       "targets": [
         {
-          "expr": "topk(10, sum(rate(lurus_hub_quota_consumed_total[5m])) by (user_id))",
+          "expr": "topk(10, sum(rate(lurus_gateway_quota_consumed_total[5m])) by (user_id))",
           "legendFormat": "user={{user_id}}"
         }
       ],
@@ -184,7 +184,7 @@
       "gridPos": { "x": 12, "y": 28, "w": 12, "h": 8 },
       "targets": [
         {
-          "expr": "sum(rate(lurus_hub_tokens_processed_total[5m])) by (token_type)",
+          "expr": "sum(rate(lurus_gateway_tokens_processed_total[5m])) by (token_type)",
           "legendFormat": "{{token_type}}"
         }
       ]
@@ -196,7 +196,7 @@
       "gridPos": { "x": 0, "y": 36, "w": 12, "h": 8 },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, rate(lurus_hub_billing_preauth_duration_seconds_bucket[5m])) * 1000",
+          "expr": "histogram_quantile(0.95, rate(lurus_billing_preauth_duration_seconds_bucket[5m])) * 1000",
           "legendFormat": "p95 preauth ms"
         }
       ],
@@ -208,8 +208,8 @@
       "gridPos": { "x": 12, "y": 36, "w": 12, "h": 8 },
       "description": "outbox_pending growing = platform settlement is failing. circuit_breaker_state=1 = newhub stopped trying.",
       "targets": [
-        { "expr": "lurus_hub_billing_outbox_pending",      "legendFormat": "outbox depth" },
-        { "expr": "lurus_hub_billing_circuit_breaker_state", "legendFormat": "platform breaker" }
+        { "expr": "lurus_billing_outbox_pending",      "legendFormat": "outbox depth" },
+        { "expr": "lurus_billing_circuit_breaker_state", "legendFormat": "platform breaker" }
       ]
     }
   ],

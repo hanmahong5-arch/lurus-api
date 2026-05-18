@@ -8,6 +8,15 @@
 #   page    — wakes on-call (5xx burst, breaker stuck open, settlement broken)
 #   ticket  — file an issue, look at it next business hour
 #   info    — anomaly, FYI in chat
+#
+# Metric naming (DO NOT drift):
+#   gateway metrics — internal/pkg/metrics/metrics.go → "lurus_gateway_*"
+#                     (namespace="lurus", subsystem="gateway")
+#   billing metrics — internal/pkg/metrics/billing.go → "lurus_billing_*"
+#                     (namespace="lurus", subsystem="billing")
+#   If the Go subsystem strings ever change, search-replace here too.
+#   (2026-05-18 incident: all 11 rules silently dead for months because
+#    YAML used "lurus_hub_*" while Go emitted "lurus_gateway_*".)
 
 groups:
   - name: lurus-hub-availability
@@ -16,8 +25,8 @@ groups:
       - alert: HubAvailabilityBelowSLO
         expr: |
           (
-            1 - sum(rate(lurus_hub_requests_total{status=~"5.."}[5m]))
-              / sum(rate(lurus_hub_requests_total[5m]))
+            1 - sum(rate(lurus_gateway_requests_total{status=~"5.."}[5m]))
+              / sum(rate(lurus_gateway_requests_total[5m]))
           ) * 100 < 99.5
         for: 10m
         labels:
@@ -30,8 +39,8 @@ groups:
       - alert: HubAvailabilityCritical
         expr: |
           (
-            1 - sum(rate(lurus_hub_requests_total{status=~"5.."}[5m]))
-              / sum(rate(lurus_hub_requests_total[5m]))
+            1 - sum(rate(lurus_gateway_requests_total{status=~"5.."}[5m]))
+              / sum(rate(lurus_gateway_requests_total[5m]))
           ) * 100 < 95
         for: 2m
         labels:
@@ -46,7 +55,7 @@ groups:
       - alert: HubP95LatencyHigh
         expr: |
           histogram_quantile(0.95,
-            sum(rate(lurus_hub_request_duration_seconds_bucket[5m])) by (le)
+            sum(rate(lurus_gateway_request_duration_seconds_bucket[5m])) by (le)
           ) > 3
         for: 10m
         labels:
@@ -59,9 +68,9 @@ groups:
       - alert: HubGatewayOverheadHigh
         expr: |
           (
-            histogram_quantile(0.95, sum(rate(lurus_hub_request_duration_seconds_bucket[5m])) by (le))
+            histogram_quantile(0.95, sum(rate(lurus_gateway_request_duration_seconds_bucket[5m])) by (le))
             -
-            histogram_quantile(0.95, sum(rate(lurus_hub_relay_duration_seconds_bucket[5m])) by (le))
+            histogram_quantile(0.95, sum(rate(lurus_gateway_relay_duration_seconds_bucket[5m])) by (le))
           ) > 0.1
         for: 15m
         labels:
@@ -75,7 +84,7 @@ groups:
     interval: 30s
     rules:
       - alert: ChannelBreakerStuckOpen
-        expr: lurus_hub_circuit_breaker_state == 1
+        expr: lurus_gateway_circuit_breaker_state == 1
         for: 30m
         labels:
           severity: ticket
@@ -86,7 +95,7 @@ groups:
 
       - alert: ChannelBreakerFlapping
         expr: |
-          changes(lurus_hub_circuit_breaker_state[10m]) > 5
+          changes(lurus_gateway_circuit_breaker_state[10m]) > 5
         for: 5m
         labels:
           severity: info
@@ -99,7 +108,7 @@ groups:
     interval: 30s
     rules:
       - alert: CostSpikeBurstHigh
-        expr: sum(rate(lurus_hub_requests_total{status="429"}[5m])) > 1
+        expr: sum(rate(lurus_gateway_requests_total{status="429"}[5m])) > 1
         for: 5m
         labels:
           severity: ticket
@@ -109,7 +118,7 @@ groups:
           description: "Multiple users hitting the 5-min quota guard simultaneously. Could be coordinated abuse OR a too-tight threshold."
 
       - alert: QuotaCapBurstHigh
-        expr: sum(rate(lurus_hub_requests_total{status="402"}[5m])) > 5
+        expr: sum(rate(lurus_gateway_requests_total{status="402"}[5m])) > 5
         for: 10m
         labels:
           severity: info
@@ -122,7 +131,7 @@ groups:
     interval: 60s
     rules:
       - alert: PlatformBreakerOpen
-        expr: lurus_hub_billing_circuit_breaker_state == 1
+        expr: lurus_billing_circuit_breaker_state == 1
         for: 5m
         labels:
           severity: page
@@ -132,7 +141,7 @@ groups:
           description: "newhub stopped settling pre-auths to platform. Quota is being consumed but wallet not debited. Check platform health."
 
       - alert: BillingOutboxBacklog
-        expr: lurus_hub_billing_outbox_pending > 100
+        expr: lurus_billing_outbox_pending > 100
         for: 15m
         labels:
           severity: ticket
@@ -142,7 +151,7 @@ groups:
           description: "Settlement-retry queue is growing. Either platform is slow or a bug is preventing dequeue."
 
       - alert: BillingOutboxFailures
-        expr: rate(lurus_hub_billing_outbox_failed_total[1h]) > 0
+        expr: rate(lurus_billing_outbox_failed_total[1h]) > 0
         for: 5m
         labels:
           severity: ticket

@@ -3,6 +3,16 @@
 **Epic**: 7 - Reliability Hard Floor
 **Priority**: P1
 **Status**: review (artifacts shipped; first STAGE drill run pending operator)
+
+> **2026-05-18 fix**: alert pack metric names were silently dead.
+> `deploy/grafana/newhub-alerts.yaml` and `newhub-slo.json` referenced
+> `lurus_hub_*`, but Go code emits `lurus_gateway_*` (gateway) /
+> `lurus_billing_*` (billing). Surfaced during reseller-MVP swarm L2 ADR
+> research. Fixed via sed in both files (14 + 18 occurrences). Anti-regression
+> comment added at top of alerts.yaml. **All 11 alert rules + 15 dashboard
+> panels now reference real series** — operator should validate on next
+> ArgoCD sync, expect previously-silent alerts to begin firing on legitimate
+> conditions.
 **Type**: Operational tooling
 **Created**: 2026-05-07
 

@@ -2,7 +2,32 @@
 
 **Epic**: 11 (v1 Web UI 退役)
 **Priority**: P1 — blocks 11-3 (v1 sunset)
-**Status**: ✅ DONE (2026-05-12) — all 6 pages wired, redirects flipped, auth TenantContext fixed. e2e against staging ⏳ pending
+**Status**: ✅ DONE (2026-05-12) — all 6 pages wired, redirects flipped, auth TenantContext fixed. e2e harness ✅ built (2026-05-18), STAGE run ⏳ pending bridge token
+
+## e2e Harness (Lane A 2026-05-18)
+
+Vitest + Playwright scaffolded; smoke test `src/test/smoke.test.js` passes 2/2
+(`bun run test`). Playwright spec
+`tests/e2e/story-11-2-token-persistence.spec.ts` walks the DoD §e2e flow
+(login → create token → relogin → assert persistence). Spec runs locally and
+in CI via `.github/workflows/web-ci.yml` (e2e job is `workflow_dispatch`-gated;
+unit/lint/build are PR-blocking).
+
+**Run condition**: spec `test.skip`s when `E2E_BRIDGE_TOKEN` is absent — it
+does NOT silently pass. Set `E2E_BRIDGE_TOKEN` + `E2E_TENANT_SLUG` env vars
+(or GHA secrets) to execute against `https://test-newhub.lurus.cn`.
+
+Local verification of harness runnability (no STAGE creds):
+```
+$ bun run test:e2e
+Running 1 test using 1 worker
+  -  1 [chromium] ... › create → relogin → token persists
+  1 skipped
+```
+
+**Not yet measured**: token-persistence behavior on STAGE. Per CLAUDE.md §4.1
+⑥, "harness exists" ≠ "behavior verified". Story can only flip to "e2e
+verified" after a non-skipped pass with bridge token set.
 **Sized**: 2-3 weeks engineering, single-developer pace
 **Discovered by**: Layer C bridge browser e2e (2026-05-10)
 

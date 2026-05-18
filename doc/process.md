@@ -417,3 +417,71 @@ bash -n syntax check 通过 · JSON valid · DoD 缺第一次 STAGE 真跑
 - `/api/v1/auth/login-or-register` 还是 TODO，前端按钮 UX 撒谎
 
 **留给明天**: oauth.go 951 LOC + zitadel_auth.go 300 LOC + 4 test 文件清理；user 表加 `lurus_account_id` 列 migration；老 v2 路由删除
+
+
+## 2026-05-18 · Hardening swarm (dev-only, single session)
+
+**Scope**: Lane A (quality floor) + Lane D (backend tests + scoped CI gate) + Lane B partial (TenantSwitcher real-data only).
+Lane C (Epic 7 STAGE validation) explicitly deferred — needs operator SSH + multi-min observation windows.
+
+**Lane A**: `web/vitest.config.js` + `playwright.config.ts` + `tests/e2e/story-11-2-token-persistence.spec.ts` + `web-ci.yml` (PR-blocking: lint/eslint/vitest/build; e2e nightly via workflow_dispatch). `bun run test` 2/2; `bun run test:e2e` 1 skipped (correct, no E2E_BRIDGE_TOKEN).
+
+**Lane D**: 9 new handler tests in `audit_governance_test.go` (4 audit + 5 governance) — all pass. Repaired pre-existing `TestListTokensV2_Pagination` (handler shape `items`/`p`/`size` drift from commit `23a87f72`). Added `go-ci.yml` with `go build` + `go vet` + scoped test gate. **Did not** add broad `go test -short ./...` — pre-existing OAuth/JWKS test debt (TestValidateIDToken_*) would block every PR; documented in `test-debt-findings.md`.
+
+**Lane B partial**: `HFShell.jsx` `useRealTenants` hook calls `/api/v2/admin/tenants` for root, single-tenant fallback otherwise. TenantSwitcher DEMO_TENANTS removed. 5 component tests added. Dashboard/Settings/Log mocks NOT cleared — multi-hour effort, deferred.
+
+**Acceptance**: `_bmad-output/planning-artifacts/hardening-swarm-2026-05-18-acceptance.md` — explicit marker-vs-measurement separation per §4.1 ⑥; lists what this swarm does NOT claim (Epic 7 review→done; broad CI gate; UI walkthrough).
+
+
+## 2026-05-18 (cont.) · Lane B pass 2 — Dashboard realtime KPI wire-up
+
+`qps` / `ttft p50` / `error rate` tiles were `—` placeholders with "coming soon" copy. No `/api/v2/{slug}/metrics/usage` exists, so derived client-side from last 5min of `/logs`.
+
+**Files**: `web/src/pages/v2/Dashboard/kpis.js` (pure helpers) + `kpis.test.js` (17 cases) + `index.jsx` widened fetch to `size=200&start_time=now-300`.
+**Honesty (§4.1 ①)**: empty window renders `—` + "no traffic in last 5 min", not 0% / 0 / perfect zero.
+**Test count**: vitest 24/24, vite build green.
+
+
+## 2026-05-18 (cont.) · Lane B pass 3 — WIPBanner + dead-mock removal
+
+**WIPBanner** shared component (`web/src/components/hifi/WIPBanner.jsx`, role=status, reason+todo props).
+
+**Injected**: Playground / Models / Chat / Flows top of body — explicit "not yet wired" marker with backend dependency listed.
+**Log page**: deleted `CLUSTERS` (4 fake error clusters) and `LIVE_ROWS` (8 hardcoded log lines + fake cursor) arrays; tabs now render WIPBanner + "endpoint not implemented" empty state.
+
+**§4.1 ⑥**: Banner = marker; mock-data deletion = measurement hygiene. Fake "live tail at 14:02:11.481 acme contoso initech" can no longer leak into stakeholder demos as if it were real telemetry.
+
+**Tests**: vitest 28/28 (added 4 WIPBanner specs); vite build green.
+
+
+## 2026-05-18 (cont.) · Reseller-MVP swarm (option β)
+
+3 parallel sonnet agents调研 (Portkey/Helicone/LiteLLM/OpenRouter/Vercel AI/Cloudflare; Langfuse/LangSmith/Helicone analytics/PromptLayer/Phoenix/Datadog LLM; OpenAI/Anthropic/OpenRouter/Stripe/Vercel/Cloudflare key UX) — 17 个高置信改进点 + 4 个跨证伪 anti-recommendation. 见 `competitive-intel-2026-05-18.md`.
+
+**Swarm 4 lanes**:
+- **L1 ADR-only**: tenant credit pool + Provisioning API — 加 2 表 + 2 列；per-request 条件 UPDATE 防 race；pool→token 双闸 (402→429)；OpenRouter Management Key 模式. 5 个开放问题等 Anita.
+- **L2 ADR-only**: budget threshold alerts — NATS→platform notifier 派发；Redis dedup TTL；扩 newhub-alerts.yaml. **🔴 重要发现**: 现有 11 条 alert YAML 用 `lurus_hub_*`，但 metrics.go namespace 是 `lurus_gateway_*` — 自从某次 subsystem 改名后所有 alert silently 死了。Story 7-5 DoD 的 alert 部分应重审.
+- **L3 实施**: Settings/Security 接 `/api/v2/client/sessions` (single-session 真数据) + WIPBanner 注明多设备未实现；Notifications/Team mock 删 + banner；Token 行加 `created_time`/`accessed_time` 显式标签.
+- **L4 实施**: Dashboard ttft tile 升级 P50/P95/P99 三档 + cost-by-model 真接（替换 bubble chart）+ OnboardingCurlBlock (零 token 时显)；kpis.js +4 个派生函数 + 11 个 vitest case.
+
+**测试**: vitest 39/39 (smoke 2 + TenantSwitcher 5 + kpis 28 + WIPBanner 4), vite build green.
+**Acceptance**: `_bmad-output/planning-artifacts/reseller-mvp-2026-05-18-acceptance.md`.
+
+
+
+## 2026-05-18 (cont.) · Fix dead alerts (自行决策路径)
+
+L2 ADR 调研发现 11 条 alert + 15 个 dashboard panel 全用错指标前缀 `lurus_hub_*`（实际 emit 是 `lurus_gateway_*` / `lurus_billing_*`）—— silently dead 不知多久。
+
+**修复**: sed 二步替换 (billing 先, gateway 后) on `deploy/grafana/newhub-alerts.yaml` + `newhub-slo.json`. YAML 顶部加防回归注释指向 `internal/pkg/metrics/{metrics,billing}.go` 的 namespace/subsystem 真源。`grep -c lurus_hub_` = 0; YAML/JSON 解析通过.
+
+**操作员影响**: 下次 ArgoCD sync ConfigMap 后 11 条 alert 开始针对真指标评估。之前隐形的合规告警会开始触发。这是预期行为，不是回归。
+
+**Story 7-5 状态**: 仍 review 但 alert pack DoD 真正修了；首次 STAGE drill 还等 operator.
+
+
+## 2026-05-18 (cont.) · Lane B 二次扫荡 — Billing + Pricing
+
+发现 Billing 整页 + Pricing 整页仍是设计 mock（INVOICES $8,420.40 / ROWS gpt-4o $2.5 等），两页各加 WIPBanner 指向 Epic 12 SKU 决策。**不删 mock 数据**因这些是 UI 占位 layout（不像 Log Cluster 那种伪 telemetry）；banner 提供"这页不真"的明确标记。
+
+测试 39/39，build 绿，go handler 测试 10/10。

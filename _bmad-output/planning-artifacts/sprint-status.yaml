@@ -180,6 +180,45 @@ active_sprint:
     - 7-2.1 PG WAL-G STAGE drill (Phase 1.0, 0.5 day)
 
 # ============================================================
+# HARDENING SWARM (2026-05-18, dev-only, single session)
+# ============================================================
+hardening_swarm_2026_05_18:
+  scope_selected_by_user: "Lane A full + Lane D full + Lane B partial; Lane C deferred"
+  acceptance_report: "_bmad-output/planning-artifacts/hardening-swarm-2026-05-18-acceptance.md"
+  lane_a_quality_floor:
+    status: done
+    artifacts:
+      - web/vitest.config.js
+      - web/playwright.config.ts
+      - web/tests/e2e/story-11-2-token-persistence.spec.ts
+      - .github/workflows/web-ci.yml
+    evidence: "vitest 2/2 smoke; playwright 1 skipped (no E2E_BRIDGE_TOKEN — correct)"
+  lane_b_v2_mock_clear:
+    status: partial
+    delivered:
+      - "Pass 1: TenantSwitcher → real /api/v2/admin/tenants + 5 component tests"
+      - "Pass 2: Dashboard qps/ttft p50/error rate derived from /logs 5-min window (was '—' / 'coming soon'); 17 unit tests for kpis.js helpers"
+      - "Pass 3: WIPBanner explicit markers on Playground/Models/Chat/Flows; Log Cluster/Live tabs strip CLUSTERS/LIVE_ROWS mock arrays + show empty state; 4 banner tests"
+    deferred: "Settings non-profile tabs (Sessions/Notifications/Team)"
+  lane_c_epic7_stage_validation:
+    status: deferred
+    reason: "Needs operator SSH to R6 + multi-min observation windows for breaker / PG HA / WAL-G / backpressure / chaos drill"
+    next_session_inputs: "stage-smoke.sh + chaos-drill.sh + per-story acceptance template"
+  lane_d_backend_tests:
+    status: done
+    artifacts:
+      - internal/adapter/handler/audit_governance_test.go
+      - .github/workflows/go-ci.yml
+      - _bmad-output/planning-artifacts/test-debt-findings.md
+    evidence: "9 new (audit+governance) + 1 repaired (v2 token) — all PASS; go build/vet clean"
+    deferred: "billing handler test (platform gRPC dep); relay fake-provider test; broad go test -short gate (OAuth/JWKS test debt)"
+  not_claimed_per_4_1_6:
+    - "Epic 7 review→done"
+    - "v2 hi-fi mock zero"
+    - "go test -short ./... green"
+    - "Story 11-2 e2e behavior-verified on STAGE"
+
+# ============================================================
 # OPEN STRATEGIC DECISIONS (need Anita confirmation)
 # ============================================================
 open_decisions:
