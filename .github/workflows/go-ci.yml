@@ -1,0 +1,73 @@
+name: Go CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/go-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/go-ci.yml'
+
+jobs:
+  build:
+    name: go build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: LurusTech/lurus-proto-go
+          path: ../shared/lurus-proto-go
+          fetch-depth: 1
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+      - run: go build ./...
+
+  test-handler:
+    name: handler audit + governance tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: LurusTech/lurus-proto-go
+          path: ../shared/lurus-proto-go
+          fetch-depth: 1
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+      # Scoped run: covers the audit + governance + v2 token pagination paths
+      # added/repaired in Lane D. Broader `go test -short ./...` is deferred
+      # until baseline OAuth/JWKS test debt is cleaned —
+      # see _bmad-output/planning-artifacts/test-debt-findings.md.
+      - run: |
+          go test -count=1 -short -v -timeout=5m \
+            ./internal/adapter/handler/ \
+            -run 'TestGetAuditEvents|TestGetGovernance|TestListTokensV2_Pagination'
+
+  vet:
+    name: go vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: LurusTech/lurus-proto-go
+          path: ../shared/lurus-proto-go
+          fetch-depth: 1
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+      - run: go vet ./...

@@ -1,0 +1,73 @@
+name: Web CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-ci.yml'
+  workflow_dispatch:
+    inputs:
+      run_e2e:
+        description: 'Run Playwright e2e against STAGE'
+        required: false
+        default: 'false'
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  test:
+    name: Lint + Typecheck + Vitest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.10'
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run eslint
+      - run: bun run test
+
+  build:
+    name: Vite build
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.10'
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+
+  e2e:
+    name: Playwright e2e (STAGE)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_e2e == 'true'
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.10'
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:e2e
+        env:
+          E2E_BASE_URL: ${{ secrets.E2E_BASE_URL || 'https://test-newhub.lurus.cn' }}
+          E2E_BRIDGE_TOKEN: ${{ secrets.E2E_BRIDGE_TOKEN }}
+          E2E_TENANT_SLUG: ${{ secrets.E2E_TENANT_SLUG || 'default' }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 14
