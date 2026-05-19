@@ -219,6 +219,36 @@ hardening_swarm_2026_05_18:
     - "Story 11-2 e2e behavior-verified on STAGE"
 
 # ============================================================
+# Q3 PHASE 2 SWARM (Credit pool + Provisioning API) — 2026-05-18 evening
+# Plan: 5 lanes / 2 waves driving Switch-Reseller backend enablement.
+# ============================================================
+phase2_swarm_2026_05_18:
+  story_doc: "_bmad-output/planning-artifacts/story-q3-phase2-credit-pool.md"
+  pre_swarm_commit: f6a492ad  # Phase 2 schema draft (migration 012 + entity + repo stub)
+  commits:
+    lane_delta_observability: 395d9065   # NATS pool_threshold publisher + 3 metrics + Grafana panels + 2 alerts
+    lane_alpha_backend:       e9f26560   # 5 admin + 2 provisioning handlers + relay-gate on 5 groups + quota wiring
+    lane_epsilon_docs:        a8f3de37   # ADR §4.2 Bearer→X-API-Key fix + contract spec + runbook + 5 retros + epic-7 roll-up
+    lane_gamma_frontend:      7ca1aa18   # CreditPoolDrawer + 11 vitest cases + Tenants pool button + Token "by user #N"
+    lane_beta_tests:          8e29a97e   # entity helpers + repo atomic race invariant + middleware shape contract
+  verified:
+    go_build: clean
+    go_vet:   clean
+    repo_tests: "TestDebitPool_AtomicRace (20 goroutines x 10 vs pool 50 -> exactly 5 ok, 15 reject, 0 negative)"
+    nats_tests: "8/8 pool_threshold cases (schema dedup + Redis dedup + redis-down fallback)"
+    frontend_tests: "50/50 vitest including 11 new CreditPoolDrawer cases"
+    frontend_build: "bun run build clean"
+  not_claimed_per_4_1_6:
+    - "STAGE drill — pool gate / wallet topup / provisioning round-trip on R6 (Phase 3, operator session)"
+    - "Switch integration — depends on G1 (Switch team commits Provisioning API timeline)"
+    - "PROD push — gated on G2 (after Phase 3 evidence + G3 pilot Reseller commitment)"
+    - "Handler-level admin/JWT tests — existing OAuth/JWKS test debt blocks broad gate; documented as follow-up"
+  external_gates_pending_anita:
+    G1_switch_team_timeline:   pending
+    G2_prod_push_authorization: pending
+    G3_pilot_reseller_commit:   pending
+
+# ============================================================
 # OPEN STRATEGIC DECISIONS (need Anita confirmation)
 # ============================================================
 open_decisions:

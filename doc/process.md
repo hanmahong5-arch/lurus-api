@@ -485,3 +485,16 @@ L2 ADR 调研发现 11 条 alert + 15 个 dashboard panel 全用错指标前缀 
 发现 Billing 整页 + Pricing 整页仍是设计 mock（INVOICES $8,420.40 / ROWS gpt-4o $2.5 等），两页各加 WIPBanner 指向 Epic 12 SKU 决策。**不删 mock 数据**因这些是 UI 占位 layout（不像 Log Cluster 那种伪 telemetry）；banner 提供"这页不真"的明确标记。
 
 测试 39/39，build 绿，go handler 测试 10/10。
+
+
+## 2026-05-18 (evening) · Q3 Phase 2 Swarm — Credit Pool + Provisioning API
+
+5 lanes / 2 waves，6 commits 全部 landed：
+- `f6a492ad` schema draft（migration 012 + entity + repo stub）
+- `395d9065` Lane δ：NATS pool_threshold（schema+Redis 双 dedup）+ 3 Prometheus 指标 + 3 Grafana panels + 2 alerts
+- `e9f26560` Lane α：5 admin + 2 provisioning handlers + pool-gate on 5 relay groups + PostConsumeQuota Phase 2.5
+- `a8f3de37` Lane ε：ADR §4.2 `Bearer→X-API-Key` 修正（Switch 集成阻断）+ contract spec + runbook + 5 retro + epic-7 roll-up
+- `7ca1aa18` Lane γ：CreditPoolDrawer（11 vitest cases）+ Tenants pool button + Token "by user #N"
+- `8e29a97e` Lane β：entity + **repo atomic race invariant**（20 goroutines × 10 vs pool 50 → 5 ok / 0 negative）+ middleware contract
+
+3 agent timed out 中段，剩余在 main 手工补完。Build/vet/tests 全绿。STAGE drill 与 G1/G2/G3 仍 pending — 不冒充 "done"。
