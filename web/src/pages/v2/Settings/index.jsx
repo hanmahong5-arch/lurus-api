@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2025 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import HFShell from '../../../components/hifi/HFShell';
 import WIPBanner from '../../../components/hifi/WIPBanner';
@@ -186,10 +204,7 @@ const HFSettings = () => {
     : [];
 
   return (
-    <HFShell
-      active='settings'
-      crumbs={['my account', 'settings']}
-    >
+    <HFShell active='settings' crumbs={['my account', 'settings']}>
       <div
         style={{
           display: 'grid',
@@ -223,7 +238,10 @@ const HFSettings = () => {
               <div className='strong' style={{ fontSize: 12 }}>
                 {l}
               </div>
-              <div className='faint mono' style={{ fontSize: 10, marginTop: 2 }}>
+              <div
+                className='faint mono'
+                style={{ fontSize: 10, marginTop: 2 }}
+              >
                 {d}
               </div>
             </div>
@@ -246,7 +264,9 @@ const HFSettings = () => {
           {section === 'profile' && (
             <div style={{ marginTop: 22 }}>
               {loadingProfile && (
-                <div className='muted' style={{ fontSize: 12 }}>Loading…</div>
+                <div className='muted' style={{ fontSize: 12 }}>
+                  Loading…
+                </div>
               )}
 
               {!loadingProfile && !profile && (
@@ -259,48 +279,52 @@ const HFSettings = () => {
                 <>
                   {/* Field rows */}
                   <div className='panel'>
-                    {profileRows.map(([label, fieldKey, value, editable], i, a) => (
-                      <div
-                        key={label}
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: '160px 1fr auto',
-                          padding: '14px 16px',
-                          borderBottom:
-                            i < a.length - 1 ? '1px dashed var(--hf-rule)' : 0,
-                          alignItems: 'center',
-                          gap: 12,
-                        }}
-                      >
-                        <span className='lbl'>{label}</span>
+                    {profileRows.map(
+                      ([label, fieldKey, value, editable], i, a) => (
+                        <div
+                          key={label}
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '160px 1fr auto',
+                            padding: '14px 16px',
+                            borderBottom:
+                              i < a.length - 1
+                                ? '1px dashed var(--hf-rule)'
+                                : 0,
+                            alignItems: 'center',
+                            gap: 12,
+                          }}
+                        >
+                          <span className='lbl'>{label}</span>
 
-                        {editable && editField === fieldKey ? (
-                          <InlineEdit
-                            value={value === '—' ? '' : value}
-                            onSave={(v) => handleSaveField(fieldKey, v)}
-                            onCancel={() => setEditField(null)}
-                          />
-                        ) : (
-                          <span className='strong' style={{ fontSize: 13 }}>
-                            {value}
-                          </span>
-                        )}
+                          {editable && editField === fieldKey ? (
+                            <InlineEdit
+                              value={value === '—' ? '' : value}
+                              onSave={(v) => handleSaveField(fieldKey, v)}
+                              onCancel={() => setEditField(null)}
+                            />
+                          ) : (
+                            <span className='strong' style={{ fontSize: 13 }}>
+                              {value}
+                            </span>
+                          )}
 
-                        {editable && editField !== fieldKey ? (
-                          <button
-                            type='button'
-                            className='btn ghost sm'
-                            disabled={saving}
-                            onClick={() => setEditField(fieldKey)}
-                          >
-                            edit
-                          </button>
-                        ) : (
-                          /* Keep grid alignment for read-only rows */
-                          <span />
-                        )}
-                      </div>
-                    ))}
+                          {editable && editField !== fieldKey ? (
+                            <button
+                              type='button'
+                              className='btn ghost sm'
+                              disabled={saving}
+                              onClick={() => setEditField(fieldKey)}
+                            >
+                              edit
+                            </button>
+                          ) : (
+                            /* Keep grid alignment for read-only rows */
+                            <span />
+                          )}
+                        </div>
+                      ),
+                    )}
                   </div>
 
                   {/* Usage summary */}
@@ -314,13 +338,17 @@ const HFSettings = () => {
                     }}
                   >
                     <div>
-                      <div className='lbl' style={{ marginBottom: 4 }}>spent</div>
+                      <div className='lbl' style={{ marginBottom: 4 }}>
+                        spent
+                      </div>
                       <div className='display' style={{ fontSize: 22 }}>
                         ${(profile.used_quota / QUOTA_PER_USD).toFixed(2)}
                       </div>
                     </div>
                     <div>
-                      <div className='lbl' style={{ marginBottom: 4 }}>requests</div>
+                      <div className='lbl' style={{ marginBottom: 4 }}>
+                        requests
+                      </div>
                       <div className='display' style={{ fontSize: 22 }}>
                         {(profile.request_count ?? 0).toLocaleString()}
                       </div>
@@ -335,7 +363,10 @@ const HFSettings = () => {
           {section === 'security' && (
             <div style={{ marginTop: 22 }}>
               <ComingSoon />
-              <div className='panel' style={{ padding: 18, marginBottom: 14, marginTop: 16 }}>
+              <div
+                className='panel'
+                style={{ padding: 18, marginBottom: 14, marginTop: 16 }}
+              >
                 <div className='lbl'>multi-factor auth</div>
                 <div
                   style={{
@@ -357,7 +388,10 @@ const HFSettings = () => {
                 reason='Multi-device session tracking is not implemented. The endpoint /api/v2/client/sessions returns only the *current* session (auth_method + active_tokens + request_count), not a per-device list with revoke.'
                 todo='Backend: device session store + DELETE /api/v2/client/sessions/:id; then surface list here.'
               />
-              <div className='panel' style={{ padding: 18, marginTop: 14, marginBottom: 14 }}>
+              <div
+                className='panel'
+                style={{ padding: 18, marginTop: 14, marginBottom: 14 }}
+              >
                 <div className='lbl'>current session</div>
                 {sessionLoading && (
                   <div
@@ -396,7 +430,7 @@ const HFSettings = () => {
                     </span>
                     <span className='tag ok'>current</span>
                     <span className='faint mono' style={{ fontSize: 10 }}>
-                      {(sessionInfo.active_tokens ?? 0)} active tokens
+                      {sessionInfo.active_tokens ?? 0} active tokens
                     </span>
                   </div>
                 )}

@@ -29,6 +29,16 @@ jobs:
           path: lurus-proto-go
           fetch-depth: 1
 
+      - name: Checkout zita-sdk-go (pinned, pre-alpha)
+        uses: actions/checkout@v4
+        with:
+          repository: hanmahong5-arch/zita-sdk-go
+          # Pre-alpha pin per release_cadence rule. Full sha required;
+          # actions/checkout treats short shas as branch/tag names.
+          ref: e2611da1e01ef77b8227571204d6780a6364fea3
+          path: zita-sdk-go
+          fetch-depth: 1
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 

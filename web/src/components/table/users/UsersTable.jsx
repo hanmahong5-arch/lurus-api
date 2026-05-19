@@ -196,7 +196,6 @@ const UsersTable = (usersData) => {
         manageUser={manageUser}
         t={t}
       />
-
     </>
   );
 };

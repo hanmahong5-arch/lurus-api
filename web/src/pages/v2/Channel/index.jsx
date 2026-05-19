@@ -1,4 +1,28 @@
-import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+/*
+Copyright (C) 2025 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+import React, {
+  Fragment,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import HFShell from '../../../components/hifi/HFShell';
 import { API, showError, showSuccess } from '../../../helpers';
 
@@ -139,7 +163,7 @@ const ChannelModal = ({ tenantSlug, existing, onDone, onClose }) => {
           baseURL: existing.BaseURL ?? '',
           models: Array.isArray(existing.Models)
             ? existing.Models.join(',')
-            : existing.Models ?? '',
+            : (existing.Models ?? ''),
           group: existing.Group ?? 'default',
           weight: existing.Weight ?? 1,
           priority: existing.Priority ?? 0,
@@ -147,7 +171,7 @@ const ChannelModal = ({ tenantSlug, existing, onDone, onClose }) => {
           tag: existing.Tag ?? '',
           remark: existing.Remark ?? '',
         }
-      : { ...EMPTY_FORM }
+      : { ...EMPTY_FORM },
   );
   const [saving, setSaving] = useState(false);
   const nameRef = useRef(null);
@@ -180,7 +204,10 @@ const ChannelModal = ({ tenantSlug, existing, onDone, onClose }) => {
 
       let res;
       if (existing) {
-        res = await API.put(`/api/v2/${tenantSlug}/channels/${existing.Id}`, body);
+        res = await API.put(
+          `/api/v2/${tenantSlug}/channels/${existing.Id}`,
+          body,
+        );
       } else {
         res = await API.post(`/api/v2/${tenantSlug}/channels`, body);
       }
@@ -275,7 +302,9 @@ const ChannelModal = ({ tenantSlug, existing, onDone, onClose }) => {
           </label>
         )}
 
-        {field('base url', 'baseURL', { placeholder: 'https://api.openai.com/v1' })}
+        {field('base url', 'baseURL', {
+          placeholder: 'https://api.openai.com/v1',
+        })}
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span className='lbl'>type (int)</span>
@@ -300,7 +329,9 @@ const ChannelModal = ({ tenantSlug, existing, onDone, onClose }) => {
 
         {field('group', 'group', { placeholder: 'default' })}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div
+          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}
+        >
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span className='lbl'>weight</span>
             <input
@@ -324,7 +355,9 @@ const ChannelModal = ({ tenantSlug, existing, onDone, onClose }) => {
         </div>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className='lbl'>model mapping (from=to, comma-separated or JSON)</span>
+          <span className='lbl'>
+            model mapping (from=to, comma-separated or JSON)
+          </span>
           <input
             style={inputStyle}
             value={form.modelMapping}
@@ -345,7 +378,14 @@ const ChannelModal = ({ tenantSlug, existing, onDone, onClose }) => {
           />
         </label>
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            justifyContent: 'flex-end',
+            marginTop: 4,
+          }}
+        >
           <button type='button' className='btn ghost' onClick={onClose}>
             cancel
           </button>
@@ -369,7 +409,9 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
   const modelsList = (() => {
     if (!channel.Models) return [];
     if (Array.isArray(channel.Models)) return channel.Models;
-    return channel.Models.split(',').map((m) => m.trim()).filter(Boolean);
+    return channel.Models.split(',')
+      .map((m) => m.trim())
+      .filter(Boolean);
   })();
 
   const saveField = async (field, value) => {
@@ -385,7 +427,10 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
     if (Object.keys(body).length === 0) return;
     setSaving(true);
     try {
-      const res = await API.put(`/api/v2/${tenantSlug}/channels/${channel.Id}`, body);
+      const res = await API.put(
+        `/api/v2/${tenantSlug}/channels/${channel.Id}`,
+        body,
+      );
       if (res?.data?.success) {
         showSuccess('Saved');
         onRefresh();
@@ -397,10 +442,17 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(`Delete channel "${channel.Name}"? This cannot be undone.`)) return;
+    if (
+      !window.confirm(
+        `Delete channel "${channel.Name}"? This cannot be undone.`,
+      )
+    )
+      return;
     setSaving(true);
     try {
-      const res = await API.delete(`/api/v2/${tenantSlug}/channels/${channel.Id}`);
+      const res = await API.delete(
+        `/api/v2/${tenantSlug}/channels/${channel.Id}`,
+      );
       if (res?.data?.success) {
         showSuccess('Channel deleted');
         onRefresh();
@@ -415,7 +467,10 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
     const newStatus = channel.Status === 1 ? 2 : 1;
     setSaving(true);
     try {
-      const res = await API.put(`/api/v2/${tenantSlug}/channels/${channel.Id}`, { status: newStatus });
+      const res = await API.put(
+        `/api/v2/${tenantSlug}/channels/${channel.Id}`,
+        { status: newStatus },
+      );
       if (res?.data?.success) {
         showSuccess(newStatus === 1 ? 'Channel enabled' : 'Channel disabled');
         onRefresh();
@@ -465,10 +520,19 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
   );
 
   return (
-    <div style={{ padding: 20, display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 20 }}>
+    <div
+      style={{
+        padding: 20,
+        display: 'grid',
+        gridTemplateColumns: '1.4fr 1fr 1fr',
+        gap: 20,
+      }}
+    >
       {/* Column 1: settings */}
       <div>
-        <div className='lbl' style={{ marginBottom: 8 }}>channel settings</div>
+        <div className='lbl' style={{ marginBottom: 8 }}>
+          channel settings
+        </div>
         <div>
           {row('base url', channel.BaseURL, 'baseURL')}
           {row('group', channel.Group, 'group')}
@@ -525,10 +589,14 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
 
       {/* Column 3: model mapping + actions */}
       <div>
-        <div className='lbl' style={{ marginBottom: 8 }}>model mapping</div>
+        <div className='lbl' style={{ marginBottom: 8 }}>
+          model mapping
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           {mappings.length === 0 && (
-            <span className='muted' style={{ fontSize: 11 }}>none</span>
+            <span className='muted' style={{ fontSize: 11 }}>
+              none
+            </span>
           )}
           {mappings.map(([from, to], j) => (
             <div
@@ -542,7 +610,9 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
               }}
             >
               <span className='pill mono'>{from}</span>
-              <span className='faint' style={{ textAlign: 'center' }}>→</span>
+              <span className='faint' style={{ textAlign: 'center' }}>
+                →
+              </span>
               <span className='pill mono'>{to}</span>
             </div>
           ))}
@@ -567,7 +637,9 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: 6, marginTop: 16, flexWrap: 'wrap' }}>
+        <div
+          style={{ display: 'flex', gap: 6, marginTop: 16, flexWrap: 'wrap' }}
+        >
           <button
             type='button'
             className='btn sm'
@@ -607,11 +679,13 @@ const HFChannel = () => {
   const fetchChannels = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await API.get(`/api/v2/${tenantSlug}/channels?page=1&page_size=100`);
+      const res = await API.get(
+        `/api/v2/${tenantSlug}/channels?page=1&page_size=100`,
+      );
       if (res?.data?.success) {
         const d = res.data.data;
         setChannels(d.channels ?? []);
-        setTotal(d.total ?? (d.channels?.length ?? 0));
+        setTotal(d.total ?? d.channels?.length ?? 0);
         setSel(new Set());
         setOpen(-1);
       }
@@ -642,8 +716,12 @@ const HFChannel = () => {
 
   // Derived summary counts
   const okCount = channels.filter((c) => channelStatus(c) === 'ok').length;
-  const disabledCount = channels.filter((c) => channelStatus(c) === 'disabled').length;
-  const errorCount = channels.filter((c) => channelStatus(c) === 'error').length;
+  const disabledCount = channels.filter(
+    (c) => channelStatus(c) === 'disabled',
+  ).length;
+  const errorCount = channels.filter(
+    (c) => channelStatus(c) === 'error',
+  ).length;
 
   // Batch enable/disable
   const batchSetStatus = async (status) => {
@@ -652,8 +730,8 @@ const HFChannel = () => {
     try {
       await Promise.all(
         targets.map((ch) =>
-          API.put(`/api/v2/${tenantSlug}/channels/${ch.Id}`, { status })
-        )
+          API.put(`/api/v2/${tenantSlug}/channels/${ch.Id}`, { status }),
+        ),
       );
       showSuccess(`${targets.length} channel(s) updated`);
       await fetchChannels();
@@ -679,21 +757,32 @@ const HFChannel = () => {
       {/* Page header */}
       <div className='hf-page-head'>
         <div>
-          <div className='lbl' style={{ marginBottom: 6 }}>channels</div>
+          <div className='lbl' style={{ marginBottom: 6 }}>
+            channels
+          </div>
           <h1>
-            {loading ? '…' : `${total} upstream channel${total !== 1 ? 's' : ''}`}
+            {loading
+              ? '…'
+              : `${total} upstream channel${total !== 1 ? 's' : ''}`}
           </h1>
           <div className='sub'>channel management · live data</div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 28 }}>
           {[
             ['healthy', loading ? '…' : String(okCount), 'var(--hf-ok)'],
-            ['disabled', loading ? '…' : String(disabledCount), 'var(--hf-warn)'],
+            [
+              'disabled',
+              loading ? '…' : String(disabledCount),
+              'var(--hf-warn)',
+            ],
             ['error', loading ? '…' : String(errorCount), 'var(--hf-err)'],
           ].map(([l, v, c], i) => (
             <div key={i}>
               <div className='lbl'>{l}</div>
-              <div className='display' style={{ fontSize: 26, color: c, marginTop: 2 }}>
+              <div
+                className='display'
+                style={{ fontSize: 26, color: c, marginTop: 2 }}
+              >
                 {v}
               </div>
             </div>
@@ -725,7 +814,11 @@ const HFChannel = () => {
             <button
               type='button'
               className='btn'
-              style={{ background: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.3)', color: '#fff' }}
+              style={{
+                background: 'rgba(255,255,255,0.15)',
+                borderColor: 'rgba(255,255,255,0.3)',
+                color: '#fff',
+              }}
               onClick={() => batchSetStatus(1)}
             >
               enable
@@ -733,7 +826,11 @@ const HFChannel = () => {
             <button
               type='button'
               className='btn'
-              style={{ background: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.3)', color: '#fff' }}
+              style={{
+                background: 'rgba(255,255,255,0.15)',
+                borderColor: 'rgba(255,255,255,0.3)',
+                color: '#fff',
+              }}
               onClick={() => batchSetStatus(2)}
             >
               disable
@@ -749,7 +846,9 @@ const HFChannel = () => {
             </button>
           </>
         ) : (
-          <span>tip · select rows for batch operations · or click any row to expand</span>
+          <span>
+            tip · select rows for batch operations · or click any row to expand
+          </span>
         )}
       </div>
 
@@ -786,14 +885,18 @@ const HFChannel = () => {
               const modelsList = (() => {
                 if (!ch.Models) return [];
                 if (Array.isArray(ch.Models)) return ch.Models;
-                return ch.Models.split(',').map((m) => m.trim()).filter(Boolean);
+                return ch.Models.split(',')
+                  .map((m) => m.trim())
+                  .filter(Boolean);
               })();
 
               return (
                 <Fragment key={ch.Id ?? i}>
                   <tr
                     style={{
-                      background: sel.has(i) ? 'rgba(255,93,31,0.08)' : undefined,
+                      background: sel.has(i)
+                        ? 'rgba(255,93,31,0.08)'
+                        : undefined,
                       borderLeft: sel.has(i)
                         ? '2px solid var(--hf-accent)'
                         : '2px solid transparent',
@@ -807,7 +910,13 @@ const HFChannel = () => {
 
                     {/* Name + group */}
                     <td onClick={() => setOpen(isOpen ? -1 : i)}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                        }}
+                      >
                         <span className={statusDot(st)} />
                         <div>
                           <div className='strong'>{ch.Name}</div>
@@ -820,30 +929,57 @@ const HFChannel = () => {
                     </td>
 
                     {/* Type */}
-                    <td className='mono muted' style={{ fontSize: 11 }} onClick={() => setOpen(isOpen ? -1 : i)}>
+                    <td
+                      className='mono muted'
+                      style={{ fontSize: 11 }}
+                      onClick={() => setOpen(isOpen ? -1 : i)}
+                    >
                       {ch.Type ?? '—'}
                     </td>
 
                     {/* Model count */}
-                    <td className='mono' onClick={() => setOpen(isOpen ? -1 : i)}>
+                    <td
+                      className='mono'
+                      onClick={() => setOpen(isOpen ? -1 : i)}
+                    >
                       {modelsList.length > 0 ? modelsList.length : '—'}
                     </td>
 
                     {/* QPS — no backend aggregation yet */}
-                    <td className='muted' style={{ fontSize: 11 }} onClick={() => setOpen(isOpen ? -1 : i)}>
+                    <td
+                      className='muted'
+                      style={{ fontSize: 11 }}
+                      onClick={() => setOpen(isOpen ? -1 : i)}
+                    >
                       —
                     </td>
 
                     {/* Latency — no backend aggregation yet */}
-                    <td className='muted' style={{ fontSize: 11 }} onClick={() => setOpen(isOpen ? -1 : i)}>
+                    <td
+                      className='muted'
+                      style={{ fontSize: 11 }}
+                      onClick={() => setOpen(isOpen ? -1 : i)}
+                    >
                       —
                     </td>
 
                     {/* Success rate */}
                     <td onClick={() => setOpen(isOpen ? -1 : i)}>
                       {ch.SuccessRate != null && ch.SuccessRate > 0 ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ width: 60, height: 4, background: 'var(--hf-sunken)' }}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 60,
+                              height: 4,
+                              background: 'var(--hf-sunken)',
+                            }}
+                          >
                             <div
                               style={{
                                 width: `${Math.min(ch.SuccessRate, 100)}%`,
@@ -873,12 +1009,18 @@ const HFChannel = () => {
                           </span>
                         </div>
                       ) : (
-                        <span className='muted' style={{ fontSize: 11 }}>—</span>
+                        <span className='muted' style={{ fontSize: 11 }}>
+                          —
+                        </span>
                       )}
                     </td>
 
                     {/* Cost — no backend aggregation yet */}
-                    <td className='muted' style={{ fontSize: 11 }} onClick={() => setOpen(isOpen ? -1 : i)}>
+                    <td
+                      className='muted'
+                      style={{ fontSize: 11 }}
+                      onClick={() => setOpen(isOpen ? -1 : i)}
+                    >
                       —
                     </td>
 

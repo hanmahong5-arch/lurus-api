@@ -22,11 +22,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # `actions/checkout` refuses paths outside GITHUB_WORKSPACE, so check
+      # the sibling repos into the workspace and relocate to ../shared to
+      # satisfy the relative `replace` directives in go.mod.
       - uses: actions/checkout@v4
         with:
           repository: LurusTech/lurus-proto-go
-          path: ../shared/lurus-proto-go
+          path: _sibling/lurus-proto-go
           fetch-depth: 1
+      - uses: actions/checkout@v4
+        with:
+          repository: hanmahong5-arch/zita-sdk-go
+          ref: e2611da1e01ef77b8227571204d6780a6364fea3
+          path: _sibling/zita-sdk-go
+          fetch-depth: 1
+      - name: Relocate sibling repos to ../shared (matches go.mod replace paths)
+        run: |
+          mkdir -p ../shared
+          mv _sibling/lurus-proto-go ../shared/lurus-proto-go
+          mv _sibling/zita-sdk-go ../shared/zita-sdk-go
+          rmdir _sibling
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.x'
@@ -38,11 +53,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # `actions/checkout` refuses paths outside GITHUB_WORKSPACE, so check
+      # the sibling repos into the workspace and relocate to ../shared to
+      # satisfy the relative `replace` directives in go.mod.
       - uses: actions/checkout@v4
         with:
           repository: LurusTech/lurus-proto-go
-          path: ../shared/lurus-proto-go
+          path: _sibling/lurus-proto-go
           fetch-depth: 1
+      - uses: actions/checkout@v4
+        with:
+          repository: hanmahong5-arch/zita-sdk-go
+          ref: e2611da1e01ef77b8227571204d6780a6364fea3
+          path: _sibling/zita-sdk-go
+          fetch-depth: 1
+      - name: Relocate sibling repos to ../shared (matches go.mod replace paths)
+        run: |
+          mkdir -p ../shared
+          mv _sibling/lurus-proto-go ../shared/lurus-proto-go
+          mv _sibling/zita-sdk-go ../shared/zita-sdk-go
+          rmdir _sibling
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.x'
@@ -61,11 +91,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # `actions/checkout` refuses paths outside GITHUB_WORKSPACE, so check
+      # the sibling repos into the workspace and relocate to ../shared to
+      # satisfy the relative `replace` directives in go.mod.
       - uses: actions/checkout@v4
         with:
           repository: LurusTech/lurus-proto-go
-          path: ../shared/lurus-proto-go
+          path: _sibling/lurus-proto-go
           fetch-depth: 1
+      - uses: actions/checkout@v4
+        with:
+          repository: hanmahong5-arch/zita-sdk-go
+          ref: e2611da1e01ef77b8227571204d6780a6364fea3
+          path: _sibling/zita-sdk-go
+          fetch-depth: 1
+      - name: Relocate sibling repos to ../shared (matches go.mod replace paths)
+        run: |
+          mkdir -p ../shared
+          mv _sibling/lurus-proto-go ../shared/lurus-proto-go
+          mv _sibling/zita-sdk-go ../shared/zita-sdk-go
+          rmdir _sibling
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.x'

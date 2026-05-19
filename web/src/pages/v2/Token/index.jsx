@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2025 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import HFShell from '../../../components/hifi/HFShell';
@@ -21,10 +39,12 @@ const quotaToUSD = (q) => (q / QUOTA_PER_USD).toFixed(2);
 
 const tokenStatus = (t) => {
   if (!t || t.Status !== 1) return 'disabled';
-  if (t.ExpiredTime > 0 && t.ExpiredTime < Math.floor(Date.now() / 1000)) return 'expired';
+  if (t.ExpiredTime > 0 && t.ExpiredTime < Math.floor(Date.now() / 1000))
+    return 'expired';
   if (!t.UnlimitedQuota) {
     const total = t.UsedQuota + t.RemainQuota;
-    if (t.RemainQuota <= 0 || (total > 0 && t.UsedQuota / total >= 0.9)) return 'near-cap';
+    if (t.RemainQuota <= 0 || (total > 0 && t.UsedQuota / total >= 0.9))
+      return 'near-cap';
   }
   return 'live';
 };
@@ -118,14 +138,19 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
       const res = await API.post(`/api/v2/${tenantSlug}/tokens`, {
         name: form.name.trim(),
         unlimited_quota: form.unlimited || capUSD <= 0,
-        remain_quota: form.unlimited || capUSD <= 0 ? 0 : Math.round(capUSD * QUOTA_PER_USD),
+        remain_quota:
+          form.unlimited || capUSD <= 0
+            ? 0
+            : Math.round(capUSD * QUOTA_PER_USD),
         model_limits_enabled: form.limitModels && !!form.models.trim(),
         model_limits: form.models.trim(),
         expired_time: -1,
       });
       if (res?.data?.success) {
         const { key } = res.data.data;
-        showSuccess('Token created — copy your key now, it won\'t be shown again.');
+        showSuccess(
+          "Token created — copy your key now, it won't be shown again.",
+        );
         onCreated(key);
       }
     } catch (_) {
@@ -161,13 +186,25 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
           gap: 14,
         }}
       >
-        <div className='strong' style={{ fontSize: 15 }}>New token</div>
+        <div className='strong' style={{ fontSize: 15 }}>
+          New token
+        </div>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           <span className='lbl'>name *</span>
           <input
             ref={nameRef}
-            style={{ fontFamily: 'var(--hf-mono)', fontSize: 12, padding: '5px 8px', border: '1px solid var(--hf-rule)', background: 'var(--hf-sunken)', color: 'var(--hf-ink)', borderRadius: 2, outline: 'none', width: '100%' }}
+            style={{
+              fontFamily: 'var(--hf-mono)',
+              fontSize: 12,
+              padding: '5px 8px',
+              border: '1px solid var(--hf-rule)',
+              background: 'var(--hf-sunken)',
+              color: 'var(--hf-ink)',
+              borderRadius: 2,
+              outline: 'none',
+              width: '100%',
+            }}
             placeholder='e.g. prod-backend'
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -179,7 +216,9 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
           <input
             type='checkbox'
             checked={form.unlimited}
-            onChange={(e) => setForm((f) => ({ ...f, unlimited: e.target.checked }))}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, unlimited: e.target.checked }))
+            }
           />
           <span className='lbl'>unlimited quota</span>
         </label>
@@ -188,7 +227,17 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
           <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             <span className='lbl'>monthly cap ($)</span>
             <input
-              style={{ fontFamily: 'var(--hf-mono)', fontSize: 12, padding: '5px 8px', border: '1px solid var(--hf-rule)', background: 'var(--hf-sunken)', color: 'var(--hf-ink)', borderRadius: 2, outline: 'none', width: '100%' }}
+              style={{
+                fontFamily: 'var(--hf-mono)',
+                fontSize: 12,
+                padding: '5px 8px',
+                border: '1px solid var(--hf-rule)',
+                background: 'var(--hf-sunken)',
+                color: 'var(--hf-ink)',
+                borderRadius: 2,
+                outline: 'none',
+                width: '100%',
+              }}
               type='number'
               min='0'
               step='0.01'
@@ -203,7 +252,9 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
           <input
             type='checkbox'
             checked={form.limitModels}
-            onChange={(e) => setForm((f) => ({ ...f, limitModels: e.target.checked }))}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, limitModels: e.target.checked }))
+            }
           />
           <span className='lbl'>restrict models</span>
         </label>
@@ -212,15 +263,34 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
           <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             <span className='lbl'>allowed models (comma-separated)</span>
             <input
-              style={{ fontFamily: 'var(--hf-mono)', fontSize: 12, padding: '5px 8px', border: '1px solid var(--hf-rule)', background: 'var(--hf-sunken)', color: 'var(--hf-ink)', borderRadius: 2, outline: 'none', width: '100%' }}
+              style={{
+                fontFamily: 'var(--hf-mono)',
+                fontSize: 12,
+                padding: '5px 8px',
+                border: '1px solid var(--hf-rule)',
+                background: 'var(--hf-sunken)',
+                color: 'var(--hf-ink)',
+                borderRadius: 2,
+                outline: 'none',
+                width: '100%',
+              }}
               placeholder='gpt-4o, claude-3.5-sonnet'
               value={form.models}
-              onChange={(e) => setForm((f) => ({ ...f, models: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, models: e.target.value }))
+              }
             />
           </label>
         )}
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            justifyContent: 'flex-end',
+            marginTop: 4,
+          }}
+        >
           <button type='button' className='btn ghost' onClick={onClose}>
             cancel
           </button>
@@ -251,7 +321,17 @@ const InlineEdit = ({ value, onSave, onCancel }) => {
   return (
     <input
       ref={ref}
-      style={{ fontFamily: 'var(--hf-mono)', fontSize: 12, padding: '3px 6px', width: '100%', border: '1px solid var(--hf-rule)', background: 'var(--hf-sunken)', color: 'var(--hf-ink)', borderRadius: 2, outline: 'none' }}
+      style={{
+        fontFamily: 'var(--hf-mono)',
+        fontSize: 12,
+        padding: '3px 6px',
+        width: '100%',
+        border: '1px solid var(--hf-rule)',
+        background: 'var(--hf-sunken)',
+        color: 'var(--hf-ink)',
+        borderRadius: 2,
+        outline: 'none',
+      }}
       value={v}
       onChange={(e) => setV(e.target.value)}
       onKeyDown={(e) => {
@@ -310,7 +390,9 @@ const HFToken = () => {
   // ── Computed summary ──────────────────────────────────────────────────────
 
   const activeCount = tokens.filter((t) => tokenStatus(t) === 'live').length;
-  const totalUsedUSD = tokens.reduce((s, t) => s + t.UsedQuota / QUOTA_PER_USD, 0).toFixed(2);
+  const totalUsedUSD = tokens
+    .reduce((s, t) => s + t.UsedQuota / QUOTA_PER_USD, 0)
+    .toFixed(2);
   const totalCapUSD = tokens
     .filter((t) => !t.UnlimitedQuota)
     .reduce((s, t) => s + (t.UsedQuota + t.RemainQuota) / QUOTA_PER_USD, 0)
@@ -343,13 +425,18 @@ const HFToken = () => {
 
   const handleRotate = async () => {
     if (!token) return;
-    if (!window.confirm(`Rotate key for "${token.Name}"? The old key stops working immediately.`)) return;
+    if (
+      !window.confirm(
+        `Rotate key for "${token.Name}"? The old key stops working immediately.`,
+      )
+    )
+      return;
     setSaving(true);
     try {
       const res = await API.post(
         `/api/v2/${tenantSlug}/tokens/${token.Id}/rotate`,
         {},
-        { skipErrorHandler: false }
+        { skipErrorHandler: false },
       );
       if (res?.data?.success) {
         const newKey = res.data.data.key;
@@ -365,7 +452,8 @@ const HFToken = () => {
 
   const handleRevoke = async () => {
     if (!token) return;
-    if (!window.confirm(`Revoke token "${token.Name}"? This cannot be undone.`)) return;
+    if (!window.confirm(`Revoke token "${token.Name}"? This cannot be undone.`))
+      return;
     setSaving(true);
     try {
       const res = await API.delete(`/api/v2/${tenantSlug}/tokens/${token.Id}`);
@@ -398,14 +486,20 @@ const HFToken = () => {
         body.remain_quota = Math.max(0, newTotalUnits - token.UsedQuota);
       }
     } else if (field === 'expires') {
-      body.expired_time = rawValue === 'never' || rawValue === '' ? -1 : Math.floor(new Date(rawValue).getTime() / 1000);
+      body.expired_time =
+        rawValue === 'never' || rawValue === ''
+          ? -1
+          : Math.floor(new Date(rawValue).getTime() / 1000);
     } else if (field === 'ips') {
       body.allow_ips = rawValue === 'any' ? '' : rawValue;
     }
     if (Object.keys(body).length === 0) return;
     setSaving(true);
     try {
-      const res = await API.put(`/api/v2/${tenantSlug}/tokens/${token.Id}`, body);
+      const res = await API.put(
+        `/api/v2/${tenantSlug}/tokens/${token.Id}`,
+        body,
+      );
       if (res?.data?.success) {
         showSuccess('Saved');
         await fetchTokens();
@@ -510,18 +604,26 @@ const HFToken = () => {
               your tokens
             </div>
             <div className='display' style={{ fontSize: 26 }}>
-              {loading ? '…' : `${tokens.length} token${tokens.length !== 1 ? 's' : ''}`}
+              {loading
+                ? '…'
+                : `${tokens.length} token${tokens.length !== 1 ? 's' : ''}`}
             </div>
           </div>
 
           {loading && (
-            <div className='muted' style={{ padding: '20px 22px', fontSize: 12 }}>
+            <div
+              className='muted'
+              style={{ padding: '20px 22px', fontSize: 12 }}
+            >
               Loading…
             </div>
           )}
 
           {!loading && tokens.length === 0 && (
-            <div className='muted' style={{ padding: '20px 22px', fontSize: 12 }}>
+            <div
+              className='muted'
+              style={{ padding: '20px 22px', fontSize: 12 }}
+            >
               No tokens yet. Create one to get started.
             </div>
           )}
@@ -556,19 +658,24 @@ const HFToken = () => {
                   </span>
                   <span className={statusClass(st)}>{st}</span>
                 </div>
-                <div className='mono muted' style={{ fontSize: 10, marginTop: 4 }}>
+                <div
+                  className='mono muted'
+                  style={{ fontSize: 10, marginTop: 4 }}
+                >
                   {maskKey(t.Key)}
                 </div>
-                <div className='mono faint' style={{ fontSize: 9, marginTop: 2 }}>
-                  created {relTime(t.CreatedTime)} · last used {relTime(t.AccessedTime)}
-                  {t.CreatorUserId > 0 && (
-                    <> · by user #{t.CreatorUserId}</>
-                  )}
+                <div
+                  className='mono faint'
+                  style={{ fontSize: 9, marginTop: 2 }}
+                >
+                  created {relTime(t.CreatedTime)} · last used{' '}
+                  {relTime(t.AccessedTime)}
+                  {t.CreatorUserId > 0 && <> · by user #{t.CreatorUserId}</>}
                 </div>
                 <div className='muted' style={{ fontSize: 11, marginTop: 2 }}>
                   {fmtModels(t)}
                 </div>
-                {!t.UnlimitedQuota && (t.UsedQuota + t.RemainQuota) > 0 && (
+                {!t.UnlimitedQuota && t.UsedQuota + t.RemainQuota > 0 && (
                   <div style={{ marginTop: 8 }}>
                     <div
                       style={{
@@ -579,7 +686,9 @@ const HFToken = () => {
                       }}
                     >
                       <span className='mono muted'>{capDisplay(t)}</span>
-                      <span className={'mono ' + (ratio > 0.9 ? 'acc' : 'muted')}>
+                      <span
+                        className={'mono ' + (ratio > 0.9 ? 'acc' : 'muted')}
+                      >
                         {(ratio * 100).toFixed(0)}%
                       </span>
                     </div>
@@ -589,7 +698,9 @@ const HFToken = () => {
                           height: '100%',
                           width: `${Math.min(ratio * 100, 100)}%`,
                           background:
-                            ratio > 0.9 ? 'var(--hf-accent)' : 'var(--hf-ink-2)',
+                            ratio > 0.9
+                              ? 'var(--hf-accent)'
+                              : 'var(--hf-ink-2)',
                         }}
                       />
                     </div>
@@ -620,11 +731,23 @@ const HFToken = () => {
                     background: 'rgba(31,122,79,0.06)',
                   }}
                 >
-                  <div className='strong' style={{ fontSize: 12, marginBottom: 6, color: 'var(--hf-ok)' }}>
+                  <div
+                    className='strong'
+                    style={{
+                      fontSize: 12,
+                      marginBottom: 6,
+                      color: 'var(--hf-ok)',
+                    }}
+                  >
                     Token created — copy your key now
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <code className='mono' style={{ fontSize: 12, flex: 1, wordBreak: 'break-all' }}>
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: 10 }}
+                  >
+                    <code
+                      className='mono'
+                      style={{ fontSize: 12, flex: 1, wordBreak: 'break-all' }}
+                    >
                       {newlyCreatedKey}
                     </code>
                     <button
@@ -706,7 +829,9 @@ const HFToken = () => {
                     className='btn sm'
                     onClick={() => handleReveal(token)}
                   >
-                    {revealed.has(token.Id) || rotatedKeys[token.Id] ? 'hide' : 'reveal'}
+                    {revealed.has(token.Id) || rotatedKeys[token.Id]
+                      ? 'hide'
+                      : 'reveal'}
                   </button>
                   <button
                     type='button'
@@ -850,7 +975,10 @@ const HFToken = () => {
                   type='button'
                   className='btn'
                   disabled={saving}
-                  style={{ color: 'var(--hf-err)', borderColor: 'var(--hf-err)' }}
+                  style={{
+                    color: 'var(--hf-err)',
+                    borderColor: 'var(--hf-err)',
+                  }}
                   onClick={handleRevoke}
                 >
                   revoke

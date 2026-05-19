@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2025 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Button,
@@ -86,8 +104,15 @@ const OpenRouterSync = () => {
 
   const submit = async () => {
     const isCreate = !editing.id;
-    if (!formValues.name || !formValues.target_channel_id || !formValues.categories?.length) {
-      Notification.warning({ title: '校验失败', content: '名称、目标渠道、分类必填' });
+    if (
+      !formValues.name ||
+      !formValues.target_channel_id ||
+      !formValues.categories?.length
+    ) {
+      Notification.warning({
+        title: '校验失败',
+        content: '名称、目标渠道、分类必填',
+      });
       return;
     }
     try {
@@ -99,7 +124,10 @@ const OpenRouterSync = () => {
         setEditing(null);
         reload();
       } else {
-        Notification.error({ title: '保存失败', content: res.data?.message || '未知错误' });
+        Notification.error({
+          title: '保存失败',
+          content: res.data?.message || '未知错误',
+        });
       }
     } catch (e) {
       Notification.error({ title: '保存失败', content: String(e) });
@@ -160,7 +188,11 @@ const OpenRouterSync = () => {
     try {
       const res = await API.get(`/api/openrouter-sync/jobs/${job.id}/preview`);
       if (res.data?.success) {
-        setPreviewing({ jobId: job.id, name: job.name, items: res.data.data || [] });
+        setPreviewing({
+          jobId: job.id,
+          name: job.name,
+          items: res.data.data || [],
+        });
       } else {
         Notification.error({ title: '预览失败', content: res.data?.message });
       }
@@ -169,8 +201,14 @@ const OpenRouterSync = () => {
     }
   };
 
-  const channelOptions = channels.map((c) => ({ value: c.id, label: `${c.name} (#${c.id})` }));
-  const categoryOptions = categories.map((c) => ({ value: c.key, label: c.label }));
+  const channelOptions = channels.map((c) => ({
+    value: c.id,
+    label: `${c.name} (#${c.id})`,
+  }));
+  const categoryOptions = categories.map((c) => ({
+    value: c.key,
+    label: c.label,
+  }));
 
   const columns = [
     { title: '名称', dataIndex: 'name' },
@@ -255,7 +293,8 @@ const OpenRouterSync = () => {
       <Card style={{ marginBottom: 12 }}>
         <Title heading={4}>OpenRouter 免费模型同步</Title>
         <Text type='tertiary'>
-          定期/手动从 OpenRouter 拉取免费模型，按分类与排名导入到目标渠道。同步引擎是单一全局引擎：
+          定期/手动从 OpenRouter
+          拉取免费模型，按分类与排名导入到目标渠道。同步引擎是单一全局引擎：
           多个任务可指向同一渠道，互不踩踏；管理员手工添加的模型不会被清理。
         </Text>
         <div style={{ marginTop: 12 }}>
@@ -279,7 +318,9 @@ const OpenRouterSync = () => {
       </Card>
 
       <Modal
-        title={editing && editing.id ? `编辑任务 #${editing.id}` : '新建同步任务'}
+        title={
+          editing && editing.id ? `编辑任务 #${editing.id}` : '新建同步任务'
+        }
         visible={!!editing}
         onCancel={() => setEditing(null)}
         onOk={submit}
@@ -287,7 +328,10 @@ const OpenRouterSync = () => {
         cancelText='取消'
         width={560}
       >
-        <Form initValues={formValues} onValueChange={(v) => setFormValues({ ...formValues, ...v })}>
+        <Form
+          initValues={formValues}
+          onValueChange={(v) => setFormValues({ ...formValues, ...v })}
+        >
           <Form.Input
             field='name'
             label='任务名称'
@@ -315,7 +359,11 @@ const OpenRouterSync = () => {
             min={0}
             max={1000}
           />
-          <Form.Select field='schedule' label='调度' optionList={SCHEDULE_OPTIONS} />
+          <Form.Select
+            field='schedule'
+            label='调度'
+            optionList={SCHEDULE_OPTIONS}
+          />
           <Form.Switch field='enabled' label='启用' />
         </Form>
       </Modal>
@@ -337,7 +385,8 @@ const OpenRouterSync = () => {
             {
               title: 'Created',
               dataIndex: 'created',
-              render: (t) => (t ? new Date(t * 1000).toLocaleDateString() : '—'),
+              render: (t) =>
+                t ? new Date(t * 1000).toLocaleDateString() : '—',
             },
           ]}
           dataSource={previewing?.items || []}

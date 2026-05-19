@@ -64,7 +64,8 @@ const PageLayout = () => {
   // legacy HeaderBar/SiderBar/Footer to avoid double-chrome.
   const isV2Route = location.pathname.startsWith('/console/v2');
 
-  const shouldHideFooter = cardProPages.includes(location.pathname) || isV2Route;
+  const shouldHideFooter =
+    cardProPages.includes(location.pathname) || isV2Route;
 
   const shouldInnerPadding =
     location.pathname.includes('/console') &&

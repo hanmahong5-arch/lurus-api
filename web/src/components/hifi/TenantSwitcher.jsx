@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2025 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import React, { useEffect, useRef, useState } from 'react';
 import UsageRing from './UsageRing';
 
@@ -148,7 +166,11 @@ const TenantSwitcher = ({
             {mode}
           </span>
           <span
-            style={{ marginLeft: 'auto', color: 'var(--hf-ink-4)', fontSize: 10 }}
+            style={{
+              marginLeft: 'auto',
+              color: 'var(--hf-ink-4)',
+              fontSize: 10,
+            }}
           >
             {open ? '▴' : '▾'}
           </span>
@@ -283,7 +305,9 @@ const TenantSwitcher = ({
                     : 'transparent';
                 }}
               >
-                <span style={{ color: tm.color, fontSize: 10 }}>{tm.glyph}</span>
+                <span style={{ color: tm.color, fontSize: 10 }}>
+                  {tm.glyph}
+                </span>
                 <span style={{ fontSize: 11, color: 'var(--hf-ink)', flex: 1 }}>
                   {t.name}
                 </span>
@@ -349,7 +373,9 @@ const TenantSwitcher = ({
                       : 'transparent';
                   }}
                 >
-                  <div style={{ fontSize: 13, color: mm.color }}>{mm.glyph}</div>
+                  <div style={{ fontSize: 13, color: mm.color }}>
+                    {mm.glyph}
+                  </div>
                   <div
                     style={{
                       fontSize: 9,

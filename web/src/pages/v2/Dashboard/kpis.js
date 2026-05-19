@@ -1,16 +1,21 @@
-// Pure derivations from /api/v2/{slug}/logs for realtime KPI tiles.
-// Frontend-only because there's no server-side aggregation endpoint yet
-// (would require a /api/v2/{slug}/metrics/realtime handler — out of
-// hardening-swarm scope, see hardening-swarm-2026-05-18-acceptance.md).
-//
-// Decisions are explicit so tests can pin behavior:
-//   - QPS uses the *full* fetched window divided by its duration in seconds,
-//     not "logs in last 60s / 60". A window of < 1s defaults to 0.
-//   - TTFT p50 looks at consume-type logs (Type==2) with total_latency_ms > 0.
-//   - Error rate = error logs (Type==5) / (consume + error). 0 if no traffic.
-//
-// All inputs are read with both snake_case (handler shape) and PascalCase
-// (some upstream paths) — defensive against minor response drift.
+/*
+Copyright (C) 2025 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 
 const LOG_TYPE_CONSUME = 2;
 const LOG_TYPE_ERROR = 5;

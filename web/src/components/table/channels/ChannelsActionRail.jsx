@@ -60,9 +60,7 @@ const RailButton = ({ tooltip, icon, onClick, disabled, danger }) => (
   </Tooltip>
 );
 
-const RailDivider = () => (
-  <Divider style={{ width: 28, margin: '4px 0' }} />
-);
+const RailDivider = () => <Divider style={{ width: 28, margin: '4px 0' }} />;
 
 const ChannelsActionRail = (props) => {
   const {
@@ -105,12 +103,10 @@ const ChannelsActionRail = (props) => {
         ? 'model'
         : 'none';
 
-  const singleChannel = mode === 'channel' && channelCount === 1
-    ? selectedChannels[0]
-    : null;
-  const singleModel = mode === 'model' && modelCount === 1
-    ? selectedModels[0]
-    : null;
+  const singleChannel =
+    mode === 'channel' && channelCount === 1 ? selectedChannels[0] : null;
+  const singleModel =
+    mode === 'model' && modelCount === 1 ? selectedModels[0] : null;
 
   const isTagRow = singleChannel?.children !== undefined;
   const isMultiKey = !!singleChannel?.channel_info?.is_multi_key;

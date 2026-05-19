@@ -33,7 +33,9 @@ test.describe('Story 11-2 — token persistence across re-login', () => {
     await page.goto(`/api/v2/bridge/exchange?token=${BRIDGE_TOKEN}`);
 
     // Expect redirect to v2 dashboard.
-    await expect(page).toHaveURL(/\/console\/v2\/dashboard/, { timeout: 10_000 });
+    await expect(page).toHaveURL(/\/console\/v2\/dashboard/, {
+      timeout: 10_000,
+    });
 
     // ── Step 2: create a token via API (faster than UI form) ───────────
     const createRes = await request.post(`/api/v2/${TENANT_SLUG}/tokens`, {
@@ -54,7 +56,9 @@ test.describe('Story 11-2 — token persistence across re-login', () => {
 
     // ── Step 5: log back in via bridge ─────────────────────────────────
     await page.goto(`/api/v2/bridge/exchange?token=${BRIDGE_TOKEN}`);
-    await expect(page).toHaveURL(/\/console\/v2\/dashboard/, { timeout: 10_000 });
+    await expect(page).toHaveURL(/\/console\/v2\/dashboard/, {
+      timeout: 10_000,
+    });
 
     // ── Step 6: assert token still in list ─────────────────────────────
     await page.goto('/console/v2/token');

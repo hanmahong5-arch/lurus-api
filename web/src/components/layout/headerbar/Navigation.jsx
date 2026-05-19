@@ -72,7 +72,10 @@ const Navigation = ({
   };
 
   return (
-    <nav aria-label='Main navigation' className='flex flex-1 items-center gap-1 lg:gap-2 mx-2 md:mx-4 overflow-x-auto whitespace-nowrap scrollbar-hide'>
+    <nav
+      aria-label='Main navigation'
+      className='flex flex-1 items-center gap-1 lg:gap-2 mx-2 md:mx-4 overflow-x-auto whitespace-nowrap scrollbar-hide'
+    >
       <SkeletonWrapper
         loading={isLoading}
         type='navigation'

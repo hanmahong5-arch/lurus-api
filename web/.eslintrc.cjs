@@ -2,7 +2,10 @@ module.exports = {
   root: true,
   env: { browser: true, es2021: true, node: true },
   parserOptions: {
-    ecmaVersion: 2020,
+    // ES2021 is required for numeric separators (e.g. 500_000) used in
+    // src/pages/v2/{Token,Tenants,Settings,Log,Dashboard}/index.jsx and
+    // src/components/hifi/UsageRing.jsx. Lift to 2022 to keep room.
+    ecmaVersion: 2022,
     sourceType: 'module',
     ecmaFeatures: { jsx: true },
   },

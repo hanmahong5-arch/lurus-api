@@ -37,10 +37,7 @@ import {
   showError,
 } from '../../../helpers';
 import { CHANNEL_OPTIONS } from '../../../constants';
-import {
-  IconTreeTriangleDown,
-  IconAlertTriangle,
-} from '@douyinfe/semi-icons';
+import { IconTreeTriangleDown, IconAlertTriangle } from '@douyinfe/semi-icons';
 import { FaRandom } from 'react-icons/fa';
 
 // Render functions

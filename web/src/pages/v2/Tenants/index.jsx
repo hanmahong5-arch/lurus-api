@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2025 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import HFShell from '../../../components/hifi/HFShell';
 import { API, showError, showSuccess } from '../../../helpers';
@@ -56,7 +74,9 @@ const CreateModal = ({ onCreated, onClose }) => {
         name: form.name.trim(),
         slug: form.slug.trim(),
         plan: form.plan,
-        quota_limit: form.quota_limit ? Math.round(parseFloat(form.quota_limit) * QUOTA_PER_USD) : 0,
+        quota_limit: form.quota_limit
+          ? Math.round(parseFloat(form.quota_limit) * QUOTA_PER_USD)
+          : 0,
         status: 1,
       };
       const res = await API.post('/api/v2/admin/tenants', body);
@@ -109,7 +129,9 @@ const CreateModal = ({ onCreated, onClose }) => {
           gap: 14,
         }}
       >
-        <div className='strong' style={{ fontSize: 15 }}>New tenant</div>
+        <div className='strong' style={{ fontSize: 15 }}>
+          New tenant
+        </div>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           <span className='lbl'>name *</span>
@@ -129,7 +151,12 @@ const CreateModal = ({ onCreated, onClose }) => {
             style={inputStyle}
             placeholder='e.g. acme'
             value={form.slug}
-            onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') }))}
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+              }))
+            }
             required
           />
         </label>
@@ -142,7 +169,9 @@ const CreateModal = ({ onCreated, onClose }) => {
             onChange={(e) => setForm((f) => ({ ...f, plan: e.target.value }))}
           >
             {PLANS.map((p) => (
-              <option key={p} value={p}>{p}</option>
+              <option key={p} value={p}>
+                {p}
+              </option>
             ))}
           </select>
         </label>
@@ -156,11 +185,20 @@ const CreateModal = ({ onCreated, onClose }) => {
             step='0.01'
             placeholder='0'
             value={form.quota_limit}
-            onChange={(e) => setForm((f) => ({ ...f, quota_limit: e.target.value }))}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, quota_limit: e.target.value }))
+            }
           />
         </label>
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            justifyContent: 'flex-end',
+            marginTop: 4,
+          }}
+        >
           <button type='button' className='btn ghost' onClick={onClose}>
             cancel
           </button>
@@ -193,7 +231,9 @@ const StatsDrawer = ({ tenant, onClose }) => {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [tenant.Id]);
 
   return (
@@ -221,15 +261,31 @@ const StatsDrawer = ({ tenant, onClose }) => {
           gap: 14,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div className='strong' style={{ fontSize: 15 }}>{tenant.Name} · stats</div>
-          <button type='button' className='btn ghost sm' onClick={onClose}>✕</button>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div className='strong' style={{ fontSize: 15 }}>
+            {tenant.Name} · stats
+          </div>
+          <button type='button' className='btn ghost sm' onClick={onClose}>
+            ✕
+          </button>
         </div>
 
-        {loading && <div className='muted' style={{ fontSize: 12 }}>Loading…</div>}
+        {loading && (
+          <div className='muted' style={{ fontSize: 12 }}>
+            Loading…
+          </div>
+        )}
 
         {!loading && !stats && (
-          <div className='muted' style={{ fontSize: 12 }}>No stats available.</div>
+          <div className='muted' style={{ fontSize: 12 }}>
+            No stats available.
+          </div>
         )}
 
         {!loading && stats && (
@@ -241,7 +297,8 @@ const StatsDrawer = ({ tenant, onClose }) => {
                   display: 'grid',
                   gridTemplateColumns: '160px 1fr',
                   padding: '10px 16px',
-                  borderBottom: i < arr.length - 1 ? '1px dashed var(--hf-rule)' : 0,
+                  borderBottom:
+                    i < arr.length - 1 ? '1px dashed var(--hf-rule)' : 0,
                   fontSize: 12,
                   alignItems: 'center',
                 }}
@@ -266,7 +323,7 @@ const HFTenants = () => {
   const [keyword, setKeyword] = useState('');
   const [creating, setCreating] = useState(false);
   const [statsTarget, setStatsTarget] = useState(null); // tenant object for stats drawer
-  const [poolTarget, setPoolTarget] = useState(null);   // tenant object for credit-pool drawer
+  const [poolTarget, setPoolTarget] = useState(null); // tenant object for credit-pool drawer
   const [actioning, setActioning] = useState(null); // tenant id being actioned
 
   const searchRef = useRef(null);
@@ -301,11 +358,16 @@ const HFTenants = () => {
   }, [keyword, fetchTenants]);
 
   const handleAction = async (tenant, action) => {
-    const label = { enable: 'enable', disable: 'disable', suspend: 'suspend' }[action];
+    const label = { enable: 'enable', disable: 'disable', suspend: 'suspend' }[
+      action
+    ];
     if (!window.confirm(`${label} tenant "${tenant.Name}"?`)) return;
     setActioning(tenant.Id);
     try {
-      const res = await API.post(`/api/v2/admin/tenants/${tenant.Id}/${action}`, {});
+      const res = await API.post(
+        `/api/v2/admin/tenants/${tenant.Id}/${action}`,
+        {},
+      );
       if (res?.data?.success) {
         showSuccess(`Tenant ${label}d`);
         await fetchTenants(keyword);
@@ -322,7 +384,9 @@ const HFTenants = () => {
     await fetchTenants(keyword);
   };
 
-  const totalUsedUSD = tenants.reduce((s, t) => s + (t.UsedQuota || 0) / QUOTA_PER_USD, 0).toFixed(2);
+  const totalUsedUSD = tenants
+    .reduce((s, t) => s + (t.UsedQuota || 0) / QUOTA_PER_USD, 0)
+    .toFixed(2);
 
   return (
     <HFShell
@@ -331,11 +395,14 @@ const HFTenants = () => {
       actions={
         <>
           {loading ? (
-            <span className='muted mono' style={{ fontSize: 11 }}>loading…</span>
+            <span className='muted mono' style={{ fontSize: 11 }}>
+              loading…
+            </span>
           ) : (
             !forbidden && (
               <span className='muted mono' style={{ fontSize: 11 }}>
-                {tenants.length} tenant{tenants.length !== 1 ? 's' : ''} · ${totalUsedUSD} used
+                {tenants.length} tenant{tenants.length !== 1 ? 's' : ''} · $
+                {totalUsedUSD} used
               </span>
             )
           )}
@@ -351,25 +418,37 @@ const HFTenants = () => {
     >
       <div className='hf-page-head'>
         <div>
-          <div className='lbl' style={{ marginBottom: 6 }}>tenants</div>
+          <div className='lbl' style={{ marginBottom: 6 }}>
+            tenants
+          </div>
           <h1>
-            {loading ? '…' : forbidden ? 'Admin access required' : `${tenants.length} tenant${tenants.length !== 1 ? 's' : ''}`}
+            {loading
+              ? '…'
+              : forbidden
+                ? 'Admin access required'
+                : `${tenants.length} tenant${tenants.length !== 1 ? 's' : ''}`}
             {!loading && !forbidden && parseFloat(totalUsedUSD) > 0 && (
               <span className='muted' style={{ fontWeight: 400 }}>
-                {' '}· ${totalUsedUSD} used
+                {' '}
+                · ${totalUsedUSD} used
               </span>
             )}
           </h1>
-          <div className='sub'>isolation · per-tenant keys · per-tenant budgets</div>
+          <div className='sub'>
+            isolation · per-tenant keys · per-tenant budgets
+          </div>
         </div>
       </div>
 
       {forbidden ? (
         <div style={{ padding: 24 }}>
           <div className='panel' style={{ padding: '20px 24px' }}>
-            <div className='strong' style={{ marginBottom: 6 }}>Admin access required</div>
+            <div className='strong' style={{ marginBottom: 6 }}>
+              Admin access required
+            </div>
             <div className='muted' style={{ fontSize: 12 }}>
-              You do not have permission to manage tenants. Contact a platform administrator.
+              You do not have permission to manage tenants. Contact a platform
+              administrator.
             </div>
           </div>
         </div>
@@ -398,10 +477,20 @@ const HFTenants = () => {
 
           <div className='panel'>
             {loading ? (
-              <div className='muted' style={{ padding: '20px 24px', fontSize: 12 }}>Loading…</div>
+              <div
+                className='muted'
+                style={{ padding: '20px 24px', fontSize: 12 }}
+              >
+                Loading…
+              </div>
             ) : tenants.length === 0 ? (
-              <div className='muted' style={{ padding: '20px 24px', fontSize: 12 }}>
-                {keyword ? 'No tenants match your search.' : 'No tenants yet. Create one to get started.'}
+              <div
+                className='muted'
+                style={{ padding: '20px 24px', fontSize: 12 }}
+              >
+                {keyword
+                  ? 'No tenants match your search.'
+                  : 'No tenants yet. Create one to get started.'}
               </div>
             ) : (
               <table className='t'>
@@ -419,14 +508,23 @@ const HFTenants = () => {
                 <tbody>
                   {tenants.map((t) => {
                     const usedUSD = parseFloat(quotaToUSD(t.UsedQuota || 0));
-                    const capUSD = t.QuotaLimit > 0 ? parseFloat(quotaToUSD(t.QuotaLimit)) : null;
+                    const capUSD =
+                      t.QuotaLimit > 0
+                        ? parseFloat(quotaToUSD(t.QuotaLimit))
+                        : null;
                     const pct = capUSD ? Math.min(usedUSD / capUSD, 1) : 0;
                     const isActioning = actioning === t.Id;
 
                     return (
                       <tr key={t.Id}>
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                            }}
+                          >
                             <div
                               style={{
                                 width: 28,
@@ -445,13 +543,20 @@ const HFTenants = () => {
                             </div>
                             <div>
                               <div className='strong'>{t.Name}</div>
-                              <div className='faint mono' style={{ fontSize: 10 }}>{t.Slug}</div>
+                              <div
+                                className='faint mono'
+                                style={{ fontSize: 10 }}
+                              >
+                                {t.Slug}
+                              </div>
                             </div>
                           </div>
                         </td>
 
                         <td>
-                          <span className={planTagClass(t.Plan)}>{t.Plan || '—'}</span>
+                          <span className={planTagClass(t.Plan)}>
+                            {t.Plan || '—'}
+                          </span>
                         </td>
 
                         <td>
@@ -470,8 +575,21 @@ const HFTenants = () => {
 
                         <td>
                           {capUSD ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <div style={{ width: 80, height: 4, background: 'var(--hf-sunken)', flexShrink: 0 }}>
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: 80,
+                                  height: 4,
+                                  background: 'var(--hf-sunken)',
+                                  flexShrink: 0,
+                                }}
+                              >
                                 <div
                                   style={{
                                     width: `${pct * 100}%`,
@@ -485,17 +603,31 @@ const HFTenants = () => {
                                   }}
                                 />
                               </div>
-                              <span className='mono muted' style={{ fontSize: 10 }}>
+                              <span
+                                className='mono muted'
+                                style={{ fontSize: 10 }}
+                              >
                                 ${quotaToUSD(t.QuotaLimit)}
                               </span>
                             </div>
                           ) : (
-                            <span className='mono muted' style={{ fontSize: 11 }}>∞</span>
+                            <span
+                              className='mono muted'
+                              style={{ fontSize: 11 }}
+                            >
+                              ∞
+                            </span>
                           )}
                         </td>
 
                         <td>
-                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              gap: 6,
+                              alignItems: 'center',
+                            }}
+                          >
                             <button
                               type='button'
                               className='btn ghost sm'
@@ -556,11 +688,17 @@ const HFTenants = () => {
       )}
 
       {creating && (
-        <CreateModal onCreated={handleCreated} onClose={() => setCreating(false)} />
+        <CreateModal
+          onCreated={handleCreated}
+          onClose={() => setCreating(false)}
+        />
       )}
 
       {statsTarget && (
-        <StatsDrawer tenant={statsTarget} onClose={() => setStatsTarget(null)} />
+        <StatsDrawer
+          tenant={statsTarget}
+          onClose={() => setStatsTarget(null)}
+        />
       )}
 
       {poolTarget && (

@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2025 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import TenantSwitcher from './TenantSwitcher';
@@ -25,13 +43,7 @@ describe('TenantSwitcher — real-data path (Lane B 2026-05-18)', () => {
   });
 
   it('handles empty tenants list without crashing or showing demo data', () => {
-    render(
-      <TenantSwitcher
-        tenants={[]}
-        tenantName=''
-        mode='Personal'
-      />,
-    );
+    render(<TenantSwitcher tenants={[]} tenantName='' mode='Personal' />);
     // No "acme" leak from removed DEMO_TENANTS.
     expect(screen.queryByText(/acme/i)).toBeNull();
     expect(screen.queryByText(/contoso/i)).toBeNull();
@@ -69,11 +81,7 @@ describe('TenantSwitcher — real-data path (Lane B 2026-05-18)', () => {
 
   it('syncs to updated tenantName prop after first paint', () => {
     const { rerender } = render(
-      <TenantSwitcher
-        tenants={[]}
-        tenantName=''
-        mode='Personal'
-      />,
+      <TenantSwitcher tenants={[]} tenantName='' mode='Personal' />,
     );
     // Simulate caller (HFShell) finishing /api/v2/admin/tenants fetch.
     rerender(

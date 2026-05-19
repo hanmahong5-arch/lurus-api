@@ -145,9 +145,8 @@ const StatsCards = ({
                           style={{ height: 6 }}
                         />
                         <div className='text-xs text-gray-400 mt-1'>
-                          {t('本月已使用')}{' '}
-                          {renderQuota(usageGauge.usedQuota)} /{' '}
-                          {renderQuota(usageGauge.totalQuota)}
+                          {t('本月已使用')} {renderQuota(usageGauge.usedQuota)}{' '}
+                          / {renderQuota(usageGauge.totalQuota)}
                         </div>
                       </>
                     ) : (

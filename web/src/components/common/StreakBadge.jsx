@@ -1,15 +1,29 @@
-/**
- * Daily Streak Badge
- *
- * Displays a fire icon + consecutive day count in the header.
- * Hover shows a Semi UI Tooltip with streak details.
- * CSS-only bounce animation on milestone (7/30 days).
- *
- * Storage: localStorage key "lurus-api:streak"
- * Each product stores streak independently.
- */
+/*
+Copyright (C) 2025 QuantumNous
 
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  useMemo,
+} from 'react';
 import { Tooltip } from '@douyinfe/semi-ui';
 
 // =============================================================================
@@ -182,10 +196,14 @@ const StreakBadge = () => {
     const prev = prevStreakRef.current;
     if (
       streak.currentStreak !== prev &&
-      (streak.currentStreak === MILESTONE_7 || streak.currentStreak === MILESTONE_30)
+      (streak.currentStreak === MILESTONE_7 ||
+        streak.currentStreak === MILESTONE_30)
     ) {
       setCelebrating(true);
-      const timer = setTimeout(() => setCelebrating(false), CELEBRATION_DURATION_MS);
+      const timer = setTimeout(
+        () => setCelebrating(false),
+        CELEBRATION_DURATION_MS,
+      );
       prevStreakRef.current = streak.currentStreak;
       return () => clearTimeout(timer);
     }
@@ -195,8 +213,10 @@ const StreakBadge = () => {
   const progressMessage = useMemo(() => {
     if (!streak) return '';
     const s = streak.currentStreak;
-    if (s < MILESTONE_7) return `\u518D\u575A\u6301 ${MILESTONE_7 - s} \u5929\u89E3\u9501 7 \u5929\u6210\u5C31`;
-    if (s < MILESTONE_30) return `\u518D\u575A\u6301 ${MILESTONE_30 - s} \u5929\u89E3\u9501 30 \u5929\u5927\u5956`;
+    if (s < MILESTONE_7)
+      return `\u518D\u575A\u6301 ${MILESTONE_7 - s} \u5929\u89E3\u9501 7 \u5929\u6210\u5C31`;
+    if (s < MILESTONE_30)
+      return `\u518D\u575A\u6301 ${MILESTONE_30 - s} \u5929\u89E3\u9501 30 \u5929\u5927\u5956`;
     return '\u5DF2\u89E3\u9501\u5168\u90E8\u91CC\u7A0B\u7891';
   }, [streak]);
 
@@ -206,11 +226,10 @@ const StreakBadge = () => {
   const tooltipContent = (
     <div style={{ maxWidth: 200 }}>
       <div style={{ fontWeight: 600, marginBottom: 4 }}>
-        {'\uD83D\uDD25'} {'\u8FDE\u7EED\u7B7E\u5230'} {streak.currentStreak} {'\u5929'}
+        {'\uD83D\uDD25'} {'\u8FDE\u7EED\u7B7E\u5230'} {streak.currentStreak}{' '}
+        {'\u5929'}
       </div>
-      <div style={{ fontSize: 12, opacity: 0.7 }}>
-        {progressMessage}
-      </div>
+      <div style={{ fontSize: 12, opacity: 0.7 }}>{progressMessage}</div>
       {streak.longestStreak > streak.currentStreak && (
         <div style={{ fontSize: 12, opacity: 0.5, marginTop: 2 }}>
           {'\u5386\u53F2\u6700\u957F'}: {streak.longestStreak} {'\u5929'}
@@ -220,7 +239,7 @@ const StreakBadge = () => {
   );
 
   return (
-    <Tooltip content={tooltipContent} position="bottom">
+    <Tooltip content={tooltipContent} position='bottom'>
       <button
         className={celebrating ? 'streak-celebrate-api' : ''}
         style={{
@@ -244,11 +263,17 @@ const StreakBadge = () => {
           e.currentTarget.style.background = 'transparent';
         }}
       >
-        <span role="img" aria-hidden="true">{'\uD83D\uDD25'}</span>
-        <span style={{ fontFamily: 'monospace', fontWeight: 500, fontSize: 13 }}>
+        <span role='img' aria-hidden='true'>
+          {'\uD83D\uDD25'}
+        </span>
+        <span
+          style={{ fontFamily: 'monospace', fontWeight: 500, fontSize: 13 }}
+        >
           {streak.currentStreak}
         </span>
-        {celebrating && <span className="streak-confetti-api" aria-hidden="true" />}
+        {celebrating && (
+          <span className='streak-confetti-api' aria-hidden='true' />
+        )}
       </button>
     </Tooltip>
   );

@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2025 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import React, { useCallback, useEffect, useState } from 'react';
 import HFShell from '../../../components/hifi/HFShell';
 import WIPBanner from '../../../components/hifi/WIPBanner';
@@ -66,37 +84,51 @@ const HFLog = () => {
   const [filterStart, setFilterStart] = useState('');
   const [filterEnd, setFilterEnd] = useState('');
 
-  const fetchLogs = useCallback(async (currentPage, model, token, start, end) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page: String(currentPage),
-        page_size: String(PAGE_SIZE),
-      });
-      if (model) params.set('model_name', model);
-      if (token) params.set('token_name', token);
-      if (start) params.set('start_time', String(Math.floor(new Date(start).getTime() / 1000)));
-      if (end) params.set('end_time', String(Math.floor(new Date(end).getTime() / 1000)));
+  const fetchLogs = useCallback(
+    async (currentPage, model, token, start, end) => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          page: String(currentPage),
+          page_size: String(PAGE_SIZE),
+        });
+        if (model) params.set('model_name', model);
+        if (token) params.set('token_name', token);
+        if (start)
+          params.set(
+            'start_time',
+            String(Math.floor(new Date(start).getTime() / 1000)),
+          );
+        if (end)
+          params.set(
+            'end_time',
+            String(Math.floor(new Date(end).getTime() / 1000)),
+          );
 
-      const res = await API.get(`/api/v2/${tenantSlug}/logs?${params.toString()}`);
-      if (res?.data?.success) {
-        const d = res.data.data;
-        setLogs(d.logs ?? []);
-        setTotal(d.total ?? 0);
-        setSelRow(0);
-      } else {
-        showError(res?.data?.message || 'Failed to load logs');
+        const res = await API.get(
+          `/api/v2/${tenantSlug}/logs?${params.toString()}`,
+        );
+        if (res?.data?.success) {
+          const d = res.data.data;
+          setLogs(d.logs ?? []);
+          setTotal(d.total ?? 0);
+          setSelRow(0);
+        } else {
+          showError(res?.data?.message || 'Failed to load logs');
+        }
+      } catch (_) {
+        // error toast shown by API interceptor
+      } finally {
+        setLoading(false);
       }
-    } catch (_) {
-      // error toast shown by API interceptor
-    } finally {
-      setLoading(false);
-    }
-  }, [tenantSlug]);
+    },
+    [tenantSlug],
+  );
 
   // Fetch on mount and whenever tenantSlug changes
   useEffect(() => {
-    if (tenantSlug) fetchLogs(page, filterModel, filterToken, filterStart, filterEnd);
+    if (tenantSlug)
+      fetchLogs(page, filterModel, filterToken, filterStart, filterEnd);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantSlug]);
 
@@ -169,7 +201,9 @@ const HFLog = () => {
           value={filterStart}
           onChange={(e) => setFilterStart(e.target.value)}
         />
-        <span className='muted' style={{ fontSize: 11 }}>→</span>
+        <span className='muted' style={{ fontSize: 11 }}>
+          →
+        </span>
         <input
           style={{ ...inputStyle, width: 160 }}
           type='datetime-local'
@@ -263,13 +297,19 @@ const HFLog = () => {
               }}
             >
               {loading && (
-                <div className='muted' style={{ padding: '20px 22px', fontSize: 12 }}>
+                <div
+                  className='muted'
+                  style={{ padding: '20px 22px', fontSize: 12 }}
+                >
                   Loading…
                 </div>
               )}
 
               {!loading && logs.length === 0 && (
-                <div className='muted' style={{ padding: '20px 22px', fontSize: 12 }}>
+                <div
+                  className='muted'
+                  style={{ padding: '20px 22px', fontSize: 12 }}
+                >
                   No logs found.
                 </div>
               )}
@@ -295,7 +335,8 @@ const HFLog = () => {
                         key={r.Id ?? i}
                         onClick={() => setSelRow(i)}
                         style={{
-                          background: selRow === i ? 'var(--hf-sunken)' : undefined,
+                          background:
+                            selRow === i ? 'var(--hf-sunken)' : undefined,
                           cursor: 'pointer',
                           borderLeft:
                             selRow === i
@@ -306,13 +347,17 @@ const HFLog = () => {
                         <td className='mono muted'>{fmtTime(r.CreatedAt)}</td>
                         <td className='mono'>
                           {r.Duration ?? '—'}
-                          {r.Duration != null && <span className='faint'>ms</span>}
+                          {r.Duration != null && (
+                            <span className='faint'>ms</span>
+                          )}
                         </td>
                         <td className='mono'>—</td>
                         <td className='strong'>{r.ModelName || '—'}</td>
                         <td className='mono muted'>—</td>
                         <td className='mono muted'>{r.TokenName || '—'}</td>
-                        <td className='mono muted'>{fmtTok(r.PromptTokens, r.CompletionTokens)}</td>
+                        <td className='mono muted'>
+                          {fmtTok(r.PromptTokens, r.CompletionTokens)}
+                        </td>
                         <td className='mono'>{fmtCost(r.Quota)}</td>
                         <td>
                           <span className='tag ok'>200</span>
@@ -363,8 +408,18 @@ const HFLog = () => {
                   </div>
 
                   <div style={{ padding: 20 }}>
-                    <div className='lbl' style={{ marginBottom: 8 }}>details</div>
-                    <div className='panel-paper' style={{ padding: 12, fontFamily: 'var(--hf-mono)', fontSize: 11, lineHeight: 1.7 }}>
+                    <div className='lbl' style={{ marginBottom: 8 }}>
+                      details
+                    </div>
+                    <div
+                      className='panel-paper'
+                      style={{
+                        padding: 12,
+                        fontFamily: 'var(--hf-mono)',
+                        fontSize: 11,
+                        lineHeight: 1.7,
+                      }}
+                    >
                       <div>
                         <span className='muted'>model:</span>{' '}
                         {selectedLog.ModelName || '—'}
@@ -387,7 +442,9 @@ const HFLog = () => {
                       </div>
                       <div>
                         <span className='muted'>duration:</span>{' '}
-                        {selectedLog.Duration != null ? `${selectedLog.Duration}ms` : '—'}
+                        {selectedLog.Duration != null
+                          ? `${selectedLog.Duration}ms`
+                          : '—'}
                       </div>
                       <div>
                         <span className='muted'>streaming:</span>{' '}
@@ -404,7 +461,10 @@ const HFLog = () => {
                 </>
               ) : (
                 !loading && (
-                  <div className='muted' style={{ padding: '20px 22px', fontSize: 12 }}>
+                  <div
+                    className='muted'
+                    style={{ padding: '20px 22px', fontSize: 12 }}
+                  >
                     Select a row to view details.
                   </div>
                 )
@@ -459,7 +519,14 @@ const HFLog = () => {
           />
           <div
             className='panel'
-            style={{ marginTop: 14, padding: 24, textAlign: 'center', color: 'var(--hf-ink-3)', fontFamily: 'var(--hf-mono)', fontSize: 12 }}
+            style={{
+              marginTop: 14,
+              padding: 24,
+              textAlign: 'center',
+              color: 'var(--hf-ink-3)',
+              fontFamily: 'var(--hf-mono)',
+              fontSize: 12,
+            }}
           >
             No error-cluster data — endpoint not implemented.
           </div>
@@ -475,7 +542,14 @@ const HFLog = () => {
           />
           <div
             className='panel'
-            style={{ marginTop: 14, padding: 24, textAlign: 'center', color: 'var(--hf-ink-3)', fontFamily: 'var(--hf-mono)', fontSize: 12 }}
+            style={{
+              marginTop: 14,
+              padding: 24,
+              textAlign: 'center',
+              color: 'var(--hf-ink-3)',
+              fontFamily: 'var(--hf-mono)',
+              fontSize: 12,
+            }}
           >
             No live-tail data — streaming endpoint not implemented.
           </div>

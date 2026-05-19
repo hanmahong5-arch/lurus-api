@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2025 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import React, { useCallback, useEffect, useState } from 'react';
 import HFShell from '../../../components/hifi/HFShell';
 import { API, showError } from '../../../helpers';
@@ -82,10 +100,7 @@ const OnboardingCurlBlock = ({ username, tenantSlug }) => {
       >
         get started — first relay call
       </div>
-      <div
-        className='display'
-        style={{ fontSize: 18, marginBottom: 10 }}
-      >
+      <div className='display' style={{ fontSize: 18, marginBottom: 10 }}>
         You have <strong>0 tokens</strong> in tenant <code>{tenantSlug}</code>.
         Create one to make your first call.
       </div>
@@ -105,7 +120,10 @@ const OnboardingCurlBlock = ({ username, tenantSlug }) => {
         >
           + create token
         </a>
-        <span className='mono muted' style={{ fontSize: 11, alignSelf: 'center' }}>
+        <span
+          className='mono muted'
+          style={{ fontSize: 11, alignSelf: 'center' }}
+        >
           then paste it into the snippet below
         </span>
       </div>
@@ -197,8 +215,8 @@ const HFDashboard = () => {
             {loading
               ? 'loading…'
               : me
-              ? `${me.request_count ?? 0} requests · $${spendUSD?.toFixed(2) ?? '—'} spent`
-              : ''}
+                ? `${me.request_count ?? 0} requests · $${spendUSD?.toFixed(2) ?? '—'} spent`
+                : ''}
           </span>
           <button type='button' className='btn' onClick={fetchData}>
             refresh
@@ -268,7 +286,7 @@ const HFDashboard = () => {
         <div className='panel' style={{ gridColumn: 'span 3', padding: 18 }}>
           <div className='lbl'>remaining quota</div>
           <div className='display' style={{ fontSize: 32, marginTop: 4 }}>
-            {loading ? '…' : remainUSD ?? '—'}
+            {loading ? '…' : (remainUSD ?? '—')}
           </div>
           <div
             style={{
@@ -279,7 +297,9 @@ const HFDashboard = () => {
             }}
           >
             <span className='mono muted' style={{ fontSize: 10 }}>
-              {me && me.remaining_quota >= 0 ? 'until top-up' : 'unlimited plan'}
+              {me && me.remaining_quota >= 0
+                ? 'until top-up'
+                : 'unlimited plan'}
             </span>
           </div>
         </div>
@@ -288,7 +308,11 @@ const HFDashboard = () => {
         <div className='panel' style={{ gridColumn: 'span 3', padding: 18 }}>
           <div className='lbl'>total requests</div>
           <div className='display' style={{ fontSize: 32, marginTop: 4 }}>
-            {loading ? '…' : me ? (me.request_count ?? 0).toLocaleString() : '—'}
+            {loading
+              ? '…'
+              : me
+                ? (me.request_count ?? 0).toLocaleString()
+                : '—'}
           </div>
           <div
             style={{
@@ -345,7 +369,9 @@ const HFDashboard = () => {
               fontFamily: 'var(--hf-mono)',
             }}
           >
-            {hasRealtimeData ? 'last 5 min · req/s' : 'no traffic in last 5 min'}
+            {hasRealtimeData
+              ? 'last 5 min · req/s'
+              : 'no traffic in last 5 min'}
           </div>
         </div>
 
@@ -378,7 +404,11 @@ const HFDashboard = () => {
                 </div>
                 <div
                   className='mono'
-                  style={{ fontSize: 9, color: 'var(--hf-ink-3)', marginTop: 2 }}
+                  style={{
+                    fontSize: 9,
+                    color: 'var(--hf-ink-3)',
+                    marginTop: 2,
+                  }}
                 >
                   {label}
                 </div>
@@ -407,12 +437,11 @@ const HFDashboard = () => {
             style={{
               fontSize: 32,
               marginTop: 4,
-              color:
-                !hasRealtimeData
-                  ? 'var(--hf-ink-3)'
-                  : errorRate > 0.05
-                    ? 'var(--hf-err)'
-                    : 'var(--hf-ok)',
+              color: !hasRealtimeData
+                ? 'var(--hf-ink-3)'
+                : errorRate > 0.05
+                  ? 'var(--hf-err)'
+                  : 'var(--hf-ok)',
             }}
           >
             {loading ? '…' : hasRealtimeData ? formatErrorRate(errorRate) : '—'}
@@ -425,7 +454,9 @@ const HFDashboard = () => {
               fontFamily: 'var(--hf-mono)',
             }}
           >
-            {hasRealtimeData ? 'last 5 min · err / consume+err' : 'no traffic in last 5 min'}
+            {hasRealtimeData
+              ? 'last 5 min · err / consume+err'
+              : 'no traffic in last 5 min'}
           </div>
         </div>
 
@@ -553,13 +584,24 @@ const HFDashboard = () => {
                   marginBottom: 4,
                 }}
               >
-                <span className='lbl' style={{ fontSize: 10 }}>time</span>
-                <span className='lbl' style={{ fontSize: 10 }}>model</span>
-                <span className='lbl' style={{ fontSize: 10, textAlign: 'right' }}>cost</span>
+                <span className='lbl' style={{ fontSize: 10 }}>
+                  time
+                </span>
+                <span className='lbl' style={{ fontSize: 10 }}>
+                  model
+                </span>
+                <span
+                  className='lbl'
+                  style={{ fontSize: 10, textAlign: 'right' }}
+                >
+                  cost
+                </span>
               </div>
               {recentLogs.map((log, i) => {
-                const model = log.model || log.ModelName || log.channel_name || '—';
-                const cost = log.quota != null ? `$${quotaToUSD(log.quota)}` : '—';
+                const model =
+                  log.model || log.ModelName || log.channel_name || '—';
+                const cost =
+                  log.quota != null ? `$${quotaToUSD(log.quota)}` : '—';
                 const ts = fmtTs(log.created_at || log.CreatedAt || null);
                 return (
                   <div
@@ -568,7 +610,10 @@ const HFDashboard = () => {
                       display: 'grid',
                       gridTemplateColumns: '1fr 1fr auto',
                       padding: '7px 0',
-                      borderBottom: i < recentLogs.length - 1 ? '1px dashed var(--hf-rule)' : 0,
+                      borderBottom:
+                        i < recentLogs.length - 1
+                          ? '1px dashed var(--hf-rule)'
+                          : 0,
                       fontSize: 11,
                       alignItems: 'center',
                     }}

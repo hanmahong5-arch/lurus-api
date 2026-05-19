@@ -63,10 +63,7 @@ const NotificationButton = ({ unreadCount, onNoticeOpen, t }) => {
       </div>
       <div className='flex flex-col items-center justify-center py-8 px-4'>
         <BellOff size={32} className='text-gray-300 dark:text-gray-600 mb-3' />
-        <Typography.Text
-          type='tertiary'
-          className='!text-sm text-center'
-        >
+        <Typography.Text type='tertiary' className='!text-sm text-center'>
           {t('暂无新通知')}
         </Typography.Text>
         <Typography.Text
@@ -89,13 +86,14 @@ const NotificationButton = ({ unreadCount, onNoticeOpen, t }) => {
       '!p-1.5 !text-gray-600 dark:!text-gray-300 focus:!bg-semi-color-fill-1 dark:focus:!bg-gray-700 !rounded-full !bg-semi-color-fill-0 dark:!bg-semi-color-fill-1 hover:!bg-semi-color-fill-1 dark:hover:!bg-semi-color-fill-2',
   };
 
-  const bellButton = unreadCount > 0 ? (
-    <Badge count={unreadCount} type='danger' overflowCount={99}>
+  const bellButton =
+    unreadCount > 0 ? (
+      <Badge count={unreadCount} type='danger' overflowCount={99}>
+        <Button {...buttonProps} />
+      </Badge>
+    ) : (
       <Button {...buttonProps} />
-    </Badge>
-  ) : (
-    <Button {...buttonProps} />
-  );
+    );
 
   return (
     <Popover

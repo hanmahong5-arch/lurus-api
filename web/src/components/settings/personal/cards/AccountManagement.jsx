@@ -47,9 +47,7 @@ const AccountManagement = ({
           <Typography.Text className='text-lg font-medium'>
             {t('账户管理')}
           </Typography.Text>
-          <div className='text-xs text-gray-600'>
-            {t('账户信息和安全设置')}
-          </div>
+          <div className='text-xs text-gray-600'>{t('账户信息和安全设置')}</div>
         </div>
       </div>
 

@@ -199,7 +199,11 @@ const Dashboard = () => {
         serverAddress={statusState?.status?.server_address}
       />
 
-      <WalletCard wallet={wallet} loading={walletLoading} CARD_PROPS={CARD_PROPS} />
+      <WalletCard
+        wallet={wallet}
+        loading={walletLoading}
+        CARD_PROPS={CARD_PROPS}
+      />
 
       <UsageAlertBanner gauge={gauge} />
       <UsageGauge

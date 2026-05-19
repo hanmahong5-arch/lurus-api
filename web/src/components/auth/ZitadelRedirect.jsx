@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2025 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import { useEffect, useState } from 'react';
 import Loading from '../common/ui/Loading';
 import { Card, Typography } from '@douyinfe/semi-ui';
@@ -32,13 +50,13 @@ const ZitadelRedirect = (_props) => {
         const res = await API.post(
           '/api/v2/auth/zita-bootstrap',
           {},
-          { skipErrorHandler: true }
+          { skipErrorHandler: true },
         );
         if (cancelled) return;
         if (res?.data?.success && res.data.data?.id) {
           localStorage.setItem('user', JSON.stringify(res.data.data));
           window.location.replace(
-            window.location.origin + '/console/v2/dashboard'
+            window.location.origin + '/console/v2/dashboard',
           );
           return;
         }
@@ -49,7 +67,7 @@ const ZitadelRedirect = (_props) => {
         if (err?.response?.status === 403) {
           if (cancelled) return;
           window.location.replace(
-            window.location.origin + '/console/v2/account-disabled'
+            window.location.origin + '/console/v2/account-disabled',
           );
           return;
         }
