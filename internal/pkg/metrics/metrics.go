@@ -216,6 +216,45 @@ var (
 		},
 		[]string{"provider", "model", "status"},
 	)
+
+	// CreditPoolDebitTotal counts every successful debit against a tenant
+	// credit pool (ADR 2026-05-18 §3.1). Bumped from the post-consume quota
+	// path that joins quota_consume + DebitPoolInTx in one transaction.
+	CreditPoolDebitTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "credit_pool_debit_total",
+			Help:      "Total debits from tenant credit pools, by tenant",
+		},
+		[]string{"tenant_id"},
+	)
+
+	// CreditPoolBalance reflects the current_balance column of each pool.
+	// Set from DebitPoolInTx + TopupPool call-sites. Resellers watch this on
+	// their Grafana panel; the CreditPoolBalanceLow alert fires under 20% ceiling.
+	CreditPoolBalance = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "credit_pool_balance",
+			Help:      "Current tenant credit pool balance",
+		},
+		[]string{"tenant_id"},
+	)
+
+	// ProvisioningKeysCreatedTotal counts Provisioning-API key creations.
+	// Bumped from the POST /internal/v1/provisioning/tenants/:slug/keys handler.
+	// Used to measure Switch-Reseller adoption rate during Q3 pilot.
+	ProvisioningKeysCreatedTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "provisioning_keys_created_total",
+			Help:      "Provisioning-API issued keys, by tenant",
+		},
+		[]string{"tenant_id"},
+	)
 )
 
 // RecordRelayRequest records a relay request with its outcome

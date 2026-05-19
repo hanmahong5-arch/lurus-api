@@ -24,6 +24,11 @@ const (
 	// SubjectLLMUsageMilestone is fired when a user crosses a usage milestone
 	// (e.g. 10k tokens this day, 1M tokens lifetime).
 	SubjectLLMUsageMilestone = "llm.usage.milestone"
+	// SubjectPoolThreshold fires when a tenant credit pool dips below its
+	// configured alert_threshold_pct. No _crossed suffix — matches
+	// llm.quota.threshold + llm.image.generated convention.
+	// Canonical: ADR 2026-05-18 (tenant-credit-pool) §9 Q5.
+	SubjectPoolThreshold = "llm.pool.threshold"
 )
 
 // llmEventEnvelope is the canonical wire format for LLM_EVENTS stream.

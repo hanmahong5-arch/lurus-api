@@ -159,3 +159,30 @@ groups:
         annotations:
           summary: "{{ $value }} pre-auths permanently failed (max retries exceeded)"
           description: "Manual reconciliation needed. See billing runbook."
+
+      # ----------------------------------------------------------------
+      # Tenant credit pool (ADR 2026-05-18). Fires when a pool drops
+      # below 1000 quota units of remaining balance for 10m — Reseller
+      # should topup before downstream traffic hits HTTP 402.
+      # ----------------------------------------------------------------
+      - alert: CreditPoolBalanceLow
+        expr: lurus_gateway_credit_pool_balance < 1000 and lurus_gateway_credit_pool_balance > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: lurus-hub
+          component: tenant_credit_pool
+        annotations:
+          summary: "Tenant {{ $labels.tenant_id }} credit pool balance {{ $value }} below threshold"
+          description: "Pool has been below 1000 quota units for 10m. Notify Reseller for topup; see doc/runbook/pool-threshold-alert.md"
+
+      - alert: CreditPoolExhausted
+        expr: lurus_gateway_credit_pool_balance <= 0
+        for: 5m
+        labels:
+          severity: page
+          service: lurus-hub
+          component: tenant_credit_pool
+        annotations:
+          summary: "Tenant {{ $labels.tenant_id }} credit pool EXHAUSTED — relay returning HTTP 402"
+          description: "All relay calls for this tenant are now 402-blocked. Page Reseller for topup or escalate per runbook."

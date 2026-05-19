@@ -211,6 +211,35 @@
         { "expr": "lurus_billing_outbox_pending",      "legendFormat": "outbox depth" },
         { "expr": "lurus_billing_circuit_breaker_state", "legendFormat": "platform breaker" }
       ]
+    },
+
+    {
+      "title": "Credit pool balance per tenant (ADR 2026-05-18)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 44, "w": 12, "h": 8 },
+      "description": "Reseller-facing remaining balance per tenant. <1000 triggers CreditPoolBalanceLow alert; <=0 triggers CreditPoolExhausted (page).",
+      "targets": [
+        { "expr": "lurus_gateway_credit_pool_balance", "legendFormat": "{{tenant_id}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "title": "Credit pool debit rate (5m)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 44, "w": 12, "h": 8 },
+      "description": "Per-tenant debit rate from PostConsumeQuota Phase 2.5. Spikes here = LLM traffic acceleration; sustained zero = tenant idle.",
+      "targets": [
+        { "expr": "sum(rate(lurus_gateway_credit_pool_debit_total[5m])) by (tenant_id)", "legendFormat": "{{tenant_id}}" }
+      ]
+    },
+    {
+      "title": "Provisioning keys created (1h rate)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 52, "w": 24, "h": 8 },
+      "description": "Switch-Reseller adoption signal. Each spike = a Reseller issuing keys to new end-customers via the Provisioning API.",
+      "targets": [
+        { "expr": "sum(rate(lurus_gateway_provisioning_keys_created_total[1h])) by (tenant_id)", "legendFormat": "{{tenant_id}}" }
+      ]
     }
   ],
   "refresh": "30s",
