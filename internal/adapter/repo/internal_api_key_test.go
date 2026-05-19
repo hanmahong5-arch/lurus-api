@@ -195,9 +195,10 @@ func TestHashKey(t *testing.T) {
 func TestGetAvailableScopes(t *testing.T) {
 	scopes := GetAvailableScopes()
 
-	// Should return 17 scopes (13 original + log:read + model:read + all + auth:login)
-	if len(scopes) != 17 {
-		t.Errorf("GetAvailableScopes() returned %d scopes, want 17", len(scopes))
+	// Should return 18 scopes: 13 original + log:read + model:read + auth:login
+	// + provisioning (ADR 2026-05-18) + all
+	if len(scopes) != 18 {
+		t.Errorf("GetAvailableScopes() returned %d scopes, want 18", len(scopes))
 	}
 
 	// Check required fields
@@ -221,6 +222,7 @@ func TestGetAvailableScopes(t *testing.T) {
 		ScopeBalanceRead, ScopeBalanceWrite,
 		ScopeTokenRead, ScopeTokenWrite,
 		ScopeAuthLogin,
+		ScopeProvisioning,
 		ScopeAll,
 	}
 
