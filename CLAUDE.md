@@ -297,3 +297,6 @@ Midjourney/Suno 通过独立 handler 处理（`handler.RelayMidjourney`, `handle
 | Project Context | `./_bmad-output/planning-artifacts/project-context.md` |
 
 **Story 文档规则（Epic 6+ 严格执行）**: 实现前建 story 文档 → 通过 `dev-story/checklist.md` → 含验证证据才可标 done。违反 = 工作无效。
+
+---
+_BMAD artifacts last review: 2026-05-18 — governance: `lurus/doc/audit/2026-05-18-bmad-output-stale.md`._
