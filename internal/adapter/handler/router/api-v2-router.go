@@ -93,6 +93,13 @@ func SetApiV2Router(router *gin.Engine) {
 		{
 			tenantLogs.GET("", handler.GetLogsV2)
 			tenantLogs.GET("/all", handler.GetAllLogsV2)
+			tenantLogs.GET("/cluster", handler.GetLogClusterV2)
+		}
+
+		tenantSessions := apiV2.Group("/:tenant_slug/sessions")
+		tenantSessions.Use(middleware.UserAuth())
+		{
+			tenantSessions.GET("", handler.ListSessionsV2)
 		}
 
 		// ================================================================

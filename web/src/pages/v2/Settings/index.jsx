@@ -21,17 +21,30 @@ import HFShell from '../../../components/hifi/HFShell';
 import WIPBanner from '../../../components/hifi/WIPBanner';
 import { API, showError, showSuccess } from '../../../helpers';
 
+// Wave 2: only security section is wired; notifications/team/integrations/MFA remain stubs pending infra.
+
 /*
  * HiFi 12 — Settings.
  * Profile: wired to GET/PUT /api/v2/:tenant_slug/user/me
- * Security/Sessions: partial — /api/v2/client/sessions returns single-session info
- *   (auth_method + active_tokens + request_count), NOT a device/IP list.
- *   Multi-device tracking + per-session revoke needs backend session store —
- *   surfaced via WIPBanner below.
+ * Security/Sessions: wired to GET /api/v2/:tenant_slug/sessions (Wave 2).
+ *   Returns single synthetic session (auth_method + active_tokens + request_count).
+ *   Multi-device tracking + per-session revoke deferred to v3.
  * Notifications + Team: mocked; see adr-2026-05-18-budget-alerts.md / -tenant-credit-pool.md.
  */
 
 const QUOTA_PER_USD = 500_000;
+
+// formatRelativeTime converts a Unix timestamp (seconds) to a human-readable
+// relative string (e.g. "just now", "3 minutes ago"). No external dependency —
+// avoids adding date-fns for a single call site.
+const formatRelativeTime = (unixSec) => {
+  if (!unixSec) return '—';
+  const diffSec = Math.floor(Date.now() / 1000) - unixSec;
+  if (diffSec < 60) return '刚刚';
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} 分钟前`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} 小时前`;
+  return `${Math.floor(diffSec / 86400)} 天前`;
+};
 
 const useTenantSlug = () => {
   const [slug, setSlug] = useState('default');
@@ -133,7 +146,7 @@ const HFSettings = () => {
   const [saving, setSaving] = useState(false);
 
   // Session state — single-session for now (backend has no device list)
-  const [sessionInfo, setSessionInfo] = useState(null);
+  const [sessions, setSessions] = useState(null);
   const [sessionLoading, setSessionLoading] = useState(false);
 
   const fetchProfile = useCallback(async () => {
@@ -150,29 +163,29 @@ const HFSettings = () => {
     }
   }, [tenantSlug]);
 
-  const fetchSession = useCallback(async () => {
+  const fetchSessions = useCallback(async () => {
     setSessionLoading(true);
     try {
-      const res = await API.get('/api/v2/client/sessions');
+      const res = await API.get(`/api/v2/${tenantSlug}/sessions`);
       if (res?.data?.success) {
-        setSessionInfo(res.data.data);
+        setSessions(res.data.data.items ?? []);
       }
     } catch (_) {
       // error toast shown by API interceptor
     } finally {
       setSessionLoading(false);
     }
-  }, []);
+  }, [tenantSlug]);
 
   useEffect(() => {
     if (tenantSlug) fetchProfile();
   }, [fetchProfile, tenantSlug]);
 
   useEffect(() => {
-    if (section === 'security' && !sessionInfo && !sessionLoading) {
-      fetchSession();
+    if (section === 'security' && !sessions && !sessionLoading) {
+      fetchSessions();
     }
-  }, [section, sessionInfo, sessionLoading, fetchSession]);
+  }, [section, sessions, sessionLoading, fetchSessions]);
 
   const handleSaveField = async (field, value) => {
     setEditField(null);
@@ -362,10 +375,9 @@ const HFSettings = () => {
           {/* ── Security ── */}
           {section === 'security' && (
             <div style={{ marginTop: 22 }}>
-              <ComingSoon />
               <div
                 className='panel'
-                style={{ padding: 18, marginBottom: 14, marginTop: 16 }}
+                style={{ padding: 18, marginBottom: 14, marginTop: 8 }}
               >
                 <div className='lbl'>multi-factor auth</div>
                 <div
@@ -379,20 +391,23 @@ const HFSettings = () => {
                   <span className='dot ok' />{' '}
                   <span className='strong'>authenticator app · enabled</span>
                   <span style={{ flex: 1 }} />
+                  <WIPBanner
+                    reason='MFA regenerate not implemented — no TOTP seed store wired.'
+                    todo='Backend: totp_seed table + POST /api/v2/:slug/mfa/regenerate'
+                  />
                   <button type='button' className='btn sm' disabled>
                     regenerate
                   </button>
                 </div>
               </div>
-              <WIPBanner
-                reason='Multi-device session tracking is not implemented. The endpoint /api/v2/client/sessions returns only the *current* session (auth_method + active_tokens + request_count), not a per-device list with revoke.'
-                todo='Backend: device session store + DELETE /api/v2/client/sessions/:id; then surface list here.'
-              />
+
               <div
                 className='panel'
                 style={{ padding: 18, marginTop: 14, marginBottom: 14 }}
               >
-                <div className='lbl'>current session</div>
+                <div className='lbl' style={{ marginBottom: 12 }}>
+                  sessions
+                </div>
                 {sessionLoading && (
                   <div
                     className='muted'
@@ -401,38 +416,121 @@ const HFSettings = () => {
                     Loading…
                   </div>
                 )}
-                {!sessionLoading && !sessionInfo && (
+                {!sessionLoading && !sessions && (
                   <div
                     className='muted'
                     style={{ fontSize: 12, marginTop: 10 }}
                   >
-                    Failed to load session info.
+                    Failed to load sessions.
                   </div>
                 )}
-                {!sessionLoading && sessionInfo && (
-                  <div
+                {!sessionLoading && sessions && sessions.length > 0 && (
+                  <table
+                    data-testid='sessions-table'
                     style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr auto auto',
-                      gap: 12,
-                      padding: '10px 0 0',
-                      alignItems: 'center',
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      fontFamily: 'var(--hf-mono)',
+                      fontSize: 11,
                     }}
                   >
-                    <span className='strong' style={{ fontSize: 12 }}>
-                      {sessionInfo.username || '—'}
-                      <span
-                        className='mono muted'
-                        style={{ fontSize: 10, marginLeft: 8 }}
-                      >
-                        · auth: {sessionInfo.auth_method || 'unknown'}
-                      </span>
-                    </span>
-                    <span className='tag ok'>current</span>
-                    <span className='faint mono' style={{ fontSize: 10 }}>
-                      {sessionInfo.active_tokens ?? 0} active tokens
-                    </span>
-                  </div>
+                    <thead>
+                      <tr style={{ color: 'var(--hf-ink-3)' }}>
+                        <th
+                          style={{
+                            textAlign: 'left',
+                            padding: '4px 8px',
+                            fontWeight: 500,
+                          }}
+                        >
+                          auth method
+                        </th>
+                        <th
+                          style={{
+                            textAlign: 'left',
+                            padding: '4px 8px',
+                            fontWeight: 500,
+                          }}
+                        >
+                          current
+                        </th>
+                        <th
+                          style={{
+                            textAlign: 'right',
+                            padding: '4px 8px',
+                            fontWeight: 500,
+                          }}
+                        >
+                          active tokens
+                        </th>
+                        <th
+                          style={{
+                            textAlign: 'right',
+                            padding: '4px 8px',
+                            fontWeight: 500,
+                          }}
+                        >
+                          requests (30d)
+                        </th>
+                        <th
+                          style={{
+                            textAlign: 'right',
+                            padding: '4px 8px',
+                            fontWeight: 500,
+                          }}
+                        >
+                          last seen
+                        </th>
+                        <th style={{ padding: '4px 8px' }} />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sessions.map((s, i) => (
+                        <tr
+                          key={s.id ?? i}
+                          style={{ borderTop: '1px dashed var(--hf-rule)' }}
+                        >
+                          <td style={{ padding: '8px 8px' }}>
+                            <span className='strong'>
+                              {s.auth_method || 'session'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '8px 8px' }}>
+                            {s.current && (
+                              <span className='tag ok'>current</span>
+                            )}
+                          </td>
+                          <td
+                            style={{ padding: '8px 8px', textAlign: 'right' }}
+                          >
+                            {s.active_tokens ?? 0}
+                          </td>
+                          <td
+                            style={{ padding: '8px 8px', textAlign: 'right' }}
+                          >
+                            {(s.request_count ?? 0).toLocaleString()}
+                          </td>
+                          <td
+                            className='faint'
+                            style={{ padding: '8px 8px', textAlign: 'right' }}
+                          >
+                            {formatRelativeTime(s.last_seen)}
+                          </td>
+                          <td
+                            style={{ padding: '8px 8px', textAlign: 'right' }}
+                          >
+                            <WIPBanner
+                              reason='session revocation deferred to v3'
+                              todo='Backend: device session store + DELETE /api/v2/:slug/sessions/:id'
+                            />
+                            <button type='button' className='btn sm' disabled>
+                              revoke
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
               </div>
             </div>

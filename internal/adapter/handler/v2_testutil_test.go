@@ -228,6 +228,7 @@ func SetupV2TestRouter(t *testing.T) *V2TestContext {
 		// Log routes
 		v2.GET("/logs", GetLogsV2)
 		v2.GET("/logs/all", GetAllLogsV2)
+		v2.GET("/logs/cluster", GetLogClusterV2)
 	}
 
 	// Admin routes (platform-level, use v1 session auth)

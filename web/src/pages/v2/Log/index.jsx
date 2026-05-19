@@ -21,6 +21,8 @@ import HFShell from '../../../components/hifi/HFShell';
 import WIPBanner from '../../../components/hifi/WIPBanner';
 import { API, showError } from '../../../helpers';
 
+/* Wave 2: Cluster tab wired; Live tail SSE deferred to v3 */
+
 /*
  * v2 Log page — wired to GET /api/v2/:tenant_slug/logs.
  * TTFT and upstream channel are not returned by the API; displayed as —.
@@ -71,6 +73,11 @@ const HFLog = () => {
 
   const [tab, setTab] = useState('trace');
   const [selRow, setSelRow] = useState(0);
+
+  // Cluster tab state
+  const [clusterBucket, setClusterBucket] = useState('hour');
+  const [clusterItems, setClusterItems] = useState([]);
+  const [clusterLoading, setClusterLoading] = useState(false);
 
   // Logs state
   const [logs, setLogs] = useState([]);
@@ -131,6 +138,38 @@ const HFLog = () => {
       fetchLogs(page, filterModel, filterToken, filterStart, filterEnd);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantSlug]);
+
+  const fetchCluster = useCallback(
+    async (bucket) => {
+      setClusterLoading(true);
+      try {
+        const res = await API.get(
+          `/api/v2/${tenantSlug}/logs/cluster?bucket=${bucket}`,
+        );
+        if (res?.data?.success) {
+          const items = res.data.data.items ?? [];
+          // Sort descending by count (API returns sorted, but guard client-side)
+          items.sort((a, b) => b.count - a.count);
+          setClusterItems(items);
+        } else {
+          showError(res?.data?.message || 'Failed to load cluster data');
+        }
+      } catch (_) {
+        // error toast shown by API interceptor
+      } finally {
+        setClusterLoading(false);
+      }
+    },
+    [tenantSlug],
+  );
+
+  // Fetch cluster when switching to cluster tab or bucket changes
+  useEffect(() => {
+    if (tab === 'cluster' && tenantSlug) {
+      fetchCluster(clusterBucket);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, clusterBucket, tenantSlug]);
 
   const applyFilters = () => {
     setPage(1);
@@ -510,26 +549,94 @@ const HFLog = () => {
         </div>
       )}
 
-      {/* ── Cluster tab — no aggregation endpoint yet ── */}
+      {/* ── Cluster tab — wired to GET /api/v2/:slug/logs/cluster ── */}
+      {/* Wave 2: Cluster tab wired; Live tail SSE deferred to v3 */}
       {tab === 'cluster' && (
         <div style={{ padding: 24 }}>
-          <WIPBanner
-            reason='Error clusters need a backend aggregation endpoint that groups logs by error signature. None exists.'
-            todo='Backend: /api/v2/{slug}/logs/clusters (group by error_signature + tenant counts + trend).'
-          />
+          {/* Bucket toggle */}
           <div
-            className='panel'
             style={{
-              marginTop: 14,
-              padding: 24,
-              textAlign: 'center',
-              color: 'var(--hf-ink-3)',
-              fontFamily: 'var(--hf-mono)',
-              fontSize: 12,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginBottom: 16,
             }}
           >
-            No error-cluster data — endpoint not implemented.
+            <span
+              className='muted'
+              style={{ fontSize: 11, fontFamily: 'var(--hf-mono)' }}
+            >
+              bucket:
+            </span>
+            {['hour', 'day'].map((b) => (
+              <button
+                key={b}
+                type='button'
+                className={clusterBucket === b ? 'btn primary' : 'btn'}
+                style={{ fontSize: 11 }}
+                onClick={() => setClusterBucket(b)}
+              >
+                {b}
+              </button>
+            ))}
+            {clusterLoading && (
+              <span
+                className='muted'
+                style={{ fontSize: 11, fontFamily: 'var(--hf-mono)' }}
+              >
+                loading…
+              </span>
+            )}
           </div>
+
+          {/* Cluster table */}
+          {!clusterLoading && clusterItems.length === 0 && (
+            <div className='muted' style={{ padding: '20px 0', fontSize: 12 }}>
+              No cluster data for selected period.
+            </div>
+          )}
+
+          {clusterItems.length > 0 && (
+            <table className='t' data-testid='cluster-table'>
+              <thead>
+                <tr>
+                  <th>model</th>
+                  <th>error code</th>
+                  <th>bucket</th>
+                  <th>count</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clusterItems.map((row, i) => {
+                  const code = row.error_code || '';
+                  const is5xx = /^5/.test(code);
+                  const is4xx = /^4/.test(code);
+                  return (
+                    <tr key={i}>
+                      <td className='strong'>{row.model_name || '—'}</td>
+                      <td>
+                        {code ? (
+                          <span
+                            className={
+                              is5xx ? 'tag error' : is4xx ? 'tag warn' : 'tag'
+                            }
+                          >
+                            {code}
+                          </span>
+                        ) : (
+                          <span className='muted'>—</span>
+                        )}
+                      </td>
+                      <td className='mono muted' style={{ fontSize: 10 }}>
+                        {row.bucket}
+                      </td>
+                      <td className='mono'>{row.count}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
