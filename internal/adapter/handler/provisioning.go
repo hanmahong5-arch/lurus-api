@@ -1,0 +1,182 @@
+package handler
+
+import (
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/app"
+	"github.com/LurusTech/lurus-hub/internal/pkg/common"
+	"github.com/LurusTech/lurus-hub/internal/pkg/metrics"
+
+	"github.com/gin-gonic/gin"
+)
+
+// CreateProvisionedKey issues a Token row tied to a Reseller-owned tenant.
+// Route: POST /internal/v1/provisioning/tenants/:slug/keys
+// Auth:  X-API-Key + scope "provisioning".
+//
+// Returns 201 with the plaintext token key (one-time view, per existing
+// /internal/token convention). Sets tokens.creator_user_id to the API key's
+// CreatedBy (Reseller's user.id) so the Token list "Created by" column can
+// render it. last_used_at = 0 (never used yet).
+//
+// Canonical: ADR 2026-05-18 (tenant-credit-pool) §4.2.
+func CreateProvisionedKey(c *gin.Context) {
+	slug := c.Param("slug")
+	if slug == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "tenant slug required",
+		})
+		return
+	}
+
+	tenant, err := repo.GetTenantBySlug(slug)
+	if err != nil || tenant == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success":    false,
+			"message":    "Tenant not found",
+			"error_code": "TENANT_NOT_FOUND",
+		})
+		return
+	}
+
+	var req struct {
+		Name           string `json:"name" binding:"required"`
+		UnlimitedQuota bool   `json:"unlimited_quota"`
+		RemainQuota    int    `json:"remain_quota"`
+		Group          string `json:"group"`
+		ExpiresAt      int64  `json:"expires_at"` // unix seconds; 0 or negative = no expiry
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	keyInterface, _ := c.Get("internal_api_key")
+	apiKey, _ := keyInterface.(*repo.InternalApiKey)
+	creatorUserID := 0
+	if apiKey != nil {
+		creatorUserID = apiKey.CreatedBy
+	}
+
+	tokenKey, err := app.GenerateTokenKey()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to generate token key: " + err.Error(),
+		})
+		return
+	}
+
+	expired := int64(-1)
+	if req.ExpiresAt > 0 {
+		expired = req.ExpiresAt
+	}
+	group := req.Group
+	if group == "" {
+		group = "default"
+	}
+
+	token := &repo.Token{
+		UserId:         0, // Provisioned keys are tenant-scoped, not user-scoped
+		TenantId:       tenant.Id,
+		Name:           req.Name,
+		Key:            tokenKey,
+		UnlimitedQuota: req.UnlimitedQuota,
+		RemainQuota:    req.RemainQuota,
+		CreatedTime:    time.Now().Unix(),
+		AccessedTime:   time.Now().Unix(),
+		Status:         common.TokenStatusEnabled,
+		ExpiredTime:    expired,
+		Group:          group,
+		CreatorUserId:  creatorUserID,
+		LastUsedAt:     0,
+	}
+
+	if err := token.Insert(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to create provisioned token: " + err.Error(),
+		})
+		return
+	}
+
+	metrics.ProvisioningKeysCreatedTotal.WithLabelValues(tenant.Id).Inc()
+	keyName := c.GetString("internal_api_key_name")
+	common.SysLog("Provisioning: created token id=" + strconv.Itoa(token.Id) +
+		" tenant=" + tenant.Id + " creator=" + strconv.Itoa(creatorUserID) +
+		" via key: " + keyName)
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"data": gin.H{
+			"id":         token.Id,
+			"key":        tokenKey,
+			"name":       token.Name,
+			"tenant_id":  tenant.Id,
+			"expires_at": expired,
+			"warning":    "Please save this key - it will not be shown again.",
+		},
+	})
+}
+
+// RevokeProvisionedKey soft-deletes a Token row issued via the Provisioning
+// API. Route: DELETE /internal/v1/provisioning/tenants/:slug/keys/:key_id.
+//
+// 404 when the token does not exist or belongs to a different tenant. This
+// prevents one Reseller from revoking another Reseller's keys via spoofed slugs.
+func RevokeProvisionedKey(c *gin.Context) {
+	slug := c.Param("slug")
+	keyIDStr := c.Param("key_id")
+	keyID, err := strconv.Atoi(keyIDStr)
+	if err != nil || keyID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid key_id",
+		})
+		return
+	}
+
+	tenant, err := repo.GetTenantBySlug(slug)
+	if err != nil || tenant == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success":    false,
+			"message":    "Tenant not found",
+			"error_code": "TENANT_NOT_FOUND",
+		})
+		return
+	}
+
+	token, err := repo.GetTokenById(keyID)
+	if err != nil || token == nil || token.TenantId != tenant.Id {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success":    false,
+			"message":    "Provisioned key not found in this tenant",
+			"error_code": "KEY_NOT_FOUND",
+		})
+		return
+	}
+
+	if err := token.Delete(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to revoke key: " + err.Error(),
+		})
+		return
+	}
+
+	keyName := c.GetString("internal_api_key_name")
+	common.SysLog("Provisioning: revoked token id=" + strconv.Itoa(keyID) +
+		" tenant=" + tenant.Id + " via key: " + keyName)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Key revoked",
+	})
+}

@@ -110,42 +110,58 @@ func CreateTenantCreditPool(tenantID string, createdByUserID int, maxBalance int
 // PostgreSQL READ COMMITTED is sufficient — the implicit row-level lock
 // during UPDATE serializes concurrent debits. SERIALIZABLE not needed.
 //
-// TODO(phase-2 wiring): called by relay middleware after upstream success,
-// before BillingOutbox settlement.
+// Use DebitPoolInTx when the caller already owns a transaction (e.g. the
+// post-consume quota path joins this debit with the quota_consume write
+// so a single rollback covers both).
 func DebitPool(poolID int64, tenantID string, amount int64, tokenID int, logID int64) error {
 	if amount <= 0 {
 		return fmt.Errorf("debit amount must be positive, got %d", amount)
 	}
 
 	return DB.Transaction(func(tx *gorm.DB) error {
-		result := tx.Model(&TenantCreditPool{}).
-			Where("id = ? AND current_balance >= ?", poolID, amount).
-			Updates(map[string]interface{}{
-				"current_balance": gorm.Expr("current_balance - ?", amount),
-				"updated_at":      time.Now(),
-			})
-		if result.Error != nil {
-			return fmt.Errorf("debit pool update: %w", result.Error)
-		}
-		if result.RowsAffected == 0 {
-			return ErrPoolExhausted
-		}
-
-		draw := &TenantCreditPoolDraw{
-			PoolID:    poolID,
-			TenantID:  tenantID,
-			TokenID:   tokenID,
-			LogID:     logID,
-			Direction: PoolDrawDirectionDebit,
-			Amount:    amount,
-			Reason:    PoolDrawReasonRelayDebit,
-			CreatedAt: time.Now(),
-		}
-		if err := tx.Create(draw).Error; err != nil {
-			return fmt.Errorf("debit pool draw insert: %w", err)
-		}
-		return nil
+		return DebitPoolInTx(tx, poolID, tenantID, amount, tokenID, logID)
 	})
+}
+
+// DebitPoolInTx is the transactional variant of DebitPool — it does the same
+// conditional-UPDATE-plus-draw-insert but reuses the caller's transaction.
+// This lets the post-consume quota path bind pool debit and quota_consume
+// into a single atomic unit (ADR §7 risk #1: rollback covers both halves so
+// the audit ledger never drifts from the pool balance).
+//
+// Callers MUST handle ErrPoolExhausted explicitly — there is no auto-retry.
+func DebitPoolInTx(tx *gorm.DB, poolID int64, tenantID string, amount int64, tokenID int, logID int64) error {
+	if amount <= 0 {
+		return fmt.Errorf("debit amount must be positive, got %d", amount)
+	}
+
+	result := tx.Model(&TenantCreditPool{}).
+		Where("id = ? AND current_balance >= ?", poolID, amount).
+		Updates(map[string]interface{}{
+			"current_balance": gorm.Expr("current_balance - ?", amount),
+			"updated_at":      time.Now(),
+		})
+	if result.Error != nil {
+		return fmt.Errorf("debit pool update: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrPoolExhausted
+	}
+
+	draw := &TenantCreditPoolDraw{
+		PoolID:    poolID,
+		TenantID:  tenantID,
+		TokenID:   tokenID,
+		LogID:     logID,
+		Direction: PoolDrawDirectionDebit,
+		Amount:    amount,
+		Reason:    PoolDrawReasonRelayDebit,
+		CreatedAt: time.Now(),
+	}
+	if err := tx.Create(draw).Error; err != nil {
+		return fmt.Errorf("debit pool draw insert: %w", err)
+	}
+	return nil
 }
 
 // TopupPool atomically increments the pool balance and writes a credit draw

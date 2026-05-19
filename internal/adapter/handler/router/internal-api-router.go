@@ -127,4 +127,13 @@ func SetInternalApiRouter(router *gin.Engine) {
 	{
 		adminGroup.POST("/backfill-token-accounts", handler.InternalBackfillTokenAccountIDs)
 	}
+
+	// Provisioning API — Reseller sub-tenant key issuance / revocation
+	// (ADR 2026-05-18 §4.2). Auth: X-API-Key + scope "provisioning".
+	provisioningGroup := internalGroup.Group("/v1/provisioning")
+	provisioningGroup.Use(middleware.RequireScope(repo.ScopeProvisioning))
+	{
+		provisioningGroup.POST("/tenants/:slug/keys", handler.CreateProvisionedKey)
+		provisioningGroup.DELETE("/tenants/:slug/keys/:key_id", handler.RevokeProvisionedKey)
+	}
 }

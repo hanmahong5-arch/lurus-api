@@ -528,6 +528,24 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 		}
 	}
 
+	// Phase 2.5: Tenant credit pool debit (ADR 2026-05-18 §5).
+	// Best-effort: pool exhaustion at post-consume time is rare (the gate
+	// already enforced) and never fails the user-facing response. We log
+	// over-debits (ErrPoolExhausted) so ops can spot pool-balance drift.
+	if quota > 0 && relayInfo.TokenId > 0 {
+		if tok, terr := repo.GetTokenById(relayInfo.TokenId); terr == nil && tok != nil && tok.TenantId != "" {
+			if pool, perr := repo.GetTenantCreditPool(tok.TenantId); perr == nil && pool != nil && !pool.IsUnlimited() {
+				if derr := repo.DebitPool(pool.ID, tok.TenantId, int64(quota), relayInfo.TokenId, 0); derr != nil {
+					common.SysLog(fmt.Sprintf("pool debit non-fatal: tenant=%s quota=%d err=%s",
+						tok.TenantId, quota, derr.Error()))
+				} else {
+					metrics.CreditPoolDebitTotal.WithLabelValues(tok.TenantId).Inc()
+					metrics.CreditPoolBalance.WithLabelValues(tok.TenantId).Set(float64(pool.CurrentBalance - int64(quota)))
+				}
+			}
+		}
+	}
+
 	// Phase 3: Update token quota with compensation on failure.
 	// If token quota update fails, we release the platform pre-auth rather than
 	// settling — prevents double-debit when local state is inconsistent.

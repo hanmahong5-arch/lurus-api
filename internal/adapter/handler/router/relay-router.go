@@ -70,6 +70,10 @@ func SetRelayRouter(router *gin.Engine) {
 
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.TokenAuth())
+	// Tenant credit-pool gate: after TokenAuth (need tenant_context),
+	// before CostSpikeLimit so an exhausted pool short-circuits the chain
+	// (ADR 2026-05-18 §5 enforcement order).
+	relayV1Router.Use(middleware.PoolBalanceCheck())
 	// Cost-spike protection runs after auth (needs user id) and before
 	// entitlement/rate-limit so a runaway loop can't keep racking up checks.
 	relayV1Router.Use(middleware.CostSpikeLimit())
@@ -174,7 +178,7 @@ func SetRelayRouter(router *gin.Engine) {
 	//relayMjRouter.Use()
 
 	relaySunoRouter := router.Group("/suno")
-	relaySunoRouter.Use(middleware.TokenAuth(), middleware.Distribute())
+	relaySunoRouter.Use(middleware.TokenAuth(), middleware.PoolBalanceCheck(), middleware.Distribute())
 	{
 		relaySunoRouter.POST("/submit/:action", handler.RelayTask)
 		relaySunoRouter.POST("/fetch", handler.RelayTask)
@@ -183,7 +187,7 @@ func SetRelayRouter(router *gin.Engine) {
 
 	// OpenAI-compatible music generation routes (used by lurus-creator)
 	relayMusicRouter := router.Group("/v1/audio")
-	relayMusicRouter.Use(middleware.TokenAuth(), middleware.Distribute())
+	relayMusicRouter.Use(middleware.TokenAuth(), middleware.PoolBalanceCheck(), middleware.Distribute())
 	{
 		relayMusicRouter.POST("/music", handler.RelayTask)
 		relayMusicRouter.GET("/music/:task_id", handler.RelayTask)
@@ -191,6 +195,7 @@ func SetRelayRouter(router *gin.Engine) {
 
 	relayGeminiRouter := router.Group("/v1beta")
 	relayGeminiRouter.Use(middleware.TokenAuth())
+	relayGeminiRouter.Use(middleware.PoolBalanceCheck())
 	relayGeminiRouter.Use(middleware.ModelRequestRateLimit())
 	relayGeminiRouter.Use(middleware.Distribute())
 	{
@@ -202,7 +207,7 @@ func SetRelayRouter(router *gin.Engine) {
 }
 
 func registerMjRouterGroup(relayMjRouter *gin.RouterGroup) {
-	relayMjRouter.Use(middleware.TokenAuth(), middleware.Distribute())
+	relayMjRouter.Use(middleware.TokenAuth(), middleware.PoolBalanceCheck(), middleware.Distribute())
 	// Image proxy requires TokenAuth but not Distribute; registered after .Use()
 	// so Gin applies the middleware. Distribute is a no-op for GET-only proxy.
 	relayMjRouter.GET("/image/:id", relay.RelayMidjourneyImage)

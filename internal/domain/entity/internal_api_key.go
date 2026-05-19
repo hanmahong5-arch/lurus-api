@@ -39,7 +39,12 @@ const (
 	ScopeAuthLogin         = "auth:login"
 	ScopeLogRead           = "log:read"
 	ScopeModelRead         = "model:read"
-	ScopeAll               = "*"
+	// ScopeProvisioning gates the Provisioning API (POST/DELETE under
+	// /internal/v1/provisioning/tenants/:slug/keys) that Resellers use to
+	// programmatically issue or revoke sub-tenant token keys. See
+	// ADR 2026-05-18 (tenant-credit-pool) §4.2 and §7 risk #5.
+	ScopeProvisioning = "provisioning"
+	ScopeAll          = "*"
 )
 
 // GetScopes returns the list of scopes for this key (JSON array format)

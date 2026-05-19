@@ -92,7 +92,16 @@ func SetApiV2Router(router *gin.Engine) {
 		{
 			switchGroup.GET("/tools/versions", handler.GetToolVersions)
 			switchGroup.GET("/presets", handler.ListSwitchPresets)
+			// Phase D Track 2.1: anonymous activation-code redemption (no auth)
+			switchGroup.POST("/redeem", handler.SwitchRedeemAnonymous)
+			// Phase D Track 2.2: single-tenant fallback heartbeat (inline raw-token auth)
+			switchGroup.POST("/heartbeat", handler.UserHeartbeat)
 		}
+
+		// Phase D Track 2.2: tenant-scoped heartbeat — sibling of /:tenant_slug/user/me.
+		// No middleware: UserHeartbeat does inline raw-token (Token.Key) auth,
+		// which middleware.UserAuth (access-token based) would otherwise reject.
+		apiV2.POST("/:tenant_slug/user/heartbeat", handler.UserHeartbeat)
 
 		apiV2.GET("/tools/download-manifest", handler.GetToolDownloadManifest)
 
@@ -132,6 +141,13 @@ func SetApiV2Router(router *gin.Engine) {
 				tenantMgmt.POST("/:id/disable", handler.DisableTenant)
 				tenantMgmt.POST("/:id/suspend", handler.SuspendTenant)
 				tenantMgmt.GET("/:id/stats", handler.GetTenantStats)
+
+				// Reseller credit-pool admin (ADR 2026-05-18 §4.1)
+				tenantMgmt.POST("/:id/credit-pool", handler.CreateCreditPool)
+				tenantMgmt.GET("/:id/credit-pool", handler.GetCreditPool)
+				tenantMgmt.POST("/:id/credit-pool/topup", handler.TopupCreditPool)
+				tenantMgmt.GET("/:id/credit-pool/usage", handler.ListCreditPoolUsage)
+				tenantMgmt.DELETE("/:id/credit-pool", handler.DeleteCreditPool)
 			}
 
 			mappingRoute := adminRoute.Group("/mappings")
@@ -143,6 +159,10 @@ func SetApiV2Router(router *gin.Engine) {
 
 			adminRoute.GET("/stats", handler.GetSystemStatsV2)
 			adminRoute.POST("/switch/presets", handler.CreateSwitchPreset)
+			// Phase D Track 2.3: white-label HMAC key derivation for Switch
+			// installer signing. Tenant slug arrives via ?tenant_slug= query
+			// (adminRoute is platform-scoped, not :tenant_slug-bound).
+			adminRoute.GET("/whitelabel/hmac-key", handler.GetWhiteLabelHMACKey)
 
 			// Governance (rate-limited: heavy aggregation queries)
 			govRoute := adminRoute.Group("/governance")
