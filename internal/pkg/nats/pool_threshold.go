@@ -122,8 +122,11 @@ func (redisCommonDeduper) SetNXBool(ctx context.Context, key string, expiration 
 // Both checks are required (per Lane δ spec). Reason: Redis may be down or
 // reset; the DB column is the durable record. On success the function:
 //
+//   - sets tenant_credit_pools.alert_fired_at = NOW() for the pool (FIRST,
+//     fail-closed: if the schema mark cannot be written, the event must not
+//     be published — otherwise schema dedup loses track and we risk an
+//     alert storm when the Redis SETNX expires)
 //   - publishes the JSON payload to SubjectPoolThreshold
-//   - sets tenant_credit_pools.alert_fired_at = NOW() for the pool
 //
 // Returns an error only for genuine infrastructure failures the caller can
 // usefully report (DB unreachable, publish enqueue failed). Suppressions
@@ -154,16 +157,26 @@ func PublishPoolThreshold(ctx context.Context, tenantID string, poolID int64, cu
 // the test suite can substitute mocks without touching real Redis / NATS /
 // gorm. now is also injected to keep behaviour deterministic across runs.
 //
-// Order of operations is load-bearing:
+// Order of operations is load-bearing (2026-05-19 Phase 2 self-audit
+// reordered Steps 3/4 — see below):
 //
 //  1. Schema dedup check — cheapest path to no-op, also the durable record
 //  2. Redis SETNX — short-window race guard between pods
-//  3. NATS publish — only after both dedup layers approve
-//  4. Schema mark fired — last so consumers see the event before the lock
+//  3. Schema mark fired — write FIRST so dedup state is durable before
+//     anything reaches the wire. If this fails we never publish and the
+//     caller sees an error; the next call re-attempts cleanly.
+//  4. NATS publish — only after the dedup state is committed. If publish
+//     fails, schema dedup has already locked the slot for the window:
+//     ops sees an error and can replay manually, but we won't double-fire.
 //
 // Errors from steps 1, 3, 4 propagate to the caller. Errors from step 2
 // (Redis transient failure) are NOT fatal: the schema check has already
 // said "ok to fire", so we proceed and rely on schema dedup for safety.
+//
+// Trade-off acknowledged: a publish failure now produces a "marked but
+// not delivered" state for the dedup window. We prefer this to the
+// alternative (publish succeeded, mark failed, Redis TTL expires, alert
+// storm), which is the failure mode the audit closed.
 func publishPoolThreshold(
 	ctx context.Context,
 	tenantID string,
@@ -207,8 +220,19 @@ func publishPoolThreshold(
 		}
 	}
 
-	// Step 3: publish to NATS. Use the canonical envelope shape used by
-	// other LLM events for downstream notification consumers.
+	// Step 3: durable schema mark FIRST (fail-closed). If this fails we
+	// never publish — caller sees the error and the next call re-attempts.
+	// Trades a rare false-suppress (mark succeeded, publish later failed
+	// inside the dedup window) for the more severe alert-storm scenario
+	// the audit closed.
+	if err := db.MarkAlertFired(ctx, poolID, now); err != nil {
+		return fmt.Errorf("pool threshold mark fired: %w", err)
+	}
+
+	// Step 4: publish to NATS. Use the canonical envelope shape used by
+	// other LLM events for downstream notification consumers. If publish
+	// fails, schema dedup has already locked the slot — caller may want to
+	// replay manually, but we won't double-fire within the window.
 	payload := PoolThresholdPayload{
 		TenantID:       tenantID,
 		PoolID:         poolID,
@@ -228,12 +252,6 @@ func publishPoolThreshold(
 		"current_balance", currentBalance,
 		"max_balance", maxBalance,
 		"threshold_pct", thresholdPct)
-
-	// Step 4: durable schema mark. If this fails the event is already on
-	// the wire — log and return so ops can reconcile.
-	if err := db.MarkAlertFired(ctx, poolID, now); err != nil {
-		return fmt.Errorf("pool threshold mark fired: %w", err)
-	}
 
 	return nil
 }

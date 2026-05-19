@@ -234,9 +234,11 @@ func TestPublishPoolThreshold_WritesAlertFiredAtOnSuccess(t *testing.T) {
 	}
 }
 
-// Test 5: publish failure does NOT update alert_fired_at — the event never
-// made it to the bus, so we must NOT record it as fired.
-func TestPublishPoolThreshold_DoesNotMarkOnPublishFailure(t *testing.T) {
+// Test 5: publish failure leaves alert_fired_at MARKED — fail-closed order
+// (2026-05-19 audit reorder, Step 3 before Step 4). The dedup state is
+// already on disk, so the alert won't re-fire inside the dedup window
+// even though the wire publish failed. Caller still sees the error.
+func TestPublishPoolThreshold_MarksEvenWhenPublishFails(t *testing.T) {
 	rdb := newMockPoolRedis()
 	pub := &mockPoolPublisher{failErr: errors.New("simulated NATS down")}
 	db := &mockPoolDB{}
@@ -249,8 +251,33 @@ func TestPublishPoolThreshold_DoesNotMarkOnPublishFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from publish failure, got nil")
 	}
-	if db.markCount() != 0 {
-		t.Errorf("expected MarkAlertFired NOT called on publish failure, got %d", db.markCount())
+	if db.markCount() != 1 {
+		t.Errorf("expected MarkAlertFired called once before publish, got %d", db.markCount())
+	}
+	if pub.count() != 0 {
+		t.Errorf("publish failed — expected 0 successful messages, got %d", pub.count())
+	}
+}
+
+// Test 5b: when the schema mark itself fails, the publish must NOT happen.
+// This is the other half of the fail-closed contract — if we cannot
+// durably record "alert fired", we must not put it on the wire (otherwise
+// schema dedup loses sync and the alert can storm).
+func TestPublishPoolThreshold_DoesNotPublishWhenMarkFails(t *testing.T) {
+	rdb := newMockPoolRedis()
+	pub := &mockPoolPublisher{}
+	db := &mockPoolDB{markErr: errors.New("simulated postgres write failure")}
+
+	err := publishPoolThreshold(
+		context.Background(),
+		"tenant-E2", 9, 10, 1000, 80,
+		pub, rdb, db, time.Now().UTC(),
+	)
+	if err == nil {
+		t.Fatal("expected error from mark failure, got nil")
+	}
+	if pub.count() != 0 {
+		t.Errorf("mark failed — expected 0 publishes, got %d", pub.count())
 	}
 }
 
