@@ -42,15 +42,31 @@ vi.mock('../../../components/hifi/HFShell', () => ({
 // WIPBanner renders inline — keep real implementation so test can assert on it.
 vi.mock('../../../components/hifi/WIPBanner', () => ({
   default: ({ reason }) =>
-    React.createElement('span', { 'data-testid': 'wip-banner', 'data-reason': reason }, reason),
+    React.createElement(
+      'span',
+      { 'data-testid': 'wip-banner', 'data-reason': reason },
+      reason,
+    ),
 }));
 
 import HFBilling from './index';
 import { API, showError } from '../../../helpers';
 
 const fakeInvoices = [
-  { month: '2026-05', quota: 8420400, amount_cny: 16.84, amount_usd: 16.84, request_count: 120 },
-  { month: '2026-04', quota: 9842200, amount_cny: 19.68, amount_usd: 19.68, request_count: 200 },
+  {
+    month: '2026-05',
+    quota: 8420400,
+    amount_cny: 16.84,
+    amount_usd: 16.84,
+    request_count: 120,
+  },
+  {
+    month: '2026-04',
+    quota: 9842200,
+    amount_cny: 19.68,
+    amount_usd: 19.68,
+    request_count: 200,
+  },
 ];
 const fakeSummary = {
   wallet_balance_cny: 1210.5,
@@ -73,7 +89,9 @@ describe('Billing page', () => {
     // from localStorage all resolve successfully without throwing.
     API.get.mockImplementation((url) => {
       if (url.includes('/billing/invoices')) {
-        return Promise.resolve({ data: { success: true, data: { items: fakeInvoices } } });
+        return Promise.resolve({
+          data: { success: true, data: { items: fakeInvoices } },
+        });
       }
       return Promise.resolve({ data: { success: true, data: fakeSummary } });
     });
@@ -99,17 +117,24 @@ describe('Billing page', () => {
   // 2. Clicking recharge calls POST /api/v2/user/billing/checkout and on
   //    success navigates to checkout_url via window.location.href.
   it('navigates to checkout on recharge click', async () => {
-    API.get
-      .mockResolvedValue({ data: { success: true, data: { items: [] } } });
+    API.get.mockResolvedValue({ data: { success: true, data: { items: [] } } });
     API.post.mockResolvedValueOnce({
-      data: { success: true, data: { checkout_url: 'https://pay.example.com/order/123' } },
+      data: {
+        success: true,
+        data: { checkout_url: 'https://pay.example.com/order/123' },
+      },
     });
 
     // Intercept window.location.href assignment without actual navigation.
     const originalLocation = window.location;
     delete window.location;
     let navigatedTo = null;
-    window.location = { ...originalLocation, set href(url) { navigatedTo = url; } };
+    window.location = {
+      ...originalLocation,
+      set href(url) {
+        navigatedTo = url;
+      },
+    };
 
     render(<HFBilling />);
 
@@ -134,7 +159,9 @@ describe('Billing page', () => {
   //    are present in the rendered DOM.
   it('shows WIPBanner near PDF download buttons', async () => {
     API.get
-      .mockResolvedValueOnce({ data: { success: true, data: { items: fakeInvoices } } })
+      .mockResolvedValueOnce({
+        data: { success: true, data: { items: fakeInvoices } },
+      })
       .mockResolvedValueOnce({ data: { success: true, data: fakeSummary } });
 
     render(<HFBilling />);
@@ -153,7 +180,11 @@ describe('Billing page', () => {
     // payment method editing WIPBanner also present
     const paymentBanners = screen
       .getAllByTestId('wip-banner')
-      .filter((el) => el.dataset.reason && el.dataset.reason.includes('payment method editing'));
+      .filter(
+        (el) =>
+          el.dataset.reason &&
+          el.dataset.reason.includes('payment method editing'),
+      );
 
     expect(paymentBanners.length).toBeGreaterThanOrEqual(1);
   });

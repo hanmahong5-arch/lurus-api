@@ -35,7 +35,11 @@ vi.mock('../../../components/hifi/HFShell', () => ({
     React.createElement(
       'div',
       { 'data-testid': 'hf-shell' },
-      React.createElement('div', { 'data-testid': 'hf-shell-actions' }, actions),
+      React.createElement(
+        'div',
+        { 'data-testid': 'hf-shell-actions' },
+        actions,
+      ),
       children,
     ),
 }));
@@ -43,7 +47,11 @@ vi.mock('../../../components/hifi/HFShell', () => ({
 // Stub WIPBanner to a simple div so we can assert its presence.
 vi.mock('../../../components/hifi/WIPBanner', () => ({
   default: ({ reason }) =>
-    React.createElement('div', { 'data-testid': 'wip-banner' }, reason ?? 'WIP'),
+    React.createElement(
+      'div',
+      { 'data-testid': 'wip-banner' },
+      reason ?? 'WIP',
+    ),
 }));
 
 // Stub Semi Spin — just renders children.
@@ -119,9 +127,15 @@ describe('Pricing page', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId('pricing-table').textContent).toContain('gpt-4o');
-      expect(screen.getByTestId('pricing-table').textContent).toContain('claude-3.5-sonnet');
-      expect(screen.getByTestId('pricing-table').textContent).toContain('gemini-1.5-pro');
+      expect(screen.getByTestId('pricing-table').textContent).toContain(
+        'gpt-4o',
+      );
+      expect(screen.getByTestId('pricing-table').textContent).toContain(
+        'claude-3.5-sonnet',
+      );
+      expect(screen.getByTestId('pricing-table').textContent).toContain(
+        'gemini-1.5-pro',
+      );
     });
   });
 

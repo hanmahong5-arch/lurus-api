@@ -52,7 +52,11 @@ const PricingPage = () => {
         const d = res?.data?.data ?? {};
         setPricing(Array.isArray(d.pricing) ? d.pricing : []);
         setVendors(Array.isArray(d.vendors) ? d.vendors : []);
-        setGroupRatio(d.group_ratio && typeof d.group_ratio === 'object' ? d.group_ratio : {});
+        setGroupRatio(
+          d.group_ratio && typeof d.group_ratio === 'object'
+            ? d.group_ratio
+            : {},
+        );
       })
       .catch((err) => {
         const msg = err?.response?.data?.message ?? '加载定价数据失败';
@@ -95,9 +99,7 @@ const PricingPage = () => {
               定价管理
             </div>
             <h1>模型定价</h1>
-            <div className='sub'>
-              供应商成本 · 分组倍率 · 计费类型
-            </div>
+            <div className='sub'>供应商成本 · 分组倍率 · 计费类型</div>
           </div>
         </div>
 
@@ -211,7 +213,11 @@ const PricingPage = () => {
                 ))}
                 {filteredPricing.length === 0 && !loading && (
                   <tr>
-                    <td colSpan={7} className='muted' style={{ textAlign: 'center', padding: 24 }}>
+                    <td
+                      colSpan={7}
+                      className='muted'
+                      style={{ textAlign: 'center', padding: 24 }}
+                    >
                       暂无数据
                     </td>
                   </tr>

@@ -189,7 +189,11 @@ const HFModels = () => {
               </div>
               <div
                 className='display'
-                style={{ fontSize: 20, marginTop: 6, letterSpacing: '-0.025em' }}
+                style={{
+                  fontSize: 20,
+                  marginTop: 6,
+                  letterSpacing: '-0.025em',
+                }}
               >
                 {m.model_name}
               </div>

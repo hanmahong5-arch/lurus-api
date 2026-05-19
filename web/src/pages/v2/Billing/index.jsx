@@ -40,7 +40,11 @@ const useTenantSlug = () => {
 
 const fmtCNY = (v) =>
   typeof v === 'number'
-    ? '¥' + v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    ? '¥' +
+      v.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
     : '—';
 
 const fmtQuota = (v) =>
@@ -108,12 +112,16 @@ const HFBilling = () => {
   const trend = invoices.slice(0, 6).slice().reverse();
   const trendMax = trend.reduce((m, b) => Math.max(m, b.amount_cny ?? 0), 1);
 
-  const balanceDisplay = summary?.wallet_balance_cny != null
-    ? fmtCNY(summary.wallet_balance_cny)
-    : '—';
-  const mtdDisplay = summary?.mtd_spend_cny != null
-    ? fmtCNY(summary.mtd_spend_cny)
-    : (invoices[0] ? fmtCNY(invoices[0].amount_cny) : '—');
+  const balanceDisplay =
+    summary?.wallet_balance_cny != null
+      ? fmtCNY(summary.wallet_balance_cny)
+      : '—';
+  const mtdDisplay =
+    summary?.mtd_spend_cny != null
+      ? fmtCNY(summary.mtd_spend_cny)
+      : invoices[0]
+        ? fmtCNY(invoices[0].amount_cny)
+        : '—';
 
   return (
     <HFShell
@@ -153,7 +161,10 @@ const HFBilling = () => {
           ].map(([l, v, col], i) => (
             <div key={i}>
               <div className='lbl'>{l}</div>
-              <div className='display' style={{ fontSize: 26, color: col, marginTop: 2 }}>
+              <div
+                className='display'
+                style={{ fontSize: 26, color: col, marginTop: 2 }}
+              >
                 {loading ? '…' : v}
               </div>
             </div>
@@ -171,16 +182,33 @@ const HFBilling = () => {
       >
         {/* Invoice table */}
         <div className='panel'>
-          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--hf-rule)' }}>
+          <div
+            style={{
+              padding: '14px 18px',
+              borderBottom: '1px solid var(--hf-rule)',
+            }}
+          >
             <div className='lbl'>invoices · monthly</div>
           </div>
 
           {loading ? (
-            <div style={{ padding: 24, textAlign: 'center', color: 'var(--hf-ink-2)' }}>
+            <div
+              style={{
+                padding: 24,
+                textAlign: 'center',
+                color: 'var(--hf-ink-2)',
+              }}
+            >
               loading…
             </div>
           ) : invoices.length === 0 ? (
-            <div style={{ padding: 24, textAlign: 'center', color: 'var(--hf-ink-2)' }}>
+            <div
+              style={{
+                padding: 24,
+                textAlign: 'center',
+                color: 'var(--hf-ink-2)',
+              }}
+            >
               no invoice data
             </div>
           ) : (
@@ -209,7 +237,11 @@ const HFBilling = () => {
                       {/* Download PDF — deferred to v2 */}
                       <span
                         data-testid={`billing-download-${i}`}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
                       >
                         <button type='button' className='btn ghost sm'>
                           PDF
@@ -285,7 +317,15 @@ const HFBilling = () => {
           <div className='panel' style={{ padding: 18 }}>
             <div className='lbl'>trend · last 6 months</div>
             {loading ? (
-              <div style={{ height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--hf-ink-2)' }}>
+              <div
+                style={{
+                  height: 100,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--hf-ink-2)',
+                }}
+              >
                 loading…
               </div>
             ) : (
@@ -310,7 +350,10 @@ const HFBilling = () => {
                         opacity: i === trend.length - 1 ? 1 : 0.6,
                       }}
                     />
-                    <div className='faint mono' style={{ fontSize: 9, marginTop: 4 }}>
+                    <div
+                      className='faint mono'
+                      style={{ fontSize: 9, marginTop: 4 }}
+                    >
                       {b.month ? b.month.slice(5) : ''}
                     </div>
                   </div>
@@ -323,17 +366,32 @@ const HFBilling = () => {
           {summary && (
             <div className='panel' style={{ padding: 18 }}>
               <div className='lbl'>platform summary</div>
-              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div
+                style={{
+                  marginTop: 10,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                }}
+              >
                 {summary.subscription_plan && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <div
+                    style={{ display: 'flex', justifyContent: 'space-between' }}
+                  >
                     <span className='muted'>plan</span>
-                    <span className='mono strong'>{summary.subscription_plan}</span>
+                    <span className='mono strong'>
+                      {summary.subscription_plan}
+                    </span>
                   </div>
                 )}
                 {summary.wallet_balance_cny != null && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <div
+                    style={{ display: 'flex', justifyContent: 'space-between' }}
+                  >
                     <span className='muted'>wallet</span>
-                    <span className='mono strong'>{fmtCNY(summary.wallet_balance_cny)}</span>
+                    <span className='mono strong'>
+                      {fmtCNY(summary.wallet_balance_cny)}
+                    </span>
                   </div>
                 )}
               </div>
