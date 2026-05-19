@@ -127,6 +127,14 @@ func SetApiV2Router(router *gin.Engine) {
 			tenantBilling.GET("/invoices", handler.ListInvoicesV2)
 		}
 
+		// Chat single-model multi-turn — non-stream only v1; in-memory
+		// conversation client-side (no chat_session table yet).
+		tenantChat := apiV2.Group("/:tenant_slug/chat")
+		tenantChat.Use(middleware.UserAuth())
+		{
+			tenantChat.POST("/send", handler.ChatSend)
+		}
+
 		// Settings — PUT for profile update (GET already registered above)
 		apiV2.PUT("/:tenant_slug/user/me", middleware.UserAuth(), handler.UpdateSelfV2)
 

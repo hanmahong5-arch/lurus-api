@@ -16,9 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import React, { Fragment, useState } from 'react';
+import React, { Fragment, useCallback, useState } from 'react';
 import HFShell from '../../../components/hifi/HFShell';
 import WIPBanner from '../../../components/hifi/WIPBanner';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import { useFormDraft } from '../../../hooks/common/useFormDraft';
+import { API, showError } from '../../../helpers';
 
 /* HiFi 13 — Flows: multi-step wizards & incident response. Ported from hifi/hf13-flows.jsx. */
 
@@ -312,10 +315,35 @@ const NewChannelStep = ({ step }) => {
   );
 };
 
-const NewTokenStep = ({ step }) => {
-  if (step === 3) {
+// Draft key shared between NewTokenStep and HFFlows nav buttons.
+const TOKEN_DRAFT_KEY = 'flow-newtoken-draft';
+const TOKEN_DRAFT_INIT = {
+  name: '',
+  group: '',
+  unlimited_quota: true,
+  remain_quota: 500000,
+  expires_at: '',
+};
+
+// NewTokenStep receives the shared draft state and callbacks from HFFlows so
+// that it does not own local state (wizard steps re-mount on flow tab switch).
+const NewTokenStep = ({
+  step,
+  draft,
+  setDraft,
+  createdKey,
+  onCopyKey,
+  onConfirmOpen,
+  confirmVisible,
+  onConfirmCancel,
+  onSubmit,
+}) => {
+  if (step === 3 && createdKey) {
     return (
-      <div style={{ textAlign: 'center', padding: '40px 0' }}>
+      <div
+        style={{ textAlign: 'center', padding: '40px 0' }}
+        data-testid='newtoken-success'
+      >
         <div
           style={{
             width: 56,
@@ -335,7 +363,9 @@ const NewTokenStep = ({ step }) => {
         <h1 className='display' style={{ fontSize: 28, margin: '0 0 8px' }}>
           Token created
         </h1>
-        <div className='muted'>copy this once · it won't be shown again</div>
+        <div className='muted'>
+          copy this once · it won&apos;t be shown again
+        </div>
         <div
           className='panel-paper'
           style={{
@@ -346,62 +376,177 @@ const NewTokenStep = ({ step }) => {
         >
           <span
             className='mono strong'
+            data-testid='newtoken-key'
             style={{ fontSize: 14, letterSpacing: '0.04em' }}
           >
-            sk-7z2e9f8a1c4b6d0e3f5a8b9c1d2e4f6a
+            {createdKey}
           </span>
-          <button type='button' className='btn sm' style={{ marginLeft: 12 }}>
+          <button
+            type='button'
+            className='btn sm'
+            data-testid='newtoken-copy'
+            style={{ marginLeft: 12 }}
+            onClick={onCopyKey}
+          >
             copy
-          </button>
-        </div>
-        <div style={{ marginTop: 24 }}>
-          <button type='button' className='btn'>
-            view in playground →
           </button>
         </div>
       </div>
     );
   }
-  const fields =
-    step === 1
-      ? [
-          ['name', 'lurus-edit · prod'],
-          ['models', 'gpt-4o, claude-3.5-sonnet'],
-          ['environment', 'production'],
-          ['team', 'lurus-edit'],
-        ]
-      : [
-          ['monthly cap', '$200.00'],
-          ['rate limit · rpm', '60'],
-          ['rate limit · tpm', '200,000'],
-          ['expires', 'never'],
-          ['allowed ips', 'any'],
-        ];
+
+  if (step === 3) {
+    // Review + confirm step — shows summary and opens ConfirmDialog on submit.
+    return (
+      <>
+        <div className='lbl'>step 3 of 3 · review</div>
+        <h1 className='display' style={{ fontSize: 28, margin: '4px 0 22px' }}>
+          Review token
+        </h1>
+        <div className='panel' style={{ padding: 22 }}>
+          {[
+            ['name', draft.name || '—'],
+            ['group', draft.group || 'default'],
+            [
+              'quota',
+              draft.unlimited_quota ? 'unlimited' : String(draft.remain_quota),
+            ],
+            ['expires', draft.expires_at || 'never'],
+          ].map((r, i, arr) => (
+            <div
+              key={r[0]}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '180px 1fr',
+                padding: '12px 0',
+                borderBottom:
+                  i < arr.length - 1 ? '1px dashed var(--hf-rule)' : 0,
+                alignItems: 'center',
+              }}
+            >
+              <span className='lbl'>{r[0]}</span>
+              <span className='strong mono' style={{ fontSize: 12 }}>
+                {r[1]}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 24, textAlign: 'right' }}>
+          <button
+            type='button'
+            className='btn primary'
+            data-testid='newtoken-open-confirm'
+            onClick={onConfirmOpen}
+          >
+            create token →
+          </button>
+        </div>
+        <ConfirmDialog
+          visible={confirmVisible}
+          title='Confirm token creation'
+          consequenceList={[
+            'The token key is shown only once after creation.',
+            'Once created it counts against your quota immediately.',
+          ]}
+          confirmText={draft.name}
+          confirmButtonText='Create token'
+          confirmButtonType='primary'
+          onConfirm={onSubmit}
+          onCancel={onConfirmCancel}
+        />
+      </>
+    );
+  }
+
+  if (step === 1) {
+    return (
+      <>
+        <div className='lbl'>step 1 of 3 · name &amp; scope</div>
+        <h1 className='display' style={{ fontSize: 28, margin: '4px 0 22px' }}>
+          What is this token for?
+        </h1>
+        <div
+          className='panel'
+          style={{ padding: 22, display: 'grid', gap: 16 }}
+        >
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span className='lbl'>token name</span>
+            <input
+              className='input'
+              data-testid='newtoken-name'
+              value={draft.name}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, name: e.target.value }))
+              }
+              placeholder='e.g. lurus-edit · prod'
+            />
+          </label>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span className='lbl'>group (optional)</span>
+            <input
+              className='input'
+              data-testid='newtoken-group'
+              value={draft.group}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, group: e.target.value }))
+              }
+              placeholder='default'
+            />
+          </label>
+        </div>
+      </>
+    );
+  }
+
+  // step === 2 — quota limits
   return (
     <>
-      <div className='lbl'>step {step} of 3</div>
+      <div className='lbl'>step 2 of 3 · limits</div>
       <h1 className='display' style={{ fontSize: 28, margin: '4px 0 22px' }}>
-        {step === 1 ? 'What is this token for?' : 'Set limits'}
+        Set limits
       </h1>
-      <div className='panel' style={{ padding: 22 }}>
-        {fields.map((r, i) => (
-          <div
-            key={i}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '180px 1fr',
-              padding: '12px 0',
-              borderBottom:
-                i < fields.length - 1 ? '1px dashed var(--hf-rule)' : 0,
-              alignItems: 'center',
-            }}
-          >
-            <span className='lbl'>{r[0]}</span>
-            <span className='strong mono' style={{ fontSize: 12 }}>
-              {r[1]}
-            </span>
-          </div>
-        ))}
+      <div className='panel' style={{ padding: 22, display: 'grid', gap: 16 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <input
+            type='checkbox'
+            data-testid='newtoken-unlimited'
+            checked={draft.unlimited_quota}
+            onChange={(e) =>
+              setDraft((d) => ({ ...d, unlimited_quota: e.target.checked }))
+            }
+          />
+          <span className='lbl'>unlimited quota</span>
+        </label>
+        {!draft.unlimited_quota && (
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span className='lbl'>remain quota (tokens)</span>
+            <input
+              type='number'
+              className='input'
+              data-testid='newtoken-quota'
+              min={1}
+              value={draft.remain_quota}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  remain_quota: parseInt(e.target.value, 10) || 0,
+                }))
+              }
+            />
+          </label>
+        )}
+        <label style={{ display: 'grid', gap: 6 }}>
+          <span className='lbl'>expires at (leave blank = never)</span>
+          <input
+            type='date'
+            className='input'
+            data-testid='newtoken-expires'
+            value={draft.expires_at}
+            onChange={(e) =>
+              setDraft((d) => ({ ...d, expires_at: e.target.value }))
+            }
+          />
+        </label>
       </div>
     </>
   );
@@ -955,21 +1100,81 @@ const RetryScreen = () => (
   </div>
 );
 
+// useTenantSlug mirrors the pattern from Playground — read from localStorage
+// so the Flows page does not need a router param prop.
+function useTenantSlug() {
+  const [slug, setSlug] = useState('default');
+  useState(() => {
+    const s = localStorage.getItem('tenant_slug');
+    if (s) setSlug(s);
+  });
+  return slug;
+}
+
 const HFFlows = () => {
   const [flow, setFlow] = useState('newChannel');
   const [step, setStep] = useState(1);
   const meta = FLOWS.find((f) => f[0] === flow);
+  const tenantSlug = useTenantSlug();
+
+  // newToken wizard state
+  const [draft, setDraft, clearDraft] = useFormDraft(
+    TOKEN_DRAFT_KEY,
+    TOKEN_DRAFT_INIT,
+  );
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [createdKey, setCreatedKey] = useState(null);
+
+  const handleSubmit = useCallback(async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const payload = {
+        name: draft.name,
+        group: draft.group || 'default',
+        unlimited_quota: draft.unlimited_quota,
+        remain_quota: draft.unlimited_quota ? 0 : draft.remain_quota,
+        expired_time: draft.expires_at
+          ? Math.floor(new Date(draft.expires_at).getTime() / 1000)
+          : -1,
+      };
+      const res = await API.post(`/api/v2/${tenantSlug}/tokens`, payload);
+      const key = res?.data?.data?.key ?? res?.data?.key;
+      setCreatedKey(key);
+      clearDraft();
+      setConfirmVisible(false);
+    } catch (err) {
+      const msg =
+        err?.response?.data?.message ??
+        err?.message ??
+        'Failed to create token';
+      showError(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [draft, tenantSlug, submitting, clearDraft]);
+
+  // When user switches flow or step, keep step in bounds.
+  const maxStep = meta[2];
+  // For newToken, "next" on step 2 goes to review (step 3). The review step
+  // handles its own submit — nav buttons are hidden once createdKey is set.
+  const showNav =
+    flow !== 'incident' &&
+    flow !== 'retry' &&
+    !(flow === 'newToken' && step === maxStep);
 
   return (
     <HFShell
       active='channels'
       crumbs={['flows', meta[1]]}
       actions={
-        flow !== 'incident' && flow !== 'retry' ? (
+        showNav ? (
           <>
             <button
               type='button'
               className='btn'
+              data-testid='flows-back'
               onClick={() => setStep(Math.max(1, step - 1))}
             >
               ← back
@@ -977,18 +1182,21 @@ const HFFlows = () => {
             <button
               type='button'
               className='btn primary'
-              onClick={() => setStep(Math.min(meta[2], step + 1))}
+              data-testid='flows-next'
+              onClick={() => setStep(Math.min(maxStep, step + 1))}
             >
-              {step === meta[2] ? 'finish' : 'next →'}
+              {step === maxStep ? 'finish' : 'next →'}
             </button>
           </>
         ) : null
       }
     >
-      <WIPBanner
-        reason='Flow wizards are static step previews — no backend orchestration endpoint exists. Each flow (newChannel/newToken/incident/retry) would need its own state-machine handler.'
-        todo='Defer until product confirms which flows actually ship; see hardening-swarm-2026-05-18-acceptance.md §Out of Scope.'
-      />
+      {flow !== 'newToken' && (
+        <WIPBanner
+          reason='Flow wizards are static step previews — wired in v3.'
+          todo='newChannel/incident/retry wired in v3.'
+        />
+      )}
       <div
         style={{
           display: 'flex',
@@ -1002,9 +1210,11 @@ const HFFlows = () => {
           <button
             key={k}
             type='button'
+            data-testid={`flows-tab-${k}`}
             onClick={() => {
               setFlow(k);
               setStep(1);
+              if (k === 'newToken') setCreatedKey(null);
             }}
             style={{
               padding: '6px 14px',
@@ -1029,6 +1239,11 @@ const HFFlows = () => {
 
       {flow === 'newChannel' && (
         <>
+          <WIPBanner
+            reason='New Channel wizard wired in v3.'
+            todo='Requires credential validation + connection-test + model-discovery.'
+            data-testid='wip-newChannel'
+          />
           <Stepper
             steps={['vendor', 'credentials', 'models', 'review']}
             cur={step}
@@ -1040,14 +1255,44 @@ const HFFlows = () => {
       )}
       {flow === 'newToken' && (
         <>
-          <Stepper steps={['name & scope', 'limits', 'done']} cur={step} />
+          <Stepper steps={['name & scope', 'limits', 'review']} cur={step} />
           <div style={{ padding: '32px 40px' }}>
-            <NewTokenStep step={step} />
+            <NewTokenStep
+              step={step}
+              draft={draft}
+              setDraft={setDraft}
+              createdKey={createdKey}
+              onCopyKey={() =>
+                navigator.clipboard.writeText(createdKey).catch(() => undefined)
+              }
+              onConfirmOpen={() => setConfirmVisible(true)}
+              confirmVisible={confirmVisible}
+              onConfirmCancel={() => setConfirmVisible(false)}
+              onSubmit={handleSubmit}
+            />
           </div>
         </>
       )}
-      {flow === 'incident' && <IncidentScreen />}
-      {flow === 'retry' && <RetryScreen />}
+      {flow === 'incident' && (
+        <>
+          <WIPBanner
+            reason='Incident Response wizard wired in v3.'
+            todo='Event-response automation — deferred.'
+            data-testid='wip-incident'
+          />
+          <IncidentScreen />
+        </>
+      )}
+      {flow === 'retry' && (
+        <>
+          <WIPBanner
+            reason='Retry Chain Visualizer wired in v3.'
+            todo='Failed-retry orchestration — deferred.'
+            data-testid='wip-retry'
+          />
+          <RetryScreen />
+        </>
+      )}
     </HFShell>
   );
 };

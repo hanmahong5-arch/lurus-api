@@ -16,43 +16,101 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import HFShell from '../../../components/hifi/HFShell';
 import WIPBanner from '../../../components/hifi/WIPBanner';
+import { API, showError } from '../../../helpers';
 
-/* HiFi 8 — Chat. Ported from hifi/hf8-chat.jsx (2026-05-07 variants pack). */
+/* Wave 2: Chat wired to non-stream POST /api/v2/:slug/chat/send.
+   In-memory conversation only — no chat_session table yet, so the
+   sidebar lists the *current* session (started + turn count), not a
+   server-side history. SSE streaming, branching/retry, and
+   multi-conversation rehydrate are deferred to v3. */
 
-const CONV = [
-  {
-    who: 'user',
-    t: '帮我把这段 SQL 改成 PostgreSQL 兼容的写法，并解释关键区别。',
-  },
-  {
-    who: 'asst',
-    t: "Sure — paste the SQL and I'll rewrite it. The most common issues moving to Postgres are:\n\n1. **Identifier quoting**: backticks → double quotes\n2. **AUTO_INCREMENT** → `GENERATED ALWAYS AS IDENTITY` or `serial`\n3. **DATETIME** → `timestamp` / `timestamptz`\n4. **GROUP_CONCAT** → `string_agg`",
-    meta: { ttft: 295, total: 1102, tok: 198, cost: 0.0028 },
-  },
-  {
-    who: 'user',
-    t: 'SQL 是这个：\n```sql\nSELECT GROUP_CONCAT(name SEPARATOR ", ") FROM users WHERE created_at > "2024-01-01"\n```',
-  },
-  {
-    who: 'asst',
-    t: "Direct port:\n\n```sql\nSELECT string_agg(name, ', ')\nFROM users\nWHERE created_at > '2024-01-01'::timestamptz;\n```\n\n**Key changes**:\n- `GROUP_CONCAT(... SEPARATOR x)` → `string_agg(col, x)` — argument order is the same.\n- Double-quoted strings `\"...\"` are identifiers in Postgres; use single quotes for string literals.\n- Cast date strings explicitly with `::timestamptz` so the planner can pick a btree index.",
-    meta: { ttft: 312, total: 1480, tok: 287, cost: 0.0042 },
-  },
-];
+const DEFAULT_MODEL = 'gpt-4o';
 
-const TODAY = [
-  ['SQL ← PostgreSQL 改写', '2m', true],
-  ['解释 OAuth 2 PKCE 流程', '34m', false],
-  ['Tailwind v4 migration plan', '1h', false],
-];
-
-const YESTERDAY = ['nginx → caddy 配置迁移', 'review prd · onboarding'];
+const formatPreview = (text) => {
+  if (!text) return '';
+  return text.length > 36 ? text.slice(0, 36) + '…' : text;
+};
 
 const HFChat = () => {
-  const [model] = useState('claude-3.5-sonnet');
+  const params = useParams();
+  const tenantSlug = params.tenant_slug || params.tenantSlug || 'default';
+
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const [model] = useState(DEFAULT_MODEL);
+  const [sessionStartedAt] = useState(() => Date.now());
+
+  const sessionTitle = useMemo(() => {
+    const firstUser = messages.find((m) => m.role === 'user');
+    return firstUser ? formatPreview(firstUser.content) : 'new chat';
+  }, [messages]);
+
+  const turnCount = useMemo(
+    () => messages.filter((m) => m.role === 'assistant').length,
+    [messages],
+  );
+
+  const sessionStartedAgo = useMemo(() => {
+    const seconds = Math.floor((Date.now() - sessionStartedAt) / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+    return `${Math.floor(seconds / 3600)}h`;
+  }, [sessionStartedAt, messages]);
+
+  const send = useCallback(async () => {
+    const text = input.trim();
+    if (!text || sending) return;
+
+    const nextMessages = [...messages, { role: 'user', content: text }];
+    setMessages(nextMessages);
+    setInput('');
+    setSending(true);
+
+    try {
+      const res = await API.post(`/api/v2/${tenantSlug}/chat/send`, {
+        model,
+        messages: nextMessages.map(({ role, content }) => ({ role, content })),
+      });
+      const data = res?.data?.data;
+      if (!data?.message) {
+        throw new Error(res?.data?.message || 'invalid chat response');
+      }
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: data.message.content,
+          meta: {
+            latency_ms: data.latency_ms,
+            prompt_tokens: data.usage?.prompt_tokens,
+            completion_tokens: data.usage?.completion_tokens,
+          },
+        },
+      ]);
+    } catch (err) {
+      showError(err?.response?.data?.message || err?.message || '发送失败');
+      // Roll back the optimistic user message on failure so the next
+      // retry doesn't double-send.
+      setMessages(messages);
+    } finally {
+      setSending(false);
+    }
+  }, [input, messages, model, sending, tenantSlug]);
+
+  const onKeyDown = useCallback(
+    (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    },
+    [send],
+  );
 
   return (
     <HFShell
@@ -69,10 +127,6 @@ const HFChat = () => {
         </>
       }
     >
-      <WIPBanner
-        reason='Conversations are hardcoded mock content (CONV const). Real chat needs a tenant-scoped conversation store and streaming SSE relay — both pending Wave 2 consumer-feature decision.'
-        todo='Pending consumer-feature deletion call (see hardening-swarm-2026-05-18-acceptance.md §Out of Scope).'
-      />
       <div
         style={{
           display: 'grid',
@@ -93,76 +147,46 @@ const HFChat = () => {
               type='button'
               className='btn primary'
               style={{ width: '100%', justifyContent: 'center' }}
+              onClick={() => setMessages([])}
             >
               + new chat
             </button>
           </div>
           <div className='lbl' style={{ padding: '8px 16px' }}>
-            today
+            current session
           </div>
-          {TODAY.map((c, i) => (
+          <div
+            data-testid='session-row'
+            style={{
+              padding: '10px 16px',
+              background: 'var(--hf-elev)',
+              borderLeft: '2px solid var(--hf-accent)',
+              borderBottom: '1px solid var(--hf-rule)',
+            }}
+          >
             <div
-              key={i}
+              className='strong'
               style={{
-                padding: '10px 16px',
-                cursor: 'pointer',
-                background: c[2] ? 'var(--hf-elev)' : 'transparent',
-                borderLeft: c[2]
-                  ? '2px solid var(--hf-accent)'
-                  : '2px solid transparent',
-                borderBottom: '1px solid var(--hf-rule)',
+                fontSize: 12,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}
             >
-              <div
-                className='strong'
-                style={{
-                  fontSize: 12,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {c[0]}
-              </div>
-              <div
-                className='faint mono'
-                style={{ fontSize: 10, marginTop: 2 }}
-              >
-                {c[1]} ago
-              </div>
+              {sessionTitle}
             </div>
-          ))}
-          <div className='lbl' style={{ padding: '8px 16px' }}>
-            yesterday
+            <div className='faint mono' style={{ fontSize: 10, marginTop: 2 }}>
+              {sessionStartedAgo} ago · {turnCount} turn
+              {turnCount === 1 ? '' : 's'}
+            </div>
           </div>
-          {YESTERDAY.map((t, i) => (
-            <div
-              key={i}
-              style={{
-                padding: '10px 16px',
-                borderBottom: '1px solid var(--hf-rule)',
-                cursor: 'pointer',
-              }}
-            >
-              <div
-                className='strong'
-                style={{
-                  fontSize: 12,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {t}
-              </div>
-              <div
-                className='faint mono'
-                style={{ fontSize: 10, marginTop: 2 }}
-              >
-                1d ago
-              </div>
-            </div>
-          ))}
+          <div style={{ padding: '14px 16px' }}>
+            <WIPBanner
+              mini
+              reason='persistence + streaming deferred to v3'
+              todo='no chat_session table yet'
+            />
+          </div>
         </div>
 
         <div
@@ -183,19 +207,17 @@ const HFChat = () => {
           >
             <div>
               <div className='display' style={{ fontSize: 17 }}>
-                SQL ← PostgreSQL 改写
+                {sessionTitle}
               </div>
               <div className='muted mono' style={{ fontSize: 10 }}>
-                4 turns · 0.0089 USD · started 2m ago
+                {turnCount} turn{turnCount === 1 ? '' : 's'} · started{' '}
+                {sessionStartedAgo} ago
               </div>
             </div>
             <span style={{ flex: 1 }} />
             <span className='pill'>
               <span className='dot ok' /> {model}
             </span>
-            <button type='button' className='btn sm'>
-              swap model ▾
-            </button>
           </div>
 
           <div
@@ -207,17 +229,27 @@ const HFChat = () => {
               width: '100%',
             }}
           >
-            {CONV.map((m, i) => (
+            {messages.length === 0 && (
+              <div
+                className='muted'
+                style={{ textAlign: 'center', padding: '60px 0' }}
+              >
+                ask anything to begin
+              </div>
+            )}
+            {messages.map((m, i) => (
               <div key={i} style={{ marginBottom: 22 }}>
                 <div
                   className='lbl'
                   style={{
                     marginBottom: 6,
                     color:
-                      m.who === 'user' ? 'var(--hf-ink-3)' : 'var(--hf-accent)',
+                      m.role === 'user'
+                        ? 'var(--hf-ink-3)'
+                        : 'var(--hf-accent)',
                   }}
                 >
-                  {m.who === 'user' ? 'you' : 'claude-3.5-sonnet'}
+                  {m.role === 'user' ? 'you' : model}
                 </div>
                 <div
                   style={{
@@ -227,26 +259,7 @@ const HFChat = () => {
                     whiteSpace: 'pre-wrap',
                   }}
                 >
-                  {m.t.split(/(```[\s\S]+?```)/g).map((seg, j) =>
-                    seg.startsWith('```') ? (
-                      <pre
-                        key={j}
-                        className='mono'
-                        style={{
-                          background: 'var(--hf-paper)',
-                          border: '1px solid var(--hf-rule)',
-                          padding: 14,
-                          fontSize: 11,
-                          margin: '10px 0',
-                          overflow: 'auto',
-                        }}
-                      >
-                        {seg.replace(/```\w*\n?/g, '').replace(/```$/, '')}
-                      </pre>
-                    ) : (
-                      <span key={j}>{seg}</span>
-                    ),
-                  )}
+                  {m.content}
                 </div>
                 {m.meta && (
                   <div
@@ -257,26 +270,32 @@ const HFChat = () => {
                       fontSize: 10,
                     }}
                   >
-                    <span className='faint mono'>ttft {m.meta.ttft}ms</span>
-                    <span className='faint mono'>total {m.meta.total}ms</span>
-                    <span className='faint mono'>{m.meta.tok}t</span>
                     <span className='faint mono'>
-                      ${m.meta.cost.toFixed(4)}
+                      {m.meta.latency_ms ?? 0}ms
+                    </span>
+                    <span className='faint mono'>
+                      {(m.meta.prompt_tokens ?? 0) +
+                        (m.meta.completion_tokens ?? 0)}
+                      t
                     </span>
                     <span style={{ flex: 1 }} />
-                    <button type='button' className='btn ghost sm'>
+                    <button
+                      type='button'
+                      className='btn ghost sm'
+                      onClick={() => navigator.clipboard?.writeText(m.content)}
+                    >
                       copy
                     </button>
-                    <button type='button' className='btn ghost sm'>
-                      retry
-                    </button>
-                    <button type='button' className='btn ghost sm'>
-                      branch
-                    </button>
+                    <WIPBanner mini reason='retry / branch deferred to v3' />
                   </div>
                 )}
               </div>
             ))}
+            {sending && (
+              <div className='muted' data-testid='sending-indicator'>
+                {model} is thinking…
+              </div>
+            )}
           </div>
 
           <div
@@ -290,15 +309,25 @@ const HFChat = () => {
               className='panel'
               style={{ padding: 14, maxWidth: 800, margin: '0 auto' }}
             >
-              <div
+              <textarea
+                aria-label='message-input'
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder='ask anything…'
+                disabled={sending}
                 style={{
+                  width: '100%',
                   minHeight: 48,
                   fontSize: 13,
-                  color: 'var(--hf-ink-3)',
+                  border: 'none',
+                  outline: 'none',
+                  background: 'transparent',
+                  resize: 'vertical',
+                  color: 'var(--hf-ink)',
+                  fontFamily: 'inherit',
                 }}
-              >
-                ask anything…
-              </div>
+              />
               <div
                 style={{
                   display: 'flex',
@@ -307,17 +336,16 @@ const HFChat = () => {
                   marginTop: 8,
                 }}
               >
-                <button type='button' className='btn ghost sm'>
-                  ＋ attach
-                </button>
-                <button type='button' className='btn ghost sm'>
-                  ⊞ tools
-                </button>
                 <span style={{ flex: 1 }} />
                 <span className='muted mono' style={{ fontSize: 10 }}>
-                  0 / 200,000
+                  {input.length} / 200,000
                 </span>
-                <button type='button' className='btn primary'>
+                <button
+                  type='button'
+                  className='btn primary'
+                  onClick={send}
+                  disabled={sending || !input.trim()}
+                >
                   ▶ send{' '}
                   <span className='kbd' style={{ marginLeft: 4 }}>
                     ↵
