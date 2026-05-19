@@ -20,6 +20,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import TenantSwitcher from './TenantSwitcher';
 import { API } from '../../helpers';
+import { clearAllDrafts } from '../../hooks/common/useFormDraft';
 
 // Single source of truth: pathname suffix → nav item id.
 // HFShell uses this to auto-highlight the active item when caller doesn't
@@ -289,6 +290,9 @@ const handleLogout = async () => {
   try {
     localStorage.removeItem('user');
     localStorage.removeItem('tenant_slug');
+    // Tier 1.4: wipe in-progress form drafts so a different account on
+    // this browser starts clean.
+    clearAllDrafts();
   } catch (e) {
     // ignore — private mode / disabled storage
   }

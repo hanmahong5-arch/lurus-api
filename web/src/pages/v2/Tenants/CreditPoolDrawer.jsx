@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useCallback, useEffect, useState } from 'react';
 import { API, showError, showSuccess } from '../../../helpers';
+import { useFormDraft } from '../../../hooks/common/useFormDraft';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure derivation helpers — exported for vitest coverage.
@@ -103,12 +104,19 @@ const CreditPoolDrawer = ({ tenantId, tenantName, onClose }) => {
   const [pool, setPool] = useState(null);
   const [draws, setDraws] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [ceilingForm, setCeilingForm] = useState({
-    max_balance: '',
-    reset_period: 'monthly',
-    alert_threshold_pct: 80,
-  });
-  const [topupForm, setTopupForm] = useState({ amount: '', reason: '' });
+
+  // Both forms persist their in-progress state via useFormDraft (Tier 1.4)
+  // so a tab close mid-fill recovers on reload. The storage key includes
+  // tenantId so each tenant has its own draft slot — a Reseller flipping
+  // between tenants doesn't see another tenant's half-typed topup amount.
+  const [ceilingForm, setCeilingForm, clearCeilingDraft, , ceilingRestored] =
+    useFormDraft(`credit-pool-ceiling:${tenantId}`, {
+      max_balance: '',
+      reset_period: 'monthly',
+      alert_threshold_pct: 80,
+    });
+  const [topupForm, setTopupForm, clearTopupDraft, , topupRestored] =
+    useFormDraft(`credit-pool-topup:${tenantId}`, { amount: '', reason: '' });
   const [submitting, setSubmitting] = useState(false);
 
   const reload = useCallback(async () => {
@@ -163,6 +171,7 @@ const CreditPoolDrawer = ({ tenantId, tenantName, onClose }) => {
       );
       if (res?.data?.success) {
         showSuccess('Credit pool created');
+        clearCeilingDraft();
         await reload();
       } else {
         showError(res?.data?.message || 'Create failed');
@@ -201,6 +210,7 @@ const CreditPoolDrawer = ({ tenantId, tenantName, onClose }) => {
         showSuccess(
           `Topup successful. New balance: ${res.data.data.new_balance}`,
         );
+        clearTopupDraft();
         await reload();
       } else {
         showError(res?.data?.message || 'Topup failed');
@@ -282,6 +292,28 @@ const CreditPoolDrawer = ({ tenantId, tenantName, onClose }) => {
                 <div className='strong' style={{ fontSize: 13 }}>
                   Set ceiling
                 </div>
+                {ceilingRestored && (
+                  <div
+                    className='muted'
+                    style={{
+                      fontSize: 11,
+                      padding: '4px 8px',
+                      borderLeft: '2px solid var(--hf-amber, #d97706)',
+                      background: 'var(--hf-amber-bg, rgba(217, 119, 6, 0.08))',
+                    }}
+                    data-testid='ceiling-restored-banner'
+                  >
+                    Restored from saved draft.{' '}
+                    <button
+                      type='button'
+                      className='btn ghost xs'
+                      onClick={clearCeilingDraft}
+                      data-testid='ceiling-discard-draft'
+                    >
+                      Discard
+                    </button>
+                  </div>
+                )}
                 <label className='lbl'>
                   max_balance (use -1 for unlimited)
                 </label>
@@ -346,6 +378,28 @@ const CreditPoolDrawer = ({ tenantId, tenantName, onClose }) => {
               <div className='strong' style={{ fontSize: 13 }}>
                 Topup from wallet
               </div>
+              {topupRestored && (
+                <div
+                  className='muted'
+                  style={{
+                    fontSize: 11,
+                    padding: '4px 8px',
+                    borderLeft: '2px solid var(--hf-amber, #d97706)',
+                    background: 'var(--hf-amber-bg, rgba(217, 119, 6, 0.08))',
+                  }}
+                  data-testid='topup-restored-banner'
+                >
+                  Restored from saved draft.{' '}
+                  <button
+                    type='button'
+                    className='btn ghost xs'
+                    onClick={clearTopupDraft}
+                    data-testid='topup-discard-draft'
+                  >
+                    Discard
+                  </button>
+                </div>
+              )}
               <label className='lbl'>amount (quota units)</label>
               <input
                 type='number'

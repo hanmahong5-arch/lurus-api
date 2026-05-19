@@ -27,6 +27,7 @@ import { getLogo, getSystemName, API, showSuccess } from '../../helpers';
 import { useIsMobile } from './useIsMobile';
 import { useSidebarCollapsed } from './useSidebarCollapsed';
 import { useMinimumLoadingTime } from './useMinimumLoadingTime';
+import { clearAllDrafts } from './useFormDraft';
 
 export const useHeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
   const { t, i18n } = useTranslation();
@@ -141,6 +142,10 @@ export const useHeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
     userDispatch({ type: 'logout' });
     localStorage.removeItem('user');
     localStorage.removeItem('tenant_slug');
+    // Tier 1.4: wipe any in-progress form drafts so the next account on
+    // this browser starts clean. Namespacing already isolates by userId,
+    // but logout-cleanup is the defence-in-depth half.
+    clearAllDrafts();
     try {
       // Layer C symmetric logout: clears Hub session AND expires the
       // platform-shared lurus_session cookie. Without the second step the
