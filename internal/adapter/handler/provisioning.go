@@ -69,15 +69,15 @@ func CreateProvisionedKey(c *gin.Context) {
 	// SECURITY (Phase 2 self-audit 2026-05-19): prevent cross-tenant key
 	// issuance. ScopeProvisioning by itself did not bound which tenants the
 	// key could write to; a leaked or misissued Reseller key could mint
-	// tokens for any tenant slug. Until InternalApiKey gains a tenant_id
-	// column (planned migration 014), platform admins must INSERT one row
-	// per (key, tenant) into internal_api_key_tenants. Empty whitelist =
-	// deny-all (fail-closed by design).
-	keyID := 0
-	if apiKey != nil {
-		keyID = apiKey.Id
-	}
-	if !repo.InternalKeyAllowedForTenant(keyID, tenant.Id) {
+	// tokens for any tenant slug. Platform admin keys (ScopeAll = "*")
+	// bypass the check — they're already trusted cross-tenant. Narrower
+	// keys must have an (api_key_id, tenant_id) row in
+	// internal_api_key_tenants; missing row → 403 (fail-closed).
+	if !repo.InternalKeyAllowedForTenant(apiKey, tenant.Id) {
+		keyID := 0
+		if apiKey != nil {
+			keyID = apiKey.Id
+		}
 		common.SysLog(fmt.Sprintf("Provisioning: cross-tenant denied key=%d tenant=%s creator=%d",
 			keyID, tenant.Id, creatorUserID))
 		c.JSON(http.StatusForbidden, gin.H{

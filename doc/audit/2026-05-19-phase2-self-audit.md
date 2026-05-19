@@ -71,33 +71,51 @@ sufficient. There is no `tenant_id` column on `internal_api_keys`
 today, so even if the handler tried to enforce ownership there was
 nothing to enforce against.
 
-**Fix (interim, fail-closed)**: until `InternalApiKey` gains a
-first-class `tenant_id` column (planned migration 014, Phase 3), the
-handler consults a small whitelist table `internal_api_key_tenants`
-seeded by the platform admin. Empty whitelist = deny-all. Specifically:
+**Fix — two-tier authorisation, no manual seeding for platform admins**.
+The handler now consults `repo.InternalKeyAllowedForTenant(apiKey, tenantID)`
+which applies:
 
-- new `repo.InternalKeyAllowedForTenant(keyID, tenantID) bool`
-- new `CREATE TABLE internal_api_key_tenants (api_key_id, tenant_id)`
+1. **Platform-wide admin keys** (`ScopeAll` = `"*"`) bypass the
+   whitelist. They were already trusted to do anything cross-tenant;
+   requiring a row per tenant would only force ops to mirror the
+   `tenants` table.
+2. **Narrow-scope keys** (typically `ScopeProvisioning`-only — e.g. a
+   Reseller's own integration key) must have an explicit
+   `(api_key_id, tenant_id)` row in `internal_api_key_tenants`. Missing
+   row → 403 (fail-closed).
+
+Specifically:
+
+- `repo.InternalKeyAllowedForTenant(apiKey *InternalApiKey, tenantID string) bool`
+- new `CREATE TABLE internal_api_key_tenants (api_key_id, tenant_id, created_at)`
   in `migrations/013_create_internal_api_key_tenants.sql`
 - handler `CreateProvisionedKey` returns `403 TENANT_NOT_AUTHORIZED`
-  + `common.SysLog` audit line on a missing row
-- new integration test `TestInternalKeyAllowedForTenant` covers:
-  empty whitelist, authorised pair, wrong tenant, wrong key, zero
-  inputs (all skipped when `TEST_POSTGRES_DSN` is unset)
+  + `common.SysLog` audit line when ScopeAll is absent AND no
+  whitelist row is found
+- integration test `TestInternalKeyAllowedForTenant` covers: nil
+  apiKey, zero id, empty tenant, ScopeAll bypass on any tenant,
+  narrow key with empty whitelist (deny), narrow key with authorised
+  row (allow), narrow key with wrong tenant or wrong id (deny).
+  Skipped when `TEST_POSTGRES_DSN` is unset
 
-**Commit**: `80e674ad` — `feat(provisioning): enforce tenant ownership on key creation (B2)`
+**Commits**:
+- `80e674ad` — `feat(provisioning): enforce tenant ownership on key creation (B2)`
+  — introduced the whitelist + fail-closed
+- *(this session, follow-up)* — refactor `InternalKeyAllowedForTenant`
+  to take `*InternalApiKey` and bypass on `ScopeAll`, removing the
+  manual-INSERT requirement for platform admin keys
 
-**🔴 Deployment fail-closed warning**: once migration 013 ships, ALL
-Provisioning Create requests return 403 until the operator INSERTs
-the first row. **This is the intended behaviour, not a bug.** Before
-the first Reseller can use the API, Anita (or a platform admin) must:
+**Deployment behaviour**: STAGE / PROD platform admin keys (those
+holding `*` in their `scopes` JSON) work out of the box — no INSERT
+required. Only Reseller-issued narrow-scope keys need an explicit
+whitelist row, and only when such a key is first issued to a Reseller.
+SQL template for that future case:
 
 ```sql
 INSERT INTO internal_api_key_tenants (api_key_id, tenant_id)
-  VALUES (<key_id>, '<tenant_id>');
+  VALUES (<reseller_key_id>, '<reseller_tenant_id>')
+ON CONFLICT DO NOTHING;
 ```
-
-…for every (key, tenant) pair that is legitimate.
 
 **Phase 3 validation**: on R6 STAGE, exercise (a) unauthorised key →
 must return 403, (b) authorised key → must return 201, (c) confirm
@@ -168,7 +186,7 @@ will provide the missing measurement.
 | C7 | P2 | Concurrent topup + debit racing toward the same `current_balance` ceiling is uncovered | `repo/tenant_credit_pool.go` | Existing atomic-debit-race test covers half; STAGE drill with synthetic burst will cover the other half |
 | C8 | P2 | `next_reset_at` monthly/weekly arithmetic at month-end boundaries (e.g., Jan 31 → Feb 28?) is uncovered | `repo/tenant_credit_pool.go:267-287` | Manual end-of-month verification, one cycle |
 | C9 | P2 | Migration 012 backfill behaviour on a 50M-row `tokens` table is unknown — `ADD COLUMN ... DEFAULT 0` is metadata-only on PG 11+ but the index build is not | `migrations/012_create_tenant_credit_pools.sql` | DBA evaluation before PROD; Phase 3 STAGE applies on a representative dataset |
-| C10 | P2 | `internal_api_key_tenants` whitelist seeding is a manual operator step — no UI yet | `migrations/013_*` + B2 fix | Operator runbook entry; eventual Phase 3 admin UI |
+| C10 | P2 | `internal_api_key_tenants` seeding is required only for narrow-scope (Reseller) keys; platform admin (`ScopeAll`) keys bypass it. UI for editing the table doesn't exist yet | `migrations/013_*` + B2 fix | Operator runbook entry; eventual Phase 3 admin UI when first narrow-scope Reseller key is provisioned |
 
 C6 is worth flagging twice: a Reseller who never Creates a pool keeps
 unlimited spend, defeating the whole feature. This is intentional
@@ -194,12 +212,13 @@ the onboarding flow.
 ## 5. Sequence to run before STAGE drill
 
 1. Apply migration 012 + 013 on STAGE (R6 / `test-newhub.lurus.cn`).
-2. Seed `internal_api_key_tenants` with at least one (key, tenant)
-   pair, otherwise every Provisioning Create returns 403 — that's
-   the fail-closed contract from §2 B2.
-3. Drive a Reseller pool to zero, then curl every gated endpoint
+2. Drive a Reseller pool to zero, then curl every gated endpoint
    from §2 B1 — must all return 402, none should slip through.
-4. Run an unauthorised Provisioning Create — must return 403 with
+3. With the platform admin key (`scopes` JSON contains `"*"`), run a
+   Provisioning Create against any tenant — must return 201 without
+   any `internal_api_key_tenants` row (ScopeAll bypass per §2 B2).
+4. Simulate an unauthorised narrow-scope key (e.g. `["provisioning"]`
+   only, no whitelist row) — must return 403 with
    `error_code: "TENANT_NOT_AUTHORIZED"` and produce the audit log
    line.
 5. Watch `pool.threshold_crossed` events on NATS during a slow burn

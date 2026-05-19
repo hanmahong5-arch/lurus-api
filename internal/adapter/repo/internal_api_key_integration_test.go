@@ -148,10 +148,11 @@ func TestApiKey_HasScope_Missing(t *testing.T) {
 // TestInternalKeyAllowedForTenant exercises the tenant-whitelist guard
 // added by Phase 2 self-audit (2026-05-19). Behaviour:
 //
-//   - empty whitelist → deny (fail-closed by design)
-//   - matching row    → allow
-//   - same key, different tenant → deny
-//   - zero key id or empty tenant id → deny
+//   - nil / zero-id / empty-tenant inputs → deny
+//   - platform admin (ScopeAll = "*") → allow without a whitelist row
+//   - narrow-scope key, empty whitelist → deny (fail-closed)
+//   - narrow-scope key, matching row → allow
+//   - narrow-scope key, wrong tenant or wrong key id → deny
 //
 // Table is created in-test rather than via AutoMigrate so the migration 013
 // SQL stays the single canonical schema source.
@@ -168,35 +169,53 @@ func TestInternalKeyAllowedForTenant(t *testing.T) {
 		t.Fatalf("create internal_api_key_tenants: %v", err)
 	}
 
-	// Empty whitelist → deny-all.
-	if InternalKeyAllowedForTenant(1, "tenant-alpha") {
-		t.Error("empty whitelist should deny key=1 tenant=tenant-alpha")
+	provScopes, _ := json.Marshal([]string{ScopeProvisioning})
+	allScopes, _ := json.Marshal([]string{ScopeAll})
+
+	narrowKey := &InternalApiKey{Id: 1, Scopes: string(provScopes)}
+	otherNarrowKey := &InternalApiKey{Id: 2, Scopes: string(provScopes)}
+	adminKey := &InternalApiKey{Id: 99, Scopes: string(allScopes)}
+
+	// Guardrails on inputs.
+	if InternalKeyAllowedForTenant(nil, "tenant-alpha") {
+		t.Error("nil apiKey must be denied")
+	}
+	if InternalKeyAllowedForTenant(&InternalApiKey{Id: 0, Scopes: string(provScopes)}, "tenant-alpha") {
+		t.Error("apiKey.Id=0 must be denied")
+	}
+	if InternalKeyAllowedForTenant(narrowKey, "") {
+		t.Error("empty tenantID must be denied")
 	}
 
-	// Authorise key=1 for tenant-alpha only.
+	// Platform admin (ScopeAll) → allow without any whitelist row.
+	if !InternalKeyAllowedForTenant(adminKey, "tenant-alpha") {
+		t.Error("ScopeAll key should bypass whitelist (tenant-alpha)")
+	}
+	if !InternalKeyAllowedForTenant(adminKey, "tenant-zzzz") {
+		t.Error("ScopeAll key should bypass whitelist for any tenant")
+	}
+
+	// Narrow key, empty whitelist → deny-all.
+	if InternalKeyAllowedForTenant(narrowKey, "tenant-alpha") {
+		t.Error("empty whitelist should deny narrow key for tenant-alpha")
+	}
+
+	// Authorise narrowKey (id=1) for tenant-alpha only.
 	if err := DB.Exec(
 		`INSERT INTO internal_api_key_tenants (api_key_id, tenant_id) VALUES (?, ?)`,
-		1, "tenant-alpha",
+		narrowKey.Id, "tenant-alpha",
 	).Error; err != nil {
 		t.Fatalf("seed whitelist row: %v", err)
 	}
 
-	if !InternalKeyAllowedForTenant(1, "tenant-alpha") {
+	if !InternalKeyAllowedForTenant(narrowKey, "tenant-alpha") {
 		t.Error("authorised pair (key=1, tenant-alpha) should be allowed")
 	}
-	if InternalKeyAllowedForTenant(1, "tenant-beta") {
-		t.Error("key=1 must not access tenant-beta with no row")
+	if InternalKeyAllowedForTenant(narrowKey, "tenant-beta") {
+		t.Error("narrowKey must not access tenant-beta with no row")
 	}
-	if InternalKeyAllowedForTenant(2, "tenant-alpha") {
-		t.Error("key=2 must not access tenant-alpha with no row")
-	}
-
-	// Guardrails on inputs.
-	if InternalKeyAllowedForTenant(0, "tenant-alpha") {
-		t.Error("keyID=0 must be denied")
-	}
-	if InternalKeyAllowedForTenant(1, "") {
-		t.Error("empty tenantID must be denied")
+	if InternalKeyAllowedForTenant(otherNarrowKey, "tenant-alpha") {
+		t.Error("otherNarrowKey must not access tenant-alpha with no row")
 	}
 }
 

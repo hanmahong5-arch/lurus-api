@@ -142,26 +142,40 @@ func UpdateInternalApiKey(id int, name string, scopes []string, expiresAt int64,
 	}).Error
 }
 
-// InternalKeyAllowedForTenant returns true iff a row exists in
-// internal_api_key_tenants binding the given (api_key_id, tenant_id) pair.
+// InternalKeyAllowedForTenant returns true if the given internal API key may
+// issue / manage tokens for the given tenant.
+//
+// Authorisation has two tiers:
+//
+//  1. Platform-wide admin keys (ScopeAll = "*") bypass the whitelist. They
+//     are already trusted to do anything cross-tenant; requiring a row per
+//     tenant would only force operators to maintain a redundant table that
+//     mirrors the tenants table.
+//  2. Narrow-scope keys (typically ScopeProvisioning-only, e.g. a Reseller's
+//     own integration key) must have an explicit (api_key_id, tenant_id)
+//     row in internal_api_key_tenants. Empty whitelist for a narrow key →
+//     deny (fail-closed).
 //
 // Phase 2 self-audit (2026-05-19) closed a cross-tenant Provisioning Create
 // hole: any holder of a ScopeProvisioning key could create tokens for any
 // tenant slug because creator_user_id was used only for attribution, never
-// as a permission boundary. Until InternalApiKey gains a first-class
-// tenant_id column (planned: migration 014 after Phase 3 STAGE drill),
-// platform admins MUST INSERT one row per (key, tenant) authorisation into
-// internal_api_key_tenants. Empty whitelist → deny-all (fail-closed).
+// as a permission boundary. Migration 014 (Phase 3) will add a first-class
+// tenant_id column on InternalApiKey, after which this whitelist table is
+// expected to remain only for the rare multi-tenant Reseller key case.
 //
-// Any DB error is treated as deny — the safer half of the trade-off, since
-// the alternative is silent cross-tenant access during a Postgres blip.
-func InternalKeyAllowedForTenant(keyID int, tenantID string) bool {
-	if keyID <= 0 || tenantID == "" {
+// nil apiKey, missing id, or empty tenantID → deny. DB error → deny (the
+// safer half of the trade-off, since the alternative is silent cross-tenant
+// access during a Postgres blip).
+func InternalKeyAllowedForTenant(apiKey *InternalApiKey, tenantID string) bool {
+	if apiKey == nil || apiKey.Id <= 0 || tenantID == "" {
 		return false
+	}
+	if apiKey.HasScope(ScopeAll) {
+		return true
 	}
 	var count int64
 	err := DB.Table("internal_api_key_tenants").
-		Where("api_key_id = ? AND tenant_id = ?", keyID, tenantID).
+		Where("api_key_id = ? AND tenant_id = ?", apiKey.Id, tenantID).
 		Count(&count).Error
 	return err == nil && count > 0
 }
