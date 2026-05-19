@@ -25,8 +25,13 @@ import (
 //	                     transient repo issues — schema dedup at debit time
 //	                     remains the safety net for over-consumption)
 //
-// Position in chain: AFTER TokenAuth, BEFORE CostSpikeLimit. Inserted on five
-// relay groups: /v1, /mj (+ /:mode/mj), /suno, /v1/audio, /v1beta.
+// Position in chain: AFTER TokenAuth, BEFORE CostSpikeLimit. Inserted on
+// every relay group that can spend tenant credit: /v1 (chat), /mj
+// (+ /:mode/mj), /suno, /v1/audio (music), /v1beta (Gemini), /v1/video +
+// /v1/videos (OpenAI video), /kling/v1, /jimeng. Video groups were added
+// 2026-05-19 after the Phase 2 self-audit found the original ADR §3.1
+// list of "5 relay groups" omitted video — a cash-path gap that let a
+// pool-exhausted Reseller continue spending via the video relay.
 func PoolBalanceCheck() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tenantCtx, err := GetTenantContext(c)
