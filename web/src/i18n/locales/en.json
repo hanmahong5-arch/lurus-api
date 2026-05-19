@@ -2730,6 +2730,13 @@
     "删除渠道 \"{{name}}\" ?": "Delete channel \"{{name}}\"?",
     "停止通过此渠道路由请求": "Requests will no longer route through this channel.",
     "对租户 \"{{name}}\" 执行 {{action}} 操作?": "Run {{action}} on tenant \"{{name}}\"?",
-    "该操作会影响该租户下所有 token 与 channel": "This affects every token and channel under this tenant."
+    "该操作会影响该租户下所有 token 与 channel": "This affects every token and channel under this tenant.",
+    "+ 添加模型": "+ Add model",
+    "平台 · 管理": "Platform · Admin",
+    "目录": "Catalog",
+    "加载中…": "Loading…",
+    "试用": "Try",
+    "单模型编辑推迟到 v3": "Single-model editing deferred to v3",
+    "单模型启用/禁用推迟到 v3": "Single-model enable/disable deferred to v3"
   }
 }

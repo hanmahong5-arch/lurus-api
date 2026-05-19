@@ -16,222 +16,104 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import HFShell from '../../../components/hifi/HFShell';
 import WIPBanner from '../../../components/hifi/WIPBanner';
+import { API, showError } from '../../../helpers';
 
-/* HiFi 7 — Models catalog. Ported from hifi/hf7-models.jsx (2026-05-07 variants pack). */
+/* HiFi 7 — Models catalog. Wired to GET /api/v2/:tenant_slug/models (2026-05-19). */
 
-const MODELS = [
-  {
-    name: 'gpt-4o',
-    v: 'OpenAI',
-    ctx: '128k',
-    tier: 'flagship',
-    in: 2.5,
-    out: 10.0,
-    latency: 412,
-    succ: 99.4,
-    modal: ['text', 'vision', 'audio'],
-    badge: 'recommended',
-  },
-  {
-    name: 'gpt-4o-mini',
-    v: 'OpenAI',
-    ctx: '128k',
-    tier: 'fast',
-    in: 0.15,
-    out: 0.6,
-    latency: 188,
-    succ: 99.7,
-    modal: ['text', 'vision'],
-    badge: 'cheap',
-  },
-  {
-    name: 'claude-3.5-sonnet',
-    v: 'Anthropic',
-    ctx: '200k',
-    tier: 'flagship',
-    in: 3.0,
-    out: 15.0,
-    latency: 295,
-    succ: 98.9,
-    modal: ['text', 'vision'],
-    badge: 'best-quality',
-  },
-  {
-    name: 'claude-3.5-haiku',
-    v: 'Anthropic',
-    ctx: '200k',
-    tier: 'fast',
-    in: 0.8,
-    out: 4.0,
-    latency: 210,
-    succ: 99.5,
-    modal: ['text'],
-  },
-  {
-    name: 'claude-3-opus',
-    v: 'Anthropic',
-    ctx: '200k',
-    tier: 'flagship',
-    in: 15.0,
-    out: 75.0,
-    latency: 920,
-    succ: 97.2,
-    modal: ['text', 'vision'],
-    badge: 'premium',
-  },
-  {
-    name: 'gemini-1.5-pro',
-    v: 'Google',
-    ctx: '2M',
-    tier: 'flagship',
-    in: 1.25,
-    out: 5.0,
-    latency: 580,
-    succ: 98.4,
-    modal: ['text', 'vision', 'audio'],
-    badge: 'long-ctx',
-  },
-  {
-    name: 'gemini-1.5-flash',
-    v: 'Google',
-    ctx: '1M',
-    tier: 'fast',
-    in: 0.075,
-    out: 0.3,
-    latency: 140,
-    succ: 99.6,
-    modal: ['text', 'vision', 'audio'],
-    badge: 'cheap',
-  },
-  {
-    name: 'gemini-2.0-flash',
-    v: 'Google',
-    ctx: '1M',
-    tier: 'fast',
-    in: 0.1,
-    out: 0.4,
-    latency: 132,
-    succ: 98.1,
-    modal: ['text', 'vision'],
-    badge: 'beta',
-  },
-  {
-    name: 'glm-4-plus',
-    v: 'Zhipu',
-    ctx: '128k',
-    tier: 'flagship',
-    in: 0.7,
-    out: 0.7,
-    latency: 580,
-    succ: 96.4,
-    modal: ['text'],
-  },
-  {
-    name: 'qwen-2.5-72b',
-    v: 'Alibaba',
-    ctx: '128k',
-    tier: 'open',
-    in: 0.4,
-    out: 1.2,
-    latency: 380,
-    succ: 98.0,
-    modal: ['text'],
-  },
-  {
-    name: 'deepseek-v3',
-    v: 'DeepSeek',
-    ctx: '64k',
-    tier: 'open',
-    in: 0.27,
-    out: 1.1,
-    latency: 410,
-    succ: 98.7,
-    modal: ['text'],
-    badge: 'trending',
-  },
-  {
-    name: 'llama-3.3-70b',
-    v: 'Meta',
-    ctx: '128k',
-    tier: 'open',
-    in: 0.2,
-    out: 0.3,
-    latency: 320,
-    succ: 99.0,
-    modal: ['text'],
-  },
-];
-
-const TIER_COLOR = {
-  flagship: 'var(--hf-accent)',
-  fast: 'var(--hf-ok)',
-  open: 'var(--hf-info)',
+const useTenantSlug = () => {
+  const [slug, setSlug] = useState('default');
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem('tenant_slug');
+      if (s) setSlug(s);
+    } catch (_) {}
+  }, []);
+  return slug;
 };
 
-const HFModels = () => {
-  const [view] = useState('grid');
-  const [vendor, setVendor] = useState('all');
+const STATUS_LABEL = { 1: 'active', 0: 'disabled' };
 
-  const vendors = ['all', ...Array.from(new Set(MODELS.map((m) => m.v)))];
-  const filtered =
-    vendor === 'all' ? MODELS : MODELS.filter((m) => m.v === vendor);
+const HFModels = () => {
+  const tenantSlug = useTenantSlug();
+  const [vendor, setVendor] = useState('');
+  const [models, setModels] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [vendorCounts, setVendorCounts] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchModels = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ limit: '100', offset: '0' });
+        if (vendor) params.set('vendor', vendor);
+        const res = await API.get(
+          `/api/v2/${tenantSlug}/models?${params.toString()}`,
+        );
+        if (cancelled) return;
+        const d = res?.data?.data ?? {};
+        setModels(d.items ?? []);
+        setTotal(d.total ?? 0);
+        if (d.vendor_counts) setVendorCounts(d.vendor_counts);
+      } catch (err) {
+        if (cancelled) return;
+        const msg =
+          err?.response?.data?.message ?? err?.message ?? t('加载模型失败');
+        showError(msg);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchModels();
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantSlug, vendor]);
+
+  // Build vendor filter pills from vendor_counts; add "all" pseudo-entry.
+  const vendorNames = Object.keys(vendorCounts).filter(Boolean).sort();
 
   return (
     <HFShell
       active='models'
-      crumbs={['platform · admin', 'models']}
+      crumbs={[t('平台 · 管理'), t('模型管理')]}
       actions={
         <>
-          <button type='button' className='btn'>
-            view: {view} ▾
-          </button>
-          <button type='button' className='btn primary'>
-            + add model
+          {/* single-model editing deferred to v3 */}
+          <WIPBanner
+            reason={t('单模型编辑推迟到 v3')}
+            todo='v3 story: per-model enable/disable'
+          />
+          <button
+            type='button'
+            className='btn primary'
+            data-testid='models-add-btn'
+            disabled
+          >
+            {t('+ 添加模型')}
           </button>
         </>
       }
     >
-      <WIPBanner
-        reason='Models catalog renders a static hi-fi mockup (MODELS const). Live data requires a /api/v2/{slug}/models endpoint that joins channel.models with pricing.'
-        todo='Backend: /api/v2/{slug}/models aggregation; UI wires after.'
-      />
       <div className='hf-page-head'>
         <div>
           <div className='lbl' style={{ marginBottom: 6 }}>
-            catalog
+            {t('目录')}
           </div>
           <h1>
-            54 models{' '}
+            {loading ? '…' : total}{' '}
             <span className='muted' style={{ fontWeight: 400 }}>
-              across 8 vendors
+              {t('个模型')}
             </span>
           </h1>
-          <div className='sub'>
-            unified pricing · normalized to USD · per 1M tokens
-          </div>
-        </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 28 }}>
-          {[
-            ['flagship', '12', 'var(--hf-accent)'],
-            ['fast', '24', 'var(--hf-ok)'],
-            ['open', '18', 'var(--hf-info)'],
-          ].map(([l, v, c], i) => (
-            <div key={i}>
-              <div className='lbl'>{l}</div>
-              <div
-                className='display'
-                style={{ fontSize: 26, color: c, marginTop: 2 }}
-              >
-                {v}
-              </div>
-            </div>
-          ))}
         </div>
       </div>
 
+      {/* Vendor filter pills */}
       <div
         style={{
           display: 'flex',
@@ -243,11 +125,27 @@ const HFModels = () => {
           flexWrap: 'wrap',
         }}
       >
-        <span className='lbl'>vendor</span>
-        {vendors.map((v) => (
+        <span className='lbl'>{t('供应商')}</span>
+        <button
+          key='all'
+          type='button'
+          data-testid='vendor-filter-all'
+          onClick={() => setVendor('')}
+          className={'pill ' + (!vendor ? 'solid' : '')}
+          style={{
+            cursor: 'pointer',
+            border: '1px solid var(--hf-rule)',
+            background: !vendor ? 'var(--hf-ink)' : 'var(--hf-elev)',
+            color: !vendor ? 'var(--hf-bg)' : 'var(--hf-ink-2)',
+          }}
+        >
+          {t('全部')} ({total})
+        </button>
+        {vendorNames.map((v) => (
           <button
             key={v}
             type='button'
+            data-testid={`vendor-filter-${v}`}
             onClick={() => setVendor(v)}
             className={'pill ' + (vendor === v ? 'solid' : '')}
             style={{
@@ -257,135 +155,87 @@ const HFModels = () => {
               color: vendor === v ? 'var(--hf-bg)' : 'var(--hf-ink-2)',
             }}
           >
-            {v}
+            {v} ({vendorCounts[v] ?? 0})
           </button>
         ))}
-        <span style={{ flex: 1 }} />
-        <div className='field' style={{ width: 280 }}>
-          <span className='faint'>⌕</span>
-          <span className='muted'>filter by name, modality, context…</span>
+      </div>
+
+      {/* Model grid */}
+      {loading ? (
+        <div
+          data-testid='models-loading'
+          style={{ padding: 48, textAlign: 'center', color: 'var(--hf-ink-2)' }}
+        >
+          {t('加载中…')}
         </div>
-      </div>
-
-      <div
-        style={{
-          padding: 24,
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: 14,
-        }}
-      >
-        {filtered.map((m, i) => (
-          <div
-            key={i}
-            className='panel'
-            style={{ padding: 18, position: 'relative', overflow: 'hidden' }}
-          >
-            {m.badge && (
-              <span
-                className='tag acc'
-                style={{
-                  position: 'absolute',
-                  top: 14,
-                  right: 14,
-                  fontSize: 9,
-                }}
+      ) : (
+        <div
+          style={{
+            padding: 24,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: 14,
+          }}
+        >
+          {models.map((m) => (
+            <div
+              key={m.id}
+              className='panel'
+              data-testid={`model-card-${m.model_name}`}
+              style={{ padding: 18, position: 'relative', overflow: 'hidden' }}
+            >
+              <div className='lbl' style={{ color: 'var(--hf-ink-2)' }}>
+                {m.vendor || t('未知供应商')}
+              </div>
+              <div
+                className='display'
+                style={{ fontSize: 20, marginTop: 6, letterSpacing: '-0.025em' }}
               >
-                {m.badge}
-              </span>
-            )}
-            <div className='lbl' style={{ color: TIER_COLOR[m.tier] }}>
-              ● {m.tier}
-            </div>
-            <div
-              className='display'
-              style={{ fontSize: 22, marginTop: 6, letterSpacing: '-0.025em' }}
-            >
-              {m.name}
-            </div>
-            <div className='muted mono' style={{ fontSize: 11, marginTop: 2 }}>
-              {m.v} · {m.ctx} ctx
-            </div>
-
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: 10,
-                marginTop: 16,
-              }}
-            >
-              <div>
-                <div className='lbl'>input · 1M</div>
-                <div className='display' style={{ fontSize: 18 }}>
-                  ${m.in.toFixed(2)}
-                </div>
+                {m.model_name}
               </div>
-              <div>
-                <div className='lbl'>output · 1M</div>
-                <div className='display' style={{ fontSize: 18 }}>
-                  ${m.out.toFixed(2)}
-                </div>
+              <div
+                className='muted mono'
+                style={{ fontSize: 11, marginTop: 4 }}
+              >
+                {t('状态')}: {STATUS_LABEL[m.status] ?? m.status}
+              </div>
+
+              <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
+                <button type='button' className='btn sm'>
+                  {t('试用')} ↗
+                </button>
+                {/* single-model enable/disable deferred to v3 */}
+                <WIPBanner
+                  reason={t('单模型启用/禁用推迟到 v3')}
+                  todo='v3 story: per-model enable/disable'
+                />
               </div>
             </div>
-
-            <hr
-              style={{
-                border: 0,
-                borderTop: '1px dashed var(--hf-rule)',
-                margin: '14px 0',
-              }}
-            />
-
-            <div style={{ display: 'flex', gap: 10, fontSize: 11 }}>
-              <span>
-                <span className='muted'>ttft</span>{' '}
-                <span className='strong'>{m.latency}ms</span>
-              </span>
-              <span>
-                <span className='muted'>succ</span>{' '}
-                <span
-                  style={{
-                    color: m.succ >= 99 ? 'var(--hf-ok)' : 'var(--hf-warn)',
-                  }}
-                >
-                  {m.succ}%
-                </span>
-              </span>
-            </div>
-
+          ))}
+          {models.length === 0 && !loading && (
             <div
+              data-testid='models-empty'
               style={{
-                display: 'flex',
-                gap: 4,
-                marginTop: 10,
-                flexWrap: 'wrap',
+                gridColumn: '1/-1',
+                padding: 48,
+                textAlign: 'center',
+                color: 'var(--hf-ink-2)',
               }}
             >
-              {m.modal.map((x) => (
-                <span key={x} className='pill' style={{ fontSize: 9 }}>
-                  {x}
-                </span>
-              ))}
+              {t('暂无模型')}
             </div>
-
-            <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
-              <button type='button' className='btn sm'>
-                try ↗
-              </button>
-              <button type='button' className='btn sm'>
-                docs
-              </button>
-              <span style={{ flex: 1 }} />
-              <button type='button' className='btn sm primary'>
-                enable
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+          )}
+        </div>
+      )}
     </HFShell>
   );
 };
+
+// Minimal t() shim — keys are used as display text until Opus wires i18n.
+// Keys map to the i18n table in the report. Replace with useTranslation() when
+// en.json / zh.json entries are merged.
+function t(key) {
+  return key;
+}
 
 export default HFModels;

@@ -16,206 +16,245 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Spin } from '@douyinfe/semi-ui';
 import HFShell from '../../../components/hifi/HFShell';
 import WIPBanner from '../../../components/hifi/WIPBanner';
+import { API, showError } from '../../../helpers';
 
-/* HiFi 10 — Pricing admin. Ported from hifi/hf10-pricing.jsx. */
+/* v2 Pricing — wired to GET /api/v2/:tenant_slug/pricing (2026-05-19).
+   Write path (markup multiplier + save) deferred to Epic 12. */
 
-const ROWS = [
-  ['gpt-4o', 2.5, 10.0, 1.4],
-  ['gpt-4o-mini', 0.15, 0.6, 1.5],
-  ['claude-3.5-sonnet', 3.0, 15.0, 1.35],
-  ['claude-3.5-haiku', 0.8, 4.0, 1.5],
-  ['gemini-1.5-pro', 1.25, 5.0, 1.4],
-  ['gemini-1.5-flash', 0.075, 0.3, 1.6],
-  ['deepseek-v3', 0.27, 1.1, 1.8],
-];
+const useTenantSlug = () => {
+  const [slug, setSlug] = useState('default');
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem('tenant_slug');
+      if (s) setSlug(s);
+    } catch (_) {}
+  }, []);
+  return slug;
+};
 
-const PLANS = [
-  ['enterprise', '×0.85', 'volume discount'],
-  ['team', '×1.00', 'standard'],
-  ['startup', '×1.10', '+10% premium'],
-  ['free', '∞', 'free tier · capped'],
-];
+const PricingPage = () => {
+  const tenantSlug = useTenantSlug();
+  const [loading, setLoading] = useState(false);
+  const [pricing, setPricing] = useState([]);
+  const [vendors, setVendors] = useState([]);
+  const [groupRatio, setGroupRatio] = useState({});
+  const [vendorFilter, setVendorFilter] = useState('');
 
-const HFPricing = () => {
+  useEffect(() => {
+    if (!tenantSlug) return;
+    setLoading(true);
+    API.get(`/api/v2/${tenantSlug}/pricing`)
+      .then((res) => {
+        const d = res?.data?.data ?? {};
+        setPricing(Array.isArray(d.pricing) ? d.pricing : []);
+        setVendors(Array.isArray(d.vendors) ? d.vendors : []);
+        setGroupRatio(d.group_ratio && typeof d.group_ratio === 'object' ? d.group_ratio : {});
+      })
+      .catch((err) => {
+        const msg = err?.response?.data?.message ?? '加载定价数据失败';
+        showError(msg);
+      })
+      .finally(() => setLoading(false));
+  }, [tenantSlug]);
+
+  const filteredPricing = useMemo(() => {
+    if (!vendorFilter) return pricing;
+    return pricing.filter((p) => p.vendor === vendorFilter);
+  }, [pricing, vendorFilter]);
+
   return (
     <HFShell
       active='pricing'
-      crumbs={['platform · admin', 'pricing']}
+      crumbs={['平台', '定价管理']}
       actions={
         <>
-          <button type='button' className='btn'>
-            currency: USD ▾
+          <button
+            type='button'
+            className='btn primary'
+            disabled
+            data-testid='pricing-save'
+            title='write API pending Epic 12'
+          >
+            保存
           </button>
-          <button type='button' className='btn primary'>
-            save changes
-          </button>
+          <WIPBanner
+            reason='write API pending Epic 12'
+            todo='Epic 12 SKU model — POST /api/v2/:tenant_slug/pricing'
+          />
         </>
       }
     >
-      <WIPBanner
-        reason='Per-model pricing rows and plan multipliers (×0.85/×1.00/×1.10) are static fixtures. Save-changes button writes nowhere; real pricing engine couples to Epic 12 SKU model.'
-        todo='Backend: /api/v2/admin/pricing/* (read+write); plan-multiplier resolution in relay/billing path. Defer until Epic 12.'
-      />
-      <div className='hf-page-head'>
-        <div>
-          <div className='lbl' style={{ marginBottom: 6 }}>
-            pricing rules
-          </div>
-          <h1>Margin & markup engine</h1>
-          <div className='sub'>
-            vendor cost → tenant invoice · per-model markup · plan multipliers
+      <Spin spinning={loading}>
+        <div className='hf-page-head'>
+          <div>
+            <div className='lbl' style={{ marginBottom: 6 }}>
+              定价管理
+            </div>
+            <h1>模型定价</h1>
+            <div className='sub'>
+              供应商成本 · 分组倍率 · 计费类型
+            </div>
           </div>
         </div>
-      </div>
 
-      <div
-        style={{
-          padding: 24,
-          display: 'grid',
-          gridTemplateColumns: '1fr 360px',
-          gap: 18,
-        }}
-      >
-        <div className='panel'>
-          <div
-            style={{
-              padding: '14px 18px',
-              borderBottom: '1px solid var(--hf-rule)',
-              display: 'flex',
-              alignItems: 'baseline',
-            }}
+        {/* Vendor filter toolbar */}
+        <div
+          style={{
+            padding: '0 24px 12px',
+            display: 'flex',
+            gap: 8,
+            flexWrap: 'wrap',
+          }}
+        >
+          <button
+            type='button'
+            className={`btn${!vendorFilter ? ' primary' : ''}`}
+            onClick={() => setVendorFilter('')}
           >
-            <div className='lbl'>model markup</div>
-            <span
-              className='muted mono'
-              style={{ fontSize: 10, marginLeft: 'auto' }}
+            全部
+          </button>
+          {vendors.map((v) => (
+            <button
+              key={v}
+              type='button'
+              className={`btn${vendorFilter === v ? ' primary' : ''}`}
+              onClick={() => setVendorFilter(v)}
             >
-              54 models · last edit 3d ago
-            </span>
-          </div>
-          <table className='t'>
-            <thead>
-              <tr>
-                <th>model</th>
-                <th>vendor cost · in</th>
-                <th>vendor cost · out</th>
-                <th>markup</th>
-                <th>tenant price · in</th>
-                <th>tenant price · out</th>
-                <th>margin</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ROWS.map((r, i) => {
-                const pIn = r[1] * r[3];
-                const pOut = r[2] * r[3];
-                const mIn = (1 - 1 / r[3]) * 100;
-                return (
-                  <tr key={i}>
-                    <td className='strong'>{r[0]}</td>
-                    <td className='mono muted'>${r[1].toFixed(2)}</td>
-                    <td className='mono muted'>${r[2].toFixed(2)}</td>
-                    <td>
-                      <div
-                        className='field'
-                        style={{ width: 80, height: 24, fontSize: 11 }}
-                      >
-                        ×{r[3].toFixed(2)}
-                      </div>
-                    </td>
-                    <td className='mono strong'>${pIn.toFixed(2)}</td>
-                    <td className='mono strong'>${pOut.toFixed(2)}</td>
-                    <td>
-                      <span className='tag ok'>{mIn.toFixed(0)}%</span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+              {v}
+            </button>
+          ))}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div className='panel' style={{ padding: 18 }}>
-            <div className='lbl'>plan multipliers</div>
+        <div style={{ padding: '0 24px 24px' }}>
+          <div className='panel'>
             <div
               style={{
+                padding: '14px 18px',
+                borderBottom: '1px solid var(--hf-rule)',
                 display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-                marginTop: 10,
+                alignItems: 'baseline',
               }}
             >
-              {PLANS.map((r, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'auto auto 1fr',
-                    gap: 10,
-                    alignItems: 'center',
-                    padding: '6px 0',
-                    borderBottom:
-                      i < PLANS.length - 1 ? '1px dashed var(--hf-rule)' : 0,
-                  }}
-                >
-                  <span
-                    className='tag'
-                    style={{ minWidth: 70, justifyContent: 'center' }}
-                  >
-                    {r[0]}
-                  </span>
-                  <span className='display' style={{ fontSize: 18 }}>
-                    {r[1]}
-                  </span>
-                  <span
-                    className='muted'
-                    style={{ fontSize: 11, textAlign: 'right' }}
-                  >
-                    {r[2]}
-                  </span>
-                </div>
-              ))}
+              <div className='lbl'>模型列表</div>
+              <span
+                className='muted mono'
+                style={{ fontSize: 10, marginLeft: 'auto' }}
+              >
+                {filteredPricing.length} 个模型
+              </span>
             </div>
+            <table className='t' data-testid='pricing-table'>
+              <thead>
+                <tr>
+                  <th>模型名称</th>
+                  <th>供应商</th>
+                  <th>计费类型</th>
+                  <th>模型倍率</th>
+                  <th>模型单价</th>
+                  <th>
+                    Markup multiplier
+                    <span
+                      className='muted'
+                      style={{ fontSize: 10, marginLeft: 6, fontWeight: 400 }}
+                    >
+                      (write API pending Epic 12)
+                    </span>
+                  </th>
+                  <th>启用分组</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPricing.map((row, i) => (
+                  <tr key={row.model_name ?? i}>
+                    <td className='strong mono' style={{ fontSize: 12 }}>
+                      {row.model_name}
+                    </td>
+                    <td>{row.vendor ?? '—'}</td>
+                    <td>
+                      <span className='tag'>
+                        {row.quota_type === 1 ? '单价计费' : '倍率计费'}
+                      </span>
+                    </td>
+                    <td className='mono muted'>
+                      {row.quota_type === 0
+                        ? `×${(row.model_ratio ?? 0).toFixed(4)}`
+                        : '—'}
+                    </td>
+                    <td className='mono muted'>
+                      {row.quota_type === 1
+                        ? `¥${(row.model_price ?? 0).toFixed(6)}`
+                        : '—'}
+                    </td>
+                    <td>
+                      <input
+                        type='text'
+                        className='field'
+                        readOnly
+                        disabled
+                        placeholder='×1.00'
+                        style={{ width: 80, height: 24, fontSize: 11 }}
+                        title='write API pending Epic 12'
+                      />
+                    </td>
+                    <td>
+                      <span className='muted' style={{ fontSize: 11 }}>
+                        {Array.isArray(row.enable_groups)
+                          ? row.enable_groups.join(', ') || '—'
+                          : '—'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {filteredPricing.length === 0 && !loading && (
+                  <tr>
+                    <td colSpan={7} className='muted' style={{ textAlign: 'center', padding: 24 }}>
+                      暂无数据
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
 
-          <div className='panel' style={{ padding: 18 }}>
-            <div className='lbl'>forecast · this month</div>
-            <div className='display' style={{ fontSize: 32, marginTop: 6 }}>
-              $8,420
-            </div>
-            <div className='muted' style={{ fontSize: 11 }}>
-              gross margin · 32% · vs last month +4pp
-            </div>
-            <hr
-              style={{
-                border: 0,
-                borderTop: '1px dashed var(--hf-rule)',
-                margin: '12px 0',
-              }}
-            />
-            <div style={{ fontSize: 11, lineHeight: 1.7 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span className='muted'>vendor cost</span>
-                <span className='mono'>$17,820</span>
+          {/* Group ratio — readonly display */}
+          {Object.keys(groupRatio).length > 0 && (
+            <div className='panel' style={{ marginTop: 18, padding: 18 }}>
+              <div className='lbl' style={{ marginBottom: 10 }}>
+                分组倍率（只读）
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span className='muted'>tenant revenue</span>
-                <span className='mono'>$26,240</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span className='strong'>net</span>
-                <span className='mono strong'>$8,420</span>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                {Object.entries(groupRatio).map(([group, ratio]) => (
+                  <div
+                    key={group}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      padding: '8px 14px',
+                      border: '1px solid var(--hf-rule)',
+                      borderRadius: 4,
+                      minWidth: 80,
+                    }}
+                  >
+                    <span className='tag' style={{ marginBottom: 4 }}>
+                      {group}
+                    </span>
+                    <span className='display mono' style={{ fontSize: 16 }}>
+                      ×{Number(ratio).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
+          )}
         </div>
-      </div>
+      </Spin>
     </HFShell>
   );
 };
 
-export default HFPricing;
+export default PricingPage;

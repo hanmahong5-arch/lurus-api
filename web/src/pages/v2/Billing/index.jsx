@@ -16,71 +16,145 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import HFShell from '../../../components/hifi/HFShell';
 import WIPBanner from '../../../components/hifi/WIPBanner';
+import { API, showError } from '../../../helpers';
 
-/* HiFi 11 — Billing. Ported from hifi/hf11-billing.jsx. */
+// HiFi 11 — Billing. Wired to real APIs (2026-05-19):
+//   GET /api/v2/:slug/billing/invoices  → monthly spend buckets
+//   GET /api/v2/user/billing/summary    → balance / MTD from platform
 
-const INVOICES = [
-  ['INV-2026-05', '2026-05', 8420.4, 'open', 'in progress'],
-  ['INV-2026-04', '2026-04', 9842.2, 'paid', 'auto-debit · 2026-05-01'],
-  ['INV-2026-03', '2026-03', 11210.8, 'paid', 'auto-debit · 2026-04-01'],
-  ['INV-2026-02', '2026-02', 8120.0, 'paid', 'auto-debit · 2026-03-01'],
-  ['INV-2026-01', '2026-01', 7240.1, 'overdue', 'retry scheduled'],
-];
+const QUOTA_PER_USD = 500_000;
 
-const TREND = [7240, 8120, 11210, 9842, 8420, 10200];
+const useTenantSlug = () => {
+  const [slug, setSlug] = useState('default');
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem('tenant_slug');
+      if (s) setSlug(s);
+    } catch (_) {}
+  }, []);
+  return slug;
+};
+
+const fmtCNY = (v) =>
+  typeof v === 'number'
+    ? '¥' + v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '—';
+
+const fmtQuota = (v) =>
+  typeof v === 'number' ? (v / QUOTA_PER_USD).toFixed(4) + ' USD eq.' : '—';
 
 const HFBilling = () => {
-  const max = Math.max(...TREND);
+  const tenantSlug = useTenantSlug();
+
+  const [invoices, setInvoices] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [recharging, setRecharging] = useState(false);
+
+  const fetchAll = useCallback(async () => {
+    if (!tenantSlug) return;
+    setLoading(true);
+    try {
+      const [invRes, sumRes] = await Promise.all([
+        API.get(`/api/v2/${tenantSlug}/billing/invoices`),
+        API.get('/api/v2/user/billing/summary'),
+      ]);
+
+      if (invRes?.data?.success) {
+        setInvoices(invRes.data.data?.items ?? []);
+      } else {
+        showError(invRes?.data?.message || '加载账单失败');
+      }
+
+      if (sumRes?.data?.success) {
+        setSummary(sumRes.data.data);
+      }
+      // summary failure is non-fatal: page still works without it
+    } catch (_) {
+      // network errors surfaced by API interceptor
+    } finally {
+      setLoading(false);
+    }
+  }, [tenantSlug]);
+
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
+
+  const handleRecharge = async () => {
+    setRecharging(true);
+    try {
+      const res = await API.post('/api/v2/user/billing/checkout', {
+        amount_cny: 200,
+        payment_method: 'alipay',
+        return_url: window.location.href,
+      });
+      if (res?.data?.success && res.data.data?.checkout_url) {
+        window.location.href = res.data.data.checkout_url;
+      } else {
+        showError(res?.data?.message || '创建充值订单失败');
+      }
+    } catch (_) {
+      // interceptor handles toast
+    } finally {
+      setRecharging(false);
+    }
+  };
+
+  // Trend: last 6 invoices in chronological order for the bar chart.
+  const trend = invoices.slice(0, 6).slice().reverse();
+  const trendMax = trend.reduce((m, b) => Math.max(m, b.amount_cny ?? 0), 1);
+
+  const balanceDisplay = summary?.wallet_balance_cny != null
+    ? fmtCNY(summary.wallet_balance_cny)
+    : '—';
+  const mtdDisplay = summary?.mtd_spend_cny != null
+    ? fmtCNY(summary.mtd_spend_cny)
+    : (invoices[0] ? fmtCNY(invoices[0].amount_cny) : '—');
+
   return (
     <HFShell
       active='billing'
       crumbs={['my account', 'billing']}
       actions={
         <>
-          <button type='button' className='btn'>
-            download invoice
-          </button>
-          <button type='button' className='btn primary'>
-            + recharge
+          <button
+            type='button'
+            className='btn primary'
+            onClick={handleRecharge}
+            disabled={recharging}
+            data-testid='billing-recharge'
+          >
+            {recharging ? '处理中…' : '+ 充值'}
           </button>
         </>
       }
     >
-      <WIPBanner
-        reason='Invoices ($8,420.40 / INV-2026-05) + spend trend + balance + projected exceed are static fixtures. Real data requires lurus-platform billing integration (Epic 12 SKU model).'
-        todo='Backend: /api/v2/{slug}/billing/* + platform gRPC GetInvoices / GetProjection. Defer until Epic 12 SKU model is decided.'
-      />
       <div className='hf-page-head'>
         <div>
           <div className='lbl' style={{ marginBottom: 6 }}>
             billing
           </div>
           <h1>
-            $8,420.40{' '}
+            {loading ? '…' : mtdDisplay}{' '}
             <span className='muted' style={{ fontWeight: 400 }}>
               · this month
             </span>
           </h1>
-          <div className='sub'>
-            prepaid balance · auto-recharge enabled · projected exceed in 3.2d
-          </div>
+          <div className='sub'>prepaid balance · api consumption</div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 28 }}>
           {[
-            ['balance', '$1,210', 'var(--hf-ink)'],
-            ['mtd spend', '$8,420', 'var(--hf-accent)'],
-            ['next invoice', '$10,200', 'var(--hf-ink)'],
-          ].map(([l, v, c], i) => (
+            ['balance', balanceDisplay, 'var(--hf-ink)'],
+            ['mtd spend', mtdDisplay, 'var(--hf-accent)'],
+          ].map(([l, v, col], i) => (
             <div key={i}>
               <div className='lbl'>{l}</div>
-              <div
-                className='display'
-                style={{ fontSize: 26, color: c, marginTop: 2 }}
-              >
-                {v}
+              <div className='display' style={{ fontSize: 26, color: col, marginTop: 2 }}>
+                {loading ? '…' : v}
               </div>
             </div>
           ))}
@@ -95,86 +169,67 @@ const HFBilling = () => {
           gap: 18,
         }}
       >
+        {/* Invoice table */}
         <div className='panel'>
-          <div
-            style={{
-              padding: '14px 18px',
-              borderBottom: '1px solid var(--hf-rule)',
-            }}
-          >
-            <div className='lbl'>invoices</div>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--hf-rule)' }}>
+            <div className='lbl'>invoices · monthly</div>
           </div>
-          <table className='t'>
-            <thead>
-              <tr>
-                <th>invoice</th>
-                <th>period</th>
-                <th>amount</th>
-                <th>status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {INVOICES.map((r, i) => (
-                <tr key={i}>
-                  <td className='mono strong'>{r[0]}</td>
-                  <td className='mono muted'>{r[1]}</td>
-                  <td>
-                    <span className='display' style={{ fontSize: 16 }}>
-                      $
-                      {r[2].toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                      })}
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      className={
-                        'tag ' +
-                        (r[3] === 'paid'
-                          ? 'ok'
-                          : r[3] === 'overdue'
-                            ? 'err'
-                            : 'warn')
-                      }
-                    >
-                      {r[3]}
-                    </span>
-                  </td>
-                  <td>
-                    <button type='button' className='btn ghost sm'>
-                      →
-                    </button>
-                  </td>
+
+          {loading ? (
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--hf-ink-2)' }}>
+              loading…
+            </div>
+          ) : invoices.length === 0 ? (
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--hf-ink-2)' }}>
+              no invoice data
+            </div>
+          ) : (
+            <table className='t'>
+              <thead>
+                <tr>
+                  <th>period</th>
+                  <th>amount (CNY)</th>
+                  <th>quota used</th>
+                  <th>requests</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {invoices.map((inv, i) => (
+                  <tr key={i}>
+                    <td className='mono strong'>{inv.month}</td>
+                    <td>
+                      <span className='display' style={{ fontSize: 16 }}>
+                        {fmtCNY(inv.amount_cny)}
+                      </span>
+                    </td>
+                    <td className='mono muted'>{fmtQuota(inv.quota)}</td>
+                    <td className='mono muted'>{inv.request_count ?? '—'}</td>
+                    <td>
+                      {/* Download PDF — deferred to v2 */}
+                      <span
+                        data-testid={`billing-download-${i}`}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                      >
+                        <button type='button' className='btn ghost sm'>
+                          PDF
+                        </button>
+                        <WIPBanner
+                          reason='PDF generation deferred to v2'
+                          todo=''
+                        />
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
 
+        {/* Side panel */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div className='panel' style={{ padding: 18 }}>
-            <div className='lbl'>auto-recharge</div>
-            <div style={{ marginTop: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span className='dot ok' />{' '}
-                <span className='strong'>enabled</span>
-                <span style={{ flex: 1 }} />
-                <button type='button' className='btn sm'>
-                  edit
-                </button>
-              </div>
-              <div
-                className='muted'
-                style={{ fontSize: 11, marginTop: 8, lineHeight: 1.7 }}
-              >
-                top up <b style={{ color: 'var(--hf-ink)' }}>$2,000</b> when
-                balance drops below{' '}
-                <b style={{ color: 'var(--hf-ink)' }}>$500</b>
-              </div>
-            </div>
-          </div>
-
+          {/* Payment method — edit deferred */}
           <div className='panel' style={{ padding: 18 }}>
             <div className='lbl'>payment method</div>
             <div
@@ -201,59 +256,89 @@ const HFBilling = () => {
                   letterSpacing: '0.1em',
                 }}
               >
-                VISA
+                ALI
               </div>
               <div>
-                <div className='mono strong'>•••• •••• •••• 4242</div>
+                <div className='mono strong'>支付宝</div>
                 <div className='faint mono' style={{ fontSize: 10 }}>
-                  exp 08/27 · default
+                  default
                 </div>
               </div>
             </div>
-            <button type='button' className='btn sm' style={{ marginTop: 8 }}>
-              + add method
-            </button>
+            <div style={{ marginTop: 8 }}>
+              <button
+                type='button'
+                className='btn sm'
+                data-testid='billing-edit-payment'
+                disabled
+              >
+                edit
+              </button>
+              <WIPBanner
+                reason='payment method editing deferred to v2'
+                todo=''
+              />
+            </div>
           </div>
 
+          {/* Spend trend */}
           <div className='panel' style={{ padding: 18 }}>
             <div className='lbl'>trend · last 6 months</div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'flex-end',
-                gap: 8,
-                height: 100,
-                marginTop: 14,
-              }}
-            >
-              {TREND.map((v, i) => (
-                <div key={i} style={{ flex: 1, textAlign: 'center' }}>
-                  <div
-                    style={{
-                      height: (v / max) * 80 + 'px',
-                      background:
-                        i === TREND.length - 1
-                          ? 'var(--hf-accent)'
-                          : 'var(--hf-ink-2)',
-                      opacity: i === TREND.length - 1 ? 1 : 0.6,
-                    }}
-                  />
-                  <div
-                    className='faint mono'
-                    style={{ fontSize: 9, marginTop: 4 }}
-                  >
-                    {['12', '01', '02', '03', '04', '05'][i]}
+            {loading ? (
+              <div style={{ height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--hf-ink-2)' }}>
+                loading…
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                  gap: 8,
+                  height: 100,
+                  marginTop: 14,
+                }}
+              >
+                {trend.map((b, i) => (
+                  <div key={i} style={{ flex: 1, textAlign: 'center' }}>
+                    <div
+                      style={{
+                        height: ((b.amount_cny ?? 0) / trendMax) * 80 + 'px',
+                        background:
+                          i === trend.length - 1
+                            ? 'var(--hf-accent)'
+                            : 'var(--hf-ink-2)',
+                        opacity: i === trend.length - 1 ? 1 : 0.6,
+                      }}
+                    />
+                    <div className='faint mono' style={{ fontSize: 9, marginTop: 4 }}>
+                      {b.month ? b.month.slice(5) : ''}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-            <div
-              className='faint mono'
-              style={{ fontSize: 10, marginTop: 6, textAlign: 'right' }}
-            >
-              last bar = forecast
-            </div>
+                ))}
+              </div>
+            )}
           </div>
+
+          {/* Summary stats from platform */}
+          {summary && (
+            <div className='panel' style={{ padding: 18 }}>
+              <div className='lbl'>platform summary</div>
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {summary.subscription_plan && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span className='muted'>plan</span>
+                    <span className='mono strong'>{summary.subscription_plan}</span>
+                  </div>
+                )}
+                {summary.wallet_balance_cny != null && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span className='muted'>wallet</span>
+                    <span className='mono strong'>{fmtCNY(summary.wallet_balance_cny)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </HFShell>

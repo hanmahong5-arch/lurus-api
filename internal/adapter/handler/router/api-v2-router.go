@@ -95,6 +95,31 @@ func SetApiV2Router(router *gin.Engine) {
 			tenantLogs.GET("/all", handler.GetAllLogsV2)
 		}
 
+		// ================================================================
+		// Tenant-scoped Catalog & Pricing & Billing (Wave 2 — 2026-05-19)
+		// Read-only projections wired from the v2 console. Write paths
+		// (single-model edit, markup engine, PDF download, payment-method
+		// edit) deferred per Wave 2 scope — UI carries mini WIPBanner.
+		// ================================================================
+
+		tenantModels := apiV2.Group("/:tenant_slug/models")
+		tenantModels.Use(middleware.UserAuth())
+		{
+			tenantModels.GET("", handler.ListModelsV2)
+		}
+
+		tenantPricing := apiV2.Group("/:tenant_slug/pricing")
+		tenantPricing.Use(middleware.UserAuth())
+		{
+			tenantPricing.GET("", handler.GetPricingV2)
+		}
+
+		tenantBilling := apiV2.Group("/:tenant_slug/billing")
+		tenantBilling.Use(middleware.UserAuth())
+		{
+			tenantBilling.GET("/invoices", handler.ListInvoicesV2)
+		}
+
 		// Settings — PUT for profile update (GET already registered above)
 		apiV2.PUT("/:tenant_slug/user/me", middleware.UserAuth(), handler.UpdateSelfV2)
 
