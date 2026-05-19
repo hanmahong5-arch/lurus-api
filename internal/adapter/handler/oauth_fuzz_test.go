@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -125,11 +126,25 @@ func FuzzGenerateOAuthState(f *testing.F) {
 			}
 		}
 
-		// Invariant 4: state should be valid base64
+		// Invariant 4: state must have payload.signature shape — base64 payload
+		// + hex HMAC signature joined by '.' (post-commit 942b2518 format).
 		if err == nil && state != "" {
-			_, decodeErr := base64.URLEncoding.DecodeString(state)
-			if decodeErr != nil {
-				t.Errorf("state is not valid base64: %v", decodeErr)
+			dotIdx := strings.LastIndex(state, ".")
+			if dotIdx < 0 {
+				t.Errorf("state missing '.' separator: %q", state)
+			} else {
+				payload := state[:dotIdx]
+				sig := state[dotIdx+1:]
+				if _, decodeErr := base64.URLEncoding.DecodeString(payload); decodeErr != nil {
+					t.Errorf("state payload is not valid base64: %v", decodeErr)
+				}
+				if _, decodeErr := hex.DecodeString(sig); decodeErr != nil {
+					t.Errorf("state signature is not valid hex: %v", decodeErr)
+				}
+				// HMAC-SHA256 hex output is exactly 64 chars.
+				if len(sig) != 64 {
+					t.Errorf("state signature length = %d, want 64 (hex SHA-256)", len(sig))
+				}
 			}
 		}
 
@@ -146,49 +161,60 @@ func FuzzGenerateOAuthState(f *testing.F) {
 	})
 }
 
-// FuzzOAuthStateRoundTrip verifies encode/decode round-trip integrity
+// FuzzOAuthStateRoundTrip verifies generate → parse round-trip integrity.
+//
+// Since commit 942b2518 the state format is HMAC-signed (payload.signature),
+// so we cannot hand-craft a raw base64(JSON) blob and feed it to parseOAuthState
+// — that would bypass HMAC verification and never round-trip. Instead, we drive
+// the round-trip through the real generate entry point and compare what comes
+// out. The `nonce` fuzz arg is preserved for seed-corpus compatibility but is
+// asserted indirectly: parsed.Nonce is whatever generateOAuthState minted, not
+// the fuzz input, since generateOAuthState owns nonce minting.
 func FuzzOAuthStateRoundTrip(f *testing.F) {
 	f.Add("tenant", "/path", "nonce123")
 	f.Add("", "", "")
 	f.Add("a", "/", "n")
 	f.Add("multi-tenant-org", "/dashboard/settings?tab=security", "secure-nonce-abc123")
 
-	f.Fuzz(func(t *testing.T, tenant, redirect, nonce string) {
+	f.Fuzz(func(t *testing.T, tenant, redirect, _ string) {
 		// Skip invalid UTF-8 inputs as JSON encoding will transform them
-		if !utf8.ValidString(tenant) || !utf8.ValidString(redirect) || !utf8.ValidString(nonce) {
+		if !utf8.ValidString(tenant) || !utf8.ValidString(redirect) {
 			return
 		}
 
-		original := OAuthStateData{
-			TenantSlug:  tenant,
-			RedirectURL: redirect,
-			Nonce:       nonce,
-			CreatedAt:   time.Now(),
-		}
-
-		// Encode
-		jsonData, err := json.Marshal(original)
+		// Generate via the real production entry point (HMAC-signed).
+		state, generatedNonce, err := generateOAuthState(tenant, redirect)
 		if err != nil {
-			return // Skip invalid inputs
+			t.Fatalf("generateOAuthState failed: %v", err)
 		}
-		encoded := base64.URLEncoding.EncodeToString(jsonData)
+		if state == "" {
+			t.Fatal("generated state is empty")
+		}
+		if generatedNonce == "" {
+			t.Fatal("generated nonce is empty")
+		}
 
-		// Decode
-		parsed, err := parseOAuthState(encoded)
+		// Parse and verify the round-trip.
+		parsed, err := parseOAuthState(state)
 		if err != nil {
-			t.Errorf("failed to parse valid state: %v", err)
-			return
+			t.Fatalf("failed to parse generated state: %v", err)
 		}
-
-		// Verify
+		if parsed == nil {
+			t.Fatal("parseOAuthState returned nil without error")
+		}
 		if parsed.TenantSlug != tenant {
 			t.Errorf("tenant mismatch: got %q, want %q", parsed.TenantSlug, tenant)
 		}
 		if parsed.RedirectURL != redirect {
 			t.Errorf("redirect mismatch: got %q, want %q", parsed.RedirectURL, redirect)
 		}
-		if parsed.Nonce != nonce {
-			t.Errorf("nonce mismatch: got %q, want %q", parsed.Nonce, nonce)
+		if parsed.Nonce != generatedNonce {
+			t.Errorf("nonce mismatch: got %q, want %q", parsed.Nonce, generatedNonce)
+		}
+		// CreatedAt must be recent (within last 10s — same window parseOAuthState
+		// callers enforce for expiration, just sanity check freshness here).
+		if time.Since(parsed.CreatedAt) > 10*time.Second {
+			t.Errorf("parsed CreatedAt too old: %v", parsed.CreatedAt)
 		}
 	})
 }
