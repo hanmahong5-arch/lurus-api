@@ -148,14 +148,20 @@ Response: { total: int64, draws: [{ id, direction, amount, reason, token_id, log
 Errors:   404, 400 (invalid date range)
 ```
 
-### 4.2 Provisioning API (internal bearer key, new `ScopeProvisioning` scope)
+### 4.2 Provisioning API (internal management key, new `ScopeProvisioning` scope)
 
 Mirrors OpenRouter `POST /api/v1/keys` shape. Path namespace `/internal/v1/provisioning/` keeps it isolated from existing internal scopes.
+
+> **Header convention**: `X-API-Key` (not `Authorization: Bearer`) per newhub's
+> `internal_api_auth.go` middleware. All `/internal/*` endpoints share this
+> convention — diverging here would require a new middleware. Fixed
+> 2026-05-18 via Lane ε (was originally written as Bearer in the first
+> draft of this ADR; corrected before Switch integration).
 
 **Create a provisioned key for a tenant**
 ```
 POST /internal/v1/provisioning/tenants/:slug/keys
-Auth: Bearer <management-key> with scope "provisioning:write"
+Auth: X-API-Key: <management-key>  (scope "provisioning:write")
 Request:
   {
     name: string,
