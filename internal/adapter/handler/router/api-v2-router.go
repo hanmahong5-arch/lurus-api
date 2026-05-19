@@ -42,6 +42,12 @@ func SetApiV2Router(router *gin.Engine) {
 		// Tenant-scoped user endpoint (session auth — called by frontend in V2 mode)
 		apiV2.GET("/:tenant_slug/user/me", middleware.UserAuth(), handler.GetSelf)
 
+		// EndUser pool readback (Tier 1.2, 2026-05-19). ZitadelAuth →
+		// tenantCtx.TenantID must match the URL slug; otherwise the handler
+		// returns 403 TENANT_MISMATCH. Whitelisted projection: only
+		// current_balance / max_balance / health are serialised.
+		apiV2.GET("/:tenant_slug/credit-pool/me", middleware.ZitadelAuth(), handler.GetCreditPoolForEndUser)
+
 		// ================================================================
 		// Tenant-scoped Token Management (session auth)
 		// ================================================================

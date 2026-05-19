@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/LurusTech/lurus-hub/internal/adapter/middleware"
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/pkg/metrics"
@@ -91,6 +92,125 @@ func GetCreditPool(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": pool})
+}
+
+// endUserPoolView is the read-only projection returned to EndUsers from
+// GET /api/v2/:tenant_slug/credit-pool/me. Strictly whitelisted — never
+// uses the full TenantCreditPool struct so admin-only fields (ceiling
+// policy, alert thresholds, owner, reset schedule) cannot leak even if
+// new fields land on the entity.
+//
+// Pointers let null serialise for "unlimited" pools (no ceiling = no
+// meaningful current/max — the relay gate is a no-op for these).
+type endUserPoolView struct {
+	CurrentBalance *int64 `json:"current_balance"`
+	MaxBalance     *int64 `json:"max_balance"`
+	Health         string `json:"health"`
+}
+
+// poolHealthForEndUser maps a pool balance to one of four enum values
+// safe to render in the EndUser dashboard. Thresholds match the
+// front-end CreditPoolDrawer.poolHealth helper so admin + EndUser
+// surfaces agree on the same band names.
+//
+//   - "green"     balance >= 20% of max
+//   - "yellow"    balance > 0 but < 20% of max
+//   - "red"       balance == 0 (gate is now blocking)
+//   - "unlimited" no ceiling configured (relay gate skipped)
+func poolHealthForEndUser(pool *repo.TenantCreditPool) string {
+	if pool == nil || pool.MaxBalance == repo.PoolMaxBalanceUnlimited {
+		return "unlimited"
+	}
+	if pool.CurrentBalance <= 0 {
+		return "red"
+	}
+	// 20% threshold via integer arithmetic — avoids float drift on
+	// tiny ceilings (e.g. max=10 should still report "yellow" at 1).
+	if pool.CurrentBalance*5 < pool.MaxBalance {
+		return "yellow"
+	}
+	return "green"
+}
+
+// GetCreditPoolForEndUser returns the pool summary for the authenticated
+// EndUser. Route: GET /api/v2/:tenant_slug/credit-pool/me.
+// Auth:  ZitadelAuth — tenantCtx.TenantID is derived from the JWT.
+//
+// Tier 1.2 (2026-05-19): EndUsers were learning their pool was exhausted
+// only by hitting HTTP 402 from the relay gate. This endpoint lets them
+// poll proactively so the dashboard can warn before traffic breaks.
+//
+// Security:
+//   - URL tenant_slug MUST resolve to the same tenant as the JWT's
+//     org claim — 403 TENANT_MISMATCH otherwise. Without this guard
+//     an EndUser with a valid JWT for tenant A could read tenant B's
+//     pool by typing the slug.
+//   - Response struct (endUserPoolView) is a strict whitelist — admin
+//     fields (ceiling policy, owner_user_id, alert_threshold_pct,
+//     reset_period, last_topup_at, draws) never serialise.
+//   - ErrPoolNotFound returns 200 with the "unlimited" projection, not
+//     404 — matches the relay gate semantic where absence = unlimited.
+func GetCreditPoolForEndUser(c *gin.Context) {
+	tenantCtx, err := middleware.GetTenantContext(c)
+	if err != nil || tenantCtx == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success":    false,
+			"message":    "Tenant context not found",
+			"error_code": "UNAUTHENTICATED",
+		})
+		return
+	}
+
+	tenant, terr := repo.GetTenantBySlug(c.Param("tenant_slug"))
+	if terr != nil || tenant == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success":    false,
+			"message":    "Tenant not found",
+			"error_code": "TENANT_NOT_FOUND",
+		})
+		return
+	}
+
+	if tenant.Id != tenantCtx.TenantID {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success":    false,
+			"message":    "Authenticated tenant does not match URL slug",
+			"error_code": "TENANT_MISMATCH",
+		})
+		return
+	}
+
+	pool, perr := repo.GetTenantCreditPool(tenant.Id)
+	if perr != nil {
+		if errors.Is(perr, repo.ErrPoolNotFound) {
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"data": endUserPoolView{
+					CurrentBalance: nil,
+					MaxBalance:     nil,
+					Health:         "unlimited",
+				},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success":    false,
+			"message":    "Failed to read credit pool: " + perr.Error(),
+			"error_code": "POOL_READ_FAILED",
+		})
+		return
+	}
+
+	view := endUserPoolView{Health: poolHealthForEndUser(pool)}
+	// Always expose current_balance — informative even for unlimited.
+	cb := pool.CurrentBalance
+	view.CurrentBalance = &cb
+	if pool.MaxBalance != repo.PoolMaxBalanceUnlimited {
+		mb := pool.MaxBalance
+		view.MaxBalance = &mb
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": view})
 }
 
 // TopupCreditPool funds the pool from the actor's platform wallet.
