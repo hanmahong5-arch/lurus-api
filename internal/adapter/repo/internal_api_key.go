@@ -142,6 +142,30 @@ func UpdateInternalApiKey(id int, name string, scopes []string, expiresAt int64,
 	}).Error
 }
 
+// InternalKeyAllowedForTenant returns true iff a row exists in
+// internal_api_key_tenants binding the given (api_key_id, tenant_id) pair.
+//
+// Phase 2 self-audit (2026-05-19) closed a cross-tenant Provisioning Create
+// hole: any holder of a ScopeProvisioning key could create tokens for any
+// tenant slug because creator_user_id was used only for attribution, never
+// as a permission boundary. Until InternalApiKey gains a first-class
+// tenant_id column (planned: migration 014 after Phase 3 STAGE drill),
+// platform admins MUST INSERT one row per (key, tenant) authorisation into
+// internal_api_key_tenants. Empty whitelist → deny-all (fail-closed).
+//
+// Any DB error is treated as deny — the safer half of the trade-off, since
+// the alternative is silent cross-tenant access during a Postgres blip.
+func InternalKeyAllowedForTenant(keyID int, tenantID string) bool {
+	if keyID <= 0 || tenantID == "" {
+		return false
+	}
+	var count int64
+	err := DB.Table("internal_api_key_tenants").
+		Where("api_key_id = ? AND tenant_id = ?", keyID, tenantID).
+		Count(&count).Error
+	return err == nil && count > 0
+}
+
 // GetAvailableScopes returns all available scopes for UI
 func GetAvailableScopes() []map[string]string {
 	return []map[string]string{

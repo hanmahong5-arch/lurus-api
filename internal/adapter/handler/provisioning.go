@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -63,6 +64,28 @@ func CreateProvisionedKey(c *gin.Context) {
 	creatorUserID := 0
 	if apiKey != nil {
 		creatorUserID = apiKey.CreatedBy
+	}
+
+	// SECURITY (Phase 2 self-audit 2026-05-19): prevent cross-tenant key
+	// issuance. ScopeProvisioning by itself did not bound which tenants the
+	// key could write to; a leaked or misissued Reseller key could mint
+	// tokens for any tenant slug. Until InternalApiKey gains a tenant_id
+	// column (planned migration 014), platform admins must INSERT one row
+	// per (key, tenant) into internal_api_key_tenants. Empty whitelist =
+	// deny-all (fail-closed by design).
+	keyID := 0
+	if apiKey != nil {
+		keyID = apiKey.Id
+	}
+	if !repo.InternalKeyAllowedForTenant(keyID, tenant.Id) {
+		common.SysLog(fmt.Sprintf("Provisioning: cross-tenant denied key=%d tenant=%s creator=%d",
+			keyID, tenant.Id, creatorUserID))
+		c.JSON(http.StatusForbidden, gin.H{
+			"success":    false,
+			"message":    "API key not authorized for this tenant",
+			"error_code": "TENANT_NOT_AUTHORIZED",
+		})
+		return
 	}
 
 	tokenKey, err := app.GenerateTokenKey()
