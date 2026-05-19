@@ -249,6 +249,43 @@ phase2_swarm_2026_05_18:
     G3_pilot_reseller_commit:   pending
 
 # ============================================================
+# PHASE 2 SELF-AUDIT — P0 reliability close-out (2026-05-19)
+# ============================================================
+phase2_self_audit_2026_05_19:
+  trigger: "user reliability self-test: 'every button / jump / edge case'"
+  audit_doc: "doc/audit/2026-05-19-phase2-self-audit.md"
+  scope: "P0 only — three confirmed cash-path / tenant-isolation / ops bugs; P1/P2 deferred to Phase 3 STAGE drill"
+  commits:
+    b1_video_router_pool_gate:    d4a540a4   # feat(relay): gate video routes with PoolBalanceCheck
+    b2_provisioning_tenant_check: 80e674ad   # feat(provisioning): enforce tenant ownership on key creation
+    b3_nats_fail_closed:          ceaa3948   # fix(nats): fail-closed on pool threshold mark-fired
+  verified:
+    go_build: clean
+    go_vet:   clean
+    nats_tests: "9/9 pool_threshold cases (was 8; +1 mark-fail, +1 inverted contract)"
+    repo_tests: "TestInternalKeyAllowedForTenant (skips without TEST_POSTGRES_DSN; compiles + skip-path PASS)"
+  fail_closed_deploy_warning: |
+    Migration 013 creates internal_api_key_tenants — empty after install,
+    so EVERY Provisioning Create returns 403 until an operator INSERTs
+    at least one (api_key_id, tenant_id) row. Intended behaviour, NOT a bug.
+  p1_p2_risk_register_deferred:
+    C1: "5 admin + 2 provisioning handlers untested → STAGE smoke"
+    C2: "quota.go Phase 2.5 integration untested → STAGE e2e"
+    C3: "wallet-revert two-phase commit untested → STAGE topup drill with forced WalletDebit failure"
+    C4: "frontend CreditPoolDrawer lifecycle untested → Phase 3 Playwright"
+    C5: "frontend 401/500/network paths untested → same"
+    C6: "no-pool-row = unlimited silent bypass → operator runbook (explicit Create required on onboarding)"
+    C7: "concurrent topup+debit race uncovered → STAGE burst drill"
+    C8: "monthly/weekly reset boundary arithmetic uncovered → manual one-cycle verification"
+    C9: "migration 012 backfill on 50M-row tokens table unproven → DBA evaluation pre-PROD"
+    C10: "internal_api_key_tenants seeding manual → operator runbook + future admin UI"
+  not_claimed_per_4_1_6:
+    - "P1/P2 surfaces verified — markers only, no STAGE measurement yet"
+    - "Migration 013 safe on populated keys table — CREATE TABLE only, unproven"
+    - "Phase 3 STAGE drill complete"
+    - "Migration 014 (Option A vs B) decided"
+
+# ============================================================
 # OPEN STRATEGIC DECISIONS (need Anita confirmation)
 # ============================================================
 open_decisions:
