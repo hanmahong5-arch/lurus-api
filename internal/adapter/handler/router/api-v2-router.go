@@ -48,6 +48,14 @@ func SetApiV2Router(router *gin.Engine) {
 		// current_balance / max_balance / health are serialised.
 		apiV2.GET("/:tenant_slug/credit-pool/me", middleware.ZitadelAuth(), handler.GetCreditPoolForEndUser)
 
+		// Playground multi-model fan-out (2026-05-19). Session auth — runs
+		// the user's prompt against N models in parallel via in-process
+		// self-HTTP loopback through /v1/chat/completions, reusing the
+		// existing TokenAuth → Distribute → Relay pipeline. Per-column
+		// errors do not fail the whole call (each cell carries its own
+		// {content, latency_ms, prompt_tokens, completion_tokens, error_code}).
+		apiV2.POST("/:tenant_slug/playground/run", middleware.UserAuth(), handler.PlaygroundFanOut)
+
 		// ================================================================
 		// Tenant-scoped Token Management (session auth)
 		// ================================================================
