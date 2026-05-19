@@ -25,6 +25,13 @@ type Token struct {
 	Group              string         `json:"group" gorm:"default:''"`
 	CrossGroupRetry    bool           `json:"cross_group_retry"`
 	IdentityAccountID  int64          `json:"identity_account_id" gorm:"default:0;index:idx_identity_account,where:identity_account_id > 0"` // lurus-platform account ID
+	// CreatorUserID is the users.id of the Reseller who issued this key via the
+	// Provisioning API (POST /internal/v1/provisioning/tenants/:slug/keys).
+	// 0 = legacy / non-provisioned key. See ADR 2026-05-18 §3.3.
+	CreatorUserId int            `json:"creator_user_id" gorm:"default:0;index:idx_tokens_creator_user_id,where:creator_user_id > 0"`
+	// LastUsedAt is updated on relay hit for Provisioning-issued keys. Unix
+	// seconds. 0 = never used. See ADR 2026-05-18 §3.3.
+	LastUsedAt    int64          `json:"last_used_at" gorm:"default:0"`
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
 }
 

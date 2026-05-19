@@ -270,6 +270,9 @@ func migrateDB() error {
 		// OpenRouter free-model sync
 		&entity.OpenRouterSyncJob{},
 		&entity.ModelUsageStat{},
+		// Tenant credit pools (Reseller mode, ADR 2026-05-18)
+		&entity.TenantCreditPool{},
+		&entity.TenantCreditPoolDraw{},
 	)
 	if err != nil {
 		return err
@@ -318,6 +321,9 @@ func migrateDBFast() error {
 		// OpenRouter free-model sync
 		{&entity.OpenRouterSyncJob{}, "OpenRouterSyncJob"},
 		{&entity.ModelUsageStat{}, "ModelUsageStat"},
+		// Tenant credit pools (Reseller mode, ADR 2026-05-18)
+		{&entity.TenantCreditPool{}, "TenantCreditPool"},
+		{&entity.TenantCreditPoolDraw{}, "TenantCreditPoolDraw"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))

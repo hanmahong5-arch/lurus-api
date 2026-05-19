@@ -15,6 +15,8 @@ type Tenant struct {
 	Status       int            `json:"status" gorm:"type:int;default:1;index"`
 	PlanType     string         `json:"plan_type" gorm:"size:32;default:'free';index"`
 	MaxUsers     int            `json:"max_users" gorm:"type:int;default:100"`
+	// Deprecated: superseded by tenant_credit_pools.max_balance in ADR 2026-05-18
+	// (Accepted §9 Q3). Kept for backward compatibility; removed in a Q4 migration.
 	MaxQuota     int64          `json:"max_quota" gorm:"type:bigint;default:1000000"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
