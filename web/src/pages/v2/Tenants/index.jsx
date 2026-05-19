@@ -17,7 +17,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import HFShell from '../../../components/hifi/HFShell';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { API, showError, showSuccess } from '../../../helpers';
 import CreditPoolDrawer from './CreditPoolDrawer';
 
@@ -317,6 +319,7 @@ const StatsDrawer = ({ tenant, onClose }) => {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 const HFTenants = () => {
+  const { t } = useTranslation();
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
@@ -325,6 +328,9 @@ const HFTenants = () => {
   const [statsTarget, setStatsTarget] = useState(null); // tenant object for stats drawer
   const [poolTarget, setPoolTarget] = useState(null); // tenant object for credit-pool drawer
   const [actioning, setActioning] = useState(null); // tenant id being actioned
+  // Tier 1.3: typed-confirmation for enable / disable / suspend. The
+  // pending action is { tenant, action } when armed; null when closed.
+  const [actionConfirm, setActionConfirm] = useState(null);
 
   const searchRef = useRef(null);
 
@@ -357,11 +363,16 @@ const HFTenants = () => {
     return () => clearTimeout(t);
   }, [keyword, fetchTenants]);
 
-  const handleAction = async (tenant, action) => {
+  const handleAction = (tenant, action) => {
+    setActionConfirm({ tenant, action });
+  };
+
+  const performAction = async () => {
+    if (!actionConfirm) return;
+    const { tenant, action } = actionConfirm;
     const label = { enable: 'enable', disable: 'disable', suspend: 'suspend' }[
       action
     ];
-    if (!window.confirm(`${label} tenant "${tenant.Name}"?`)) return;
     setActioning(tenant.Id);
     try {
       const res = await API.post(
@@ -370,6 +381,7 @@ const HFTenants = () => {
       );
       if (res?.data?.success) {
         showSuccess(`Tenant ${label}d`);
+        setActionConfirm(null);
         await fetchTenants(keyword);
       }
     } catch (_) {
@@ -708,6 +720,24 @@ const HFTenants = () => {
           onClose={() => setPoolTarget(null)}
         />
       )}
+
+      <ConfirmDialog
+        visible={!!actionConfirm}
+        title={t('对租户 "{{name}}" 执行 {{action}} 操作?', {
+          name: actionConfirm?.tenant?.Name || '',
+          action: actionConfirm?.action || '',
+        })}
+        consequenceList={[t('该操作会影响该租户下所有 token 与 channel')]}
+        confirmText={actionConfirm?.tenant?.Name || ''}
+        confirmButtonType={
+          actionConfirm?.action === 'enable' ? 'warning' : 'danger'
+        }
+        onConfirm={performAction}
+        onCancel={() =>
+          !(actioning && actioning === actionConfirm?.tenant?.Id) &&
+          setActionConfirm(null)
+        }
+      />
     </HFShell>
   );
 };

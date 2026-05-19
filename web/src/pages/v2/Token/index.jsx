@@ -18,7 +18,9 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import HFShell from '../../../components/hifi/HFShell';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { API, showError, showSuccess } from '../../../helpers';
 
 const BASE_URL = 'https://api.lurus.cn/v1';
@@ -355,6 +357,7 @@ const LANG_TABS = [
 const HFToken = () => {
   const navigate = useNavigate();
   const tenantSlug = useTenantSlug();
+  const { t } = useTranslation();
 
   const [tokens, setTokens] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -366,6 +369,9 @@ const HFToken = () => {
   const [newlyCreatedKey, setNewlyCreatedKey] = useState(null);
   const [editField, setEditField] = useState(null); // 'models'|'cap'|'expires'|'ips'
   const [saving, setSaving] = useState(false);
+  // Tier 1.3: confirm dialog state for rotate / revoke. `intent` is the
+  // verb so a single dialog handles both flows without duplicating layout.
+  const [confirmIntent, setConfirmIntent] = useState(null); // 'rotate' | 'revoke' | null
 
   const fetchTokens = useCallback(async () => {
     setLoading(true);
@@ -423,14 +429,20 @@ const HFToken = () => {
     });
   };
 
-  const handleRotate = async () => {
+  // Tier 1.3: rotate / revoke route through ConfirmDialog. The handlers
+  // below open the dialog; the actual mutation happens in performRotate /
+  // performRevoke once the user types the token name and clicks Confirm.
+  const handleRotate = () => {
     if (!token) return;
-    if (
-      !window.confirm(
-        `Rotate key for "${token.Name}"? The old key stops working immediately.`,
-      )
-    )
-      return;
+    setConfirmIntent('rotate');
+  };
+
+  const handleRevoke = () => {
+    if (!token) return;
+    setConfirmIntent('revoke');
+  };
+
+  const performRotate = async () => {
     setSaving(true);
     try {
       const res = await API.post(
@@ -443,6 +455,7 @@ const HFToken = () => {
         setRotatedKeys((prev) => ({ ...prev, [token.Id]: newKey }));
         setRevealed((prev) => new Set([...prev, token.Id]));
         showSuccess('Key rotated — copy the new key now.');
+        setConfirmIntent(null);
       }
     } catch (_) {
     } finally {
@@ -450,15 +463,13 @@ const HFToken = () => {
     }
   };
 
-  const handleRevoke = async () => {
-    if (!token) return;
-    if (!window.confirm(`Revoke token "${token.Name}"? This cannot be undone.`))
-      return;
+  const performRevoke = async () => {
     setSaving(true);
     try {
       const res = await API.delete(`/api/v2/${tenantSlug}/tokens/${token.Id}`);
       if (res?.data?.success) {
         showSuccess('Token revoked');
+        setConfirmIntent(null);
         await fetchTokens();
       }
     } catch (_) {
@@ -996,6 +1007,25 @@ const HFToken = () => {
           onClose={() => setCreating(false)}
         />
       )}
+
+      <ConfirmDialog
+        visible={confirmIntent === 'revoke'}
+        title={t('撤销令牌 "{{name}}"?', { name: token?.Name || '' })}
+        consequenceList={[t('旧密钥将立即失效'), t('此操作无法撤销')]}
+        confirmText={token?.Name || ''}
+        onConfirm={performRevoke}
+        onCancel={() => !saving && setConfirmIntent(null)}
+      />
+
+      <ConfirmDialog
+        visible={confirmIntent === 'rotate'}
+        title={t('轮换密钥 "{{name}}"?', { name: token?.Name || '' })}
+        consequenceList={[t('旧密钥将立即失效')]}
+        confirmText={token?.Name || ''}
+        confirmButtonType='warning'
+        onConfirm={performRotate}
+        onCancel={() => !saving && setConfirmIntent(null)}
+      />
     </HFShell>
   );
 };

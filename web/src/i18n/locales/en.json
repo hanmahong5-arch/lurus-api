@@ -2721,6 +2721,15 @@
     "settings_group_ops_desc": "Only needed when running in external mode",
     "settings_group_mode": "Site Mode",
     "settings_group_mode_desc": "Switch between system operating modes",
-    "settings_ops_selfuse_hint": "Self-use mode is active. The settings below are usually not needed"
+    "settings_ops_selfuse_hint": "Self-use mode is active. The settings below are usually not needed",
+    "请输入 {{name}} 以确认操作:": "Type {{name}} to confirm:",
+    "此操作无法撤销": "This action cannot be undone.",
+    "撤销令牌 \"{{name}}\"?": "Revoke token \"{{name}}\"?",
+    "旧密钥将立即失效": "The existing key will stop working immediately.",
+    "轮换密钥 \"{{name}}\"?": "Rotate key for \"{{name}}\"?",
+    "删除渠道 \"{{name}}\" ?": "Delete channel \"{{name}}\"?",
+    "停止通过此渠道路由请求": "Requests will no longer route through this channel.",
+    "对租户 \"{{name}}\" 执行 {{action}} 操作?": "Run {{action}} on tenant \"{{name}}\"?",
+    "该操作会影响该租户下所有 token 与 channel": "This affects every token and channel under this tenant."
   }
 }

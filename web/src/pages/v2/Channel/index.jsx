@@ -23,7 +23,9 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 import HFShell from '../../../components/hifi/HFShell';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { API, showError, showSuccess } from '../../../helpers';
 
 /*
@@ -401,8 +403,10 @@ const ChannelModal = ({ tenantSlug, existing, onDone, onClose }) => {
 // ─── Expanded row detail ──────────────────────────────────────────────────────
 
 const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
+  const { t } = useTranslation();
   const [editField, setEditField] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const mappings = parseMapping(channel.ModelMapping);
 
@@ -441,13 +445,10 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
     }
   };
 
-  const handleDelete = async () => {
-    if (
-      !window.confirm(
-        `Delete channel "${channel.Name}"? This cannot be undone.`,
-      )
-    )
-      return;
+  // Tier 1.3: open the typed-confirmation dialog instead of window.confirm.
+  const handleDelete = () => setConfirmDelete(true);
+
+  const performDelete = async () => {
     setSaving(true);
     try {
       const res = await API.delete(
@@ -455,6 +456,7 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
       );
       if (res?.data?.success) {
         showSuccess('Channel deleted');
+        setConfirmDelete(false);
         onRefresh();
       }
     } catch (_) {
@@ -659,6 +661,15 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        visible={confirmDelete}
+        title={t('删除渠道 "{{name}}" ?', { name: channel.Name })}
+        consequenceList={[t('停止通过此渠道路由请求'), t('此操作无法撤销')]}
+        confirmText={channel.Name}
+        onConfirm={performDelete}
+        onCancel={() => !saving && setConfirmDelete(false)}
+      />
     </div>
   );
 };
