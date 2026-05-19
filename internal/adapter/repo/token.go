@@ -387,6 +387,44 @@ func CountUserTokens(userId int) (int64, error) {
 	return total, err
 }
 
+// GetProvisionedTokensByTenant returns Tokens issued via the Provisioning API
+// for a specific (Reseller user, tenant) pair, ordered by id DESC. Used by
+// GET /internal/v1/provisioning/tenants/:slug/keys (Tier 1.1, 2026-05-19).
+//
+// Filters:
+//   - creator_user_id = creatorUserID limits results to keys minted by THIS
+//     Reseller — keeps one Reseller's LIST output from leaking another's
+//     keys even when both happen to write to the same tenant via separate
+//     Provisioning keys. Legacy tokens (creator_user_id = 0) never show up.
+//   - tenant_id = tenantID narrows to the URL-bound tenant scope.
+//   - includeRevoked=false adds status = TokenStatusEnabled. GORM's
+//     soft-delete (DeletedAt) is always applied by Find — revoked rows
+//     would otherwise leak via re-enabled status anomalies.
+//
+// limit / offset are clamped at the handler; the repo trusts the window.
+func GetProvisionedTokensByTenant(creatorUserID int, tenantID string, includeRevoked bool, offset, limit int) ([]*Token, error) {
+	var tokens []*Token
+	q := DB.Where("creator_user_id = ? AND tenant_id = ?", creatorUserID, tenantID)
+	if !includeRevoked {
+		q = q.Where("status = ?", common.TokenStatusEnabled)
+	}
+	err := q.Order("id DESC").Offset(offset).Limit(limit).Find(&tokens).Error
+	return tokens, err
+}
+
+// CountProvisionedTokensByTenant returns the total row count matching
+// GetProvisionedTokensByTenant — used for pagination metadata in the
+// LIST response. Filter semantics MUST stay in sync with the Get above.
+func CountProvisionedTokensByTenant(creatorUserID int, tenantID string, includeRevoked bool) (int64, error) {
+	var total int64
+	q := DB.Model(&Token{}).Where("creator_user_id = ? AND tenant_id = ?", creatorUserID, tenantID)
+	if !includeRevoked {
+		q = q.Where("status = ?", common.TokenStatusEnabled)
+	}
+	err := q.Count(&total).Error
+	return total, err
+}
+
 // BatchDeleteTokens 删除指定用户的一组令牌，返回成功删除数量
 func BatchDeleteTokens(ids []int, userId int) (int, error) {
 	if len(ids) == 0 {

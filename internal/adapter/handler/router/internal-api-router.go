@@ -134,6 +134,7 @@ func SetInternalApiRouter(router *gin.Engine) {
 	provisioningGroup.Use(middleware.RequireScope(repo.ScopeProvisioning))
 	{
 		provisioningGroup.POST("/tenants/:slug/keys", handler.CreateProvisionedKey)
+		provisioningGroup.GET("/tenants/:slug/keys", handler.ListProvisionedKeys)
 		provisioningGroup.DELETE("/tenants/:slug/keys/:key_id", handler.RevokeProvisionedKey)
 	}
 }

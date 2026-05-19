@@ -149,6 +149,136 @@ func CreateProvisionedKey(c *gin.Context) {
 	})
 }
 
+// ListProvisionedKeys returns Provisioning-issued tokens for a tenant, scoped
+// to the actor key's creator user. Route:
+//
+//	GET /internal/v1/provisioning/tenants/:slug/keys
+//	    ?limit=20&offset=0&include_revoked=false
+//
+// Tier 1.1 (2026-05-19): customers using the Provisioning API had no way to
+// recover the list of keys they had previously issued — only the one-time
+// plaintext view from Create. This endpoint closes that gap.
+//
+// Response fields are an explicit whitelist (id / name / status / quota /
+// expires_at / created_at / last_used_at / created_by_user_id). The raw
+// key, key_hash, and model_limits payload are never serialised so the
+// LIST output is safe to log and forward.
+func ListProvisionedKeys(c *gin.Context) {
+	slug := c.Param("slug")
+	if slug == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success":    false,
+			"message":    "tenant slug required",
+			"error_code": "INVALID_TENANT_SLUG",
+		})
+		return
+	}
+
+	tenant, err := repo.GetTenantBySlug(slug)
+	if err != nil || tenant == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success":    false,
+			"message":    "Tenant not found",
+			"error_code": "TENANT_NOT_FOUND",
+		})
+		return
+	}
+
+	keyInterface, _ := c.Get("internal_api_key")
+	apiKey, _ := keyInterface.(*repo.InternalApiKey)
+
+	// SECURITY: same tenant guard as CreateProvisionedKey — narrow keys must
+	// be whitelisted for the tenant, ScopeAll bypasses. Without this check a
+	// leaked Reseller key could enumerate sibling tenants' provisioned keys.
+	if !repo.InternalKeyAllowedForTenant(apiKey, tenant.Id) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success":    false,
+			"message":    "API key not authorized for this tenant",
+			"error_code": "TENANT_NOT_AUTHORIZED",
+		})
+		return
+	}
+
+	// Pagination bounds: reject limit < 1 outright (catches ?limit=0 which
+	// would silently return nothing); clamp values > 100 to 100.
+	limitRaw := c.DefaultQuery("limit", "20")
+	limit, err := strconv.Atoi(limitRaw)
+	if err != nil || limit < 1 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success":    false,
+			"message":    "limit must be an integer between 1 and 100",
+			"error_code": "INVALID_PAGINATION",
+		})
+		return
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	offsetRaw := c.DefaultQuery("offset", "0")
+	offset, err := strconv.Atoi(offsetRaw)
+	if err != nil || offset < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success":    false,
+			"message":    "offset must be a non-negative integer",
+			"error_code": "INVALID_PAGINATION",
+		})
+		return
+	}
+
+	includeRevoked := c.Query("include_revoked") == "true"
+
+	creatorUserID := 0
+	if apiKey != nil {
+		creatorUserID = apiKey.CreatedBy
+	}
+
+	tokens, err := repo.GetProvisionedTokensByTenant(creatorUserID, tenant.Id, includeRevoked, offset, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to list provisioned tokens: " + err.Error(),
+		})
+		return
+	}
+
+	total, err := repo.CountProvisionedTokensByTenant(creatorUserID, tenant.Id, includeRevoked)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to count provisioned tokens: " + err.Error(),
+		})
+		return
+	}
+
+	items := make([]gin.H, 0, len(tokens))
+	for _, t := range tokens {
+		items = append(items, gin.H{
+			"id":                 t.Id,
+			"name":               t.Name,
+			"status":             t.Status,
+			"unlimited_quota":    t.UnlimitedQuota,
+			"remain_quota":       t.RemainQuota,
+			"used_quota":         t.UsedQuota,
+			"group":              t.Group,
+			"expires_at":         t.ExpiredTime,
+			"created_at":         t.CreatedTime,
+			"last_used_at":       t.LastUsedAt,
+			"created_by_user_id": t.CreatorUserId,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"items":  items,
+			"total":  total,
+			"limit":  limit,
+			"offset": offset,
+		},
+	})
+}
+
 // RevokeProvisionedKey soft-deletes a Token row issued via the Provisioning
 // API. Route: DELETE /internal/v1/provisioning/tenants/:slug/keys/:key_id.
 //
