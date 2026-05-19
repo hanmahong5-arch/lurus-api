@@ -561,6 +561,9 @@ const HFToken = () => {
                 </div>
                 <div className='mono faint' style={{ fontSize: 9, marginTop: 2 }}>
                   created {relTime(t.CreatedTime)} · last used {relTime(t.AccessedTime)}
+                  {t.CreatorUserId > 0 && (
+                    <> · by user #{t.CreatorUserId}</>
+                  )}
                 </div>
                 <div className='muted' style={{ fontSize: 11, marginTop: 2 }}>
                   {fmtModels(t)}

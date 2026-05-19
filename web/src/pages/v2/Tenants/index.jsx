@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import HFShell from '../../../components/hifi/HFShell';
 import { API, showError, showSuccess } from '../../../helpers';
+import CreditPoolDrawer from './CreditPoolDrawer';
 
 /* HiFi 9 — Tenants admin. Wired to /api/v2/admin/tenants (2026-05-11). */
 
@@ -265,6 +266,7 @@ const HFTenants = () => {
   const [keyword, setKeyword] = useState('');
   const [creating, setCreating] = useState(false);
   const [statsTarget, setStatsTarget] = useState(null); // tenant object for stats drawer
+  const [poolTarget, setPoolTarget] = useState(null);   // tenant object for credit-pool drawer
   const [actioning, setActioning] = useState(null); // tenant id being actioned
 
   const searchRef = useRef(null);
@@ -502,6 +504,14 @@ const HFTenants = () => {
                             >
                               stats
                             </button>
+                            <button
+                              type='button'
+                              className='btn ghost sm'
+                              disabled={isActioning}
+                              onClick={() => setPoolTarget(t)}
+                            >
+                              pool
+                            </button>
                             {t.Status !== 1 && (
                               <button
                                 type='button'
@@ -551,6 +561,14 @@ const HFTenants = () => {
 
       {statsTarget && (
         <StatsDrawer tenant={statsTarget} onClose={() => setStatsTarget(null)} />
+      )}
+
+      {poolTarget && (
+        <CreditPoolDrawer
+          tenantId={poolTarget.Id}
+          tenantName={poolTarget.Name}
+          onClose={() => setPoolTarget(null)}
+        />
       )}
     </HFShell>
   );
