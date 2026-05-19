@@ -829,13 +829,22 @@ func validateIDToken(idToken string, expectedNonce string) (*IDTokenClaims, erro
 		return nil, fmt.Errorf("invalid ID token claims type")
 	}
 
-	// Validate issuer
+	if err := validateIDTokenClaims(claims, expectedNonce); err != nil {
+		return nil, err
+	}
+	return claims, nil
+}
+
+// validateIDTokenClaims performs OIDC claim-level checks on an already-parsed
+// IDTokenClaims: issuer, audience, expiry, nonce, issued-at. Signature
+// verification is the caller's responsibility (see validateIDToken). Split out
+// so unit tests can exercise claim logic without an initialized JWKS manager.
+func validateIDTokenClaims(claims *IDTokenClaims, expectedNonce string) error {
 	expectedIssuer := os.Getenv("ZITADEL_ISSUER")
 	if claims.Issuer != expectedIssuer {
-		return nil, fmt.Errorf("invalid issuer: expected %s, got %s", expectedIssuer, claims.Issuer)
+		return fmt.Errorf("invalid issuer: expected %s, got %s", expectedIssuer, claims.Issuer)
 	}
 
-	// Validate audience (should contain our client ID)
 	expectedAudience := os.Getenv("ZITADEL_CLIENT_ID")
 	audienceValid := false
 	for _, aud := range claims.Audience {
@@ -845,25 +854,22 @@ func validateIDToken(idToken string, expectedNonce string) (*IDTokenClaims, erro
 		}
 	}
 	if !audienceValid {
-		return nil, fmt.Errorf("invalid audience: client_id %s not found in audience", expectedAudience)
+		return fmt.Errorf("invalid audience: client_id %s not found in audience", expectedAudience)
 	}
 
-	// Validate expiration
 	if claims.ExpiresAt != nil && claims.ExpiresAt.Before(time.Now()) {
-		return nil, fmt.Errorf("ID token has expired")
+		return fmt.Errorf("ID token has expired")
 	}
 
-	// Validate nonce (prevents replay attacks)
 	if expectedNonce != "" && claims.Nonce != expectedNonce {
-		return nil, fmt.Errorf("invalid nonce: expected %s, got %s", expectedNonce, claims.Nonce)
+		return fmt.Errorf("invalid nonce: expected %s, got %s", expectedNonce, claims.Nonce)
 	}
 
-	// Validate issued at (not in the future)
 	if claims.IssuedAt != nil && claims.IssuedAt.After(time.Now().Add(5*time.Minute)) {
-		return nil, fmt.Errorf("ID token issued in the future")
+		return fmt.Errorf("ID token issued in the future")
 	}
 
-	return claims, nil
+	return nil
 }
 
 // ============================================================================

@@ -106,16 +106,15 @@ func TestValidateIDToken_InvalidIssuer(t *testing.T) {
 
 	os.Setenv("ZITADEL_CLIENT_ID", "test-client-id")
 
-	// Create a token with wrong issuer
+	// Build claims with wrong issuer. We exercise the claim-only validator so
+	// the test does not need a live JWKS manager (signature verification is a
+	// separate layer, covered by middleware tests).
 	claims := IDTokenClaims{}
 	claims.Issuer = "https://wrong-issuer.example.com"
 	claims.Audience = []string{"test-client-id"}
-	claims.ExpiresAt = nil // No expiration for this test
+	claims.ExpiresAt = nil
 
-	// Create a minimal valid JWT structure (we're testing claim validation, not signature)
-	token := createTestIDToken(t, claims)
-
-	_, err := validateIDToken(token, "")
+	err := validateIDTokenClaims(&claims, "")
 	if err == nil {
 		t.Fatal("expected error for wrong issuer, got nil")
 	}
@@ -135,15 +134,12 @@ func TestValidateIDToken_InvalidAudience(t *testing.T) {
 		os.Setenv("ZITADEL_ISSUER", originalIssuer)
 	}()
 
-	// Create a token with wrong audience
 	claims := IDTokenClaims{}
 	claims.Issuer = "https://issuer.example.com"
 	claims.Audience = []string{"wrong-client-id"}
 	claims.ExpiresAt = nil
 
-	token := createTestIDToken(t, claims)
-
-	_, err := validateIDToken(token, "")
+	err := validateIDTokenClaims(&claims, "")
 	if err == nil {
 		t.Fatal("expected error for wrong audience, got nil")
 	}
@@ -162,16 +158,13 @@ func TestValidateIDToken_ExpiredToken(t *testing.T) {
 		os.Setenv("ZITADEL_ISSUER", originalIssuer)
 	}()
 
-	// Create an expired token
 	claims := IDTokenClaims{}
 	claims.Issuer = "https://issuer.example.com"
 	claims.Audience = []string{"test-client-id"}
 	expiredTime := time.Now().Add(-1 * time.Hour)
 	claims.ExpiresAt = jwt.NewNumericDate(expiredTime)
 
-	token := createTestIDToken(t, claims)
-
-	_, err := validateIDToken(token, "")
+	err := validateIDTokenClaims(&claims, "")
 	if err == nil {
 		t.Fatal("expected error for expired token, got nil")
 	}
@@ -190,16 +183,13 @@ func TestValidateIDToken_InvalidNonce(t *testing.T) {
 		os.Setenv("ZITADEL_ISSUER", originalIssuer)
 	}()
 
-	// Create a token with wrong nonce
 	claims := IDTokenClaims{}
 	claims.Issuer = "https://issuer.example.com"
 	claims.Audience = []string{"test-client-id"}
 	claims.Nonce = "wrong-nonce"
 	claims.ExpiresAt = nil
 
-	token := createTestIDToken(t, claims)
-
-	_, err := validateIDToken(token, "expected-nonce")
+	err := validateIDTokenClaims(&claims, "expected-nonce")
 	if err == nil {
 		t.Fatal("expected error for wrong nonce (replay protection), got nil")
 	}
@@ -218,7 +208,6 @@ func TestValidateIDToken_FutureIssuedAt(t *testing.T) {
 		os.Setenv("ZITADEL_ISSUER", originalIssuer)
 	}()
 
-	// Create a token issued far in the future
 	claims := IDTokenClaims{}
 	claims.Issuer = "https://issuer.example.com"
 	claims.Audience = []string{"test-client-id"}
@@ -226,9 +215,7 @@ func TestValidateIDToken_FutureIssuedAt(t *testing.T) {
 	claims.IssuedAt = jwt.NewNumericDate(futureTime)
 	claims.ExpiresAt = nil
 
-	token := createTestIDToken(t, claims)
-
-	_, err := validateIDToken(token, "")
+	err := validateIDTokenClaims(&claims, "")
 	if err == nil {
 		t.Fatal("expected error for future issued_at, got nil")
 	}
@@ -389,29 +376,3 @@ func TestOAuthState_NonceUniqueness(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-// createTestIDToken creates a minimal JWT for testing (not cryptographically signed)
-// This is for testing claim validation, not signature verification
-func createTestIDToken(t *testing.T, claims IDTokenClaims) string {
-	t.Helper()
-
-	// Create header
-	header := map[string]string{
-		"alg": "RS256",
-		"typ": "JWT",
-	}
-	headerJSON, _ := json.Marshal(header)
-	headerEncoded := base64.RawURLEncoding.EncodeToString(headerJSON)
-
-	// Create claims
-	claimsJSON, _ := json.Marshal(claims)
-	claimsEncoded := base64.RawURLEncoding.EncodeToString(claimsJSON)
-
-	// Create a fake signature (for testing claim validation, not signature)
-	fakeSignature := base64.RawURLEncoding.EncodeToString([]byte("fake-signature"))
-
-	return headerEncoded + "." + claimsEncoded + "." + fakeSignature
-}
