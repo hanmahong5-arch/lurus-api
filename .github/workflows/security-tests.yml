@@ -60,6 +60,14 @@ jobs:
           mv _sibling/zita-sdk-go ../shared/zita-sdk-go
           rmdir _sibling
 
+      - name: Stub web/dist for //go:embed in web/embed.go
+        # web/embed.go uses //go:embed dist; without a placeholder the
+        # whole-module compile in `go test ./internal/...` may still trip
+        # on transitive packages that import web.
+        run: |
+          mkdir -p web/dist
+          echo '<!doctype html><title>stub</title>' > web/dist/index.html
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:

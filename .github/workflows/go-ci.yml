@@ -42,6 +42,14 @@ jobs:
           mv _sibling/lurus-proto-go ../shared/lurus-proto-go
           mv _sibling/zita-sdk-go ../shared/zita-sdk-go
           rmdir _sibling
+      - name: Stub web/dist for //go:embed in web/embed.go
+        # The Go binary embeds web/dist via //go:embed (see web/embed.go).
+        # Production builds run `bun run build` to populate dist; for a
+        # Go-only verify, a placeholder dist/index.html satisfies the embed
+        # without paying the frontend build cost.
+        run: |
+          mkdir -p web/dist
+          echo '<!doctype html><title>stub</title>' > web/dist/index.html
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.x'
@@ -73,6 +81,14 @@ jobs:
           mv _sibling/lurus-proto-go ../shared/lurus-proto-go
           mv _sibling/zita-sdk-go ../shared/zita-sdk-go
           rmdir _sibling
+      - name: Stub web/dist for //go:embed in web/embed.go
+        # The Go binary embeds web/dist via //go:embed (see web/embed.go).
+        # Production builds run `bun run build` to populate dist; for a
+        # Go-only verify, a placeholder dist/index.html satisfies the embed
+        # without paying the frontend build cost.
+        run: |
+          mkdir -p web/dist
+          echo '<!doctype html><title>stub</title>' > web/dist/index.html
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.x'
@@ -111,6 +127,14 @@ jobs:
           mv _sibling/lurus-proto-go ../shared/lurus-proto-go
           mv _sibling/zita-sdk-go ../shared/zita-sdk-go
           rmdir _sibling
+      - name: Stub web/dist for //go:embed in web/embed.go
+        # The Go binary embeds web/dist via //go:embed (see web/embed.go).
+        # Production builds run `bun run build` to populate dist; for a
+        # Go-only verify, a placeholder dist/index.html satisfies the embed
+        # without paying the frontend build cost.
+        run: |
+          mkdir -p web/dist
+          echo '<!doctype html><title>stub</title>' > web/dist/index.html
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.x'
