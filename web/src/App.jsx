@@ -58,6 +58,7 @@ const V2Models = lazy(() => import('./pages/v2/Models'));
 const V2Chat = lazy(() => import('./pages/v2/Chat'));
 const V2Tenants = lazy(() => import('./pages/v2/Tenants'));
 const V2Pricing = lazy(() => import('./pages/v2/Pricing'));
+const V2Redemption = lazy(() => import('./pages/v2/Redemption'));
 const V2Billing = lazy(() => import('./pages/v2/Billing'));
 const V2Settings = lazy(() => import('./pages/v2/Settings'));
 const V2Flows = lazy(() => import('./pages/v2/Flows'));
@@ -341,6 +342,7 @@ function App() {
           ['chat', V2Chat],
           ['tenants', V2Tenants],
           ['pricing', V2Pricing],
+          ['redemption', V2Redemption],
           ['billing', V2Billing],
           ['settings', V2Settings],
           ['flows', V2Flows],

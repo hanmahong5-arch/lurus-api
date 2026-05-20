@@ -90,6 +90,45 @@ func SearchRedemptions(keyword string, startIdx int, num int) (redemptions []*Re
 	return redemptions, total, nil
 }
 
+// GetRedemptionsByTenant lists redemptions for a single tenant. The explicit
+// WHERE clause is defence-in-depth — the TenantPlugin's auto-filter would
+// also apply in production, but the explicit clause keeps the function
+// correct under hermetic tests that don't register the plugin.
+func GetRedemptionsByTenant(tenantID string, startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
+	db := DB.Model(&Redemption{}).Where("tenant_id = ?", tenantID)
+
+	if err = db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if err = db.Order("id desc").Limit(num).Offset(startIdx).Find(&redemptions).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return redemptions, total, nil
+}
+
+// SearchRedemptionsByTenant is the tenant-scoped sibling of SearchRedemptions.
+func SearchRedemptionsByTenant(tenantID string, keyword string, startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
+	query := DB.Model(&Redemption{}).Where("tenant_id = ?", tenantID)
+
+	if id, err := strconv.Atoi(keyword); err == nil {
+		query = query.Where("id = ? OR name LIKE ?", id, keyword+"%")
+	} else {
+		query = query.Where("name LIKE ?", keyword+"%")
+	}
+
+	if err = query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if err = query.Order("id desc").Limit(num).Offset(startIdx).Find(&redemptions).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return redemptions, total, nil
+}
+
 func GetRedemptionById(id int) (*Redemption, error) {
 	if id == 0 {
 		return nil, errors.New("id 为空！")

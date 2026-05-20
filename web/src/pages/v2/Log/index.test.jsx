@@ -167,4 +167,45 @@ describe('Log page', () => {
       expect(screen.getByTestId('wip-banner')).toBeDefined();
     });
   });
+
+  // 4. Export button sets window.location.href to the correct URL with
+  //    the current filter state encoded as query params.
+  it('export button builds correct URL with current filters', async () => {
+    // Capture href assignments via a writable mock on window.location.
+    let assignedHref = '';
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...window.location,
+        set href(v) {
+          assignedHref = v;
+        },
+        get href() {
+          return assignedHref;
+        },
+      },
+    });
+
+    render(<HFLog />);
+
+    // Wait for initial fetch to complete so the Requests tab is active.
+    await waitFor(() => {
+      expect(API.get).toHaveBeenCalled();
+    });
+
+    // Simulate filter inputs.
+    const modelInput = screen.getByPlaceholderText('model name…');
+    const tokenInput = screen.getByPlaceholderText('token name…');
+    fireEvent.change(modelInput, { target: { value: 'gpt-4o' } });
+    fireEvent.change(tokenInput, { target: { value: 'my-token' } });
+
+    // Click the export button (visible on Requests tab).
+    const exportBtn = screen.getByTestId('log-export-btn');
+    fireEvent.click(exportBtn);
+
+    // href must point to the export endpoint for the current tenant slug.
+    expect(assignedHref).toContain('/api/v2/acme/logs/export');
+    expect(assignedHref).toContain('model_name=gpt-4o');
+    expect(assignedHref).toContain('token_name=my-token');
+  });
 });

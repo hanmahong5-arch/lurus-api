@@ -36,6 +36,7 @@ const PATH_TO_ID = {
   models: 'models',
   tenants: 'users',
   pricing: 'pricing',
+  redemption: 'redemption',
   settings: 'settings',
   flows: 'channels',
   states: 'logs',
@@ -167,6 +168,13 @@ const NAV_SECTIONS = [
         href: '/console/v2/pricing',
         glyph: '▥',
         label: 'Pricing',
+        badge: '',
+      },
+      {
+        id: 'redemption',
+        href: '/console/v2/redemption',
+        glyph: '◈',
+        label: 'Redemption',
         badge: '',
       },
       {

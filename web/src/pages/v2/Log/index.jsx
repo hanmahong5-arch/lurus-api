@@ -267,6 +267,33 @@ const HFLog = () => {
         >
           clear
         </button>
+        {tab === 'trace' && (
+          <button
+            type='button'
+            className='btn ghost'
+            data-testid='log-export-btn'
+            onClick={() => {
+              const params = new URLSearchParams();
+              if (filterModel) params.set('model_name', filterModel);
+              if (filterToken) params.set('token_name', filterToken);
+              if (filterStart)
+                params.set(
+                  'start_time',
+                  String(Math.floor(new Date(filterStart).getTime() / 1000)),
+                );
+              if (filterEnd)
+                params.set(
+                  'end_time',
+                  String(Math.floor(new Date(filterEnd).getTime() / 1000)),
+                );
+              const qs = params.toString();
+              window.location.href =
+                `/api/v2/${tenantSlug}/logs/export` + (qs ? `?${qs}` : '');
+            }}
+          >
+            📥 导出 CSV
+          </button>
+        )}
       </div>
 
       {/* Tabs */}

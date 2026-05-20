@@ -106,7 +106,25 @@ func SetApiV2Router(router *gin.Engine) {
 			tenantLogs.GET("", handler.GetLogsV2)
 			tenantLogs.GET("/all", handler.GetAllLogsV2)
 			tenantLogs.GET("/cluster", handler.GetLogClusterV2)
+			// Wave 3 Phase 2 (2026-05-20): CSV export with streaming writer
+			// and a 50k-row hard cap (clamped silently above that).
+			tenantLogs.GET("/export", handler.ExportLogsV2)
 		}
+
+		// ================================================================
+		// Tenant-scoped Redemption Codes (Wave 3 Phase 2 — 2026-05-20)
+		// List / Create / Delete enforce admin role inside the handler;
+		// /redeem is the user-facing redemption endpoint.
+		// ================================================================
+
+		tenantRedemptions := apiV2.Group("/:tenant_slug/redemptions")
+		tenantRedemptions.Use(middleware.UserAuth())
+		{
+			tenantRedemptions.GET("", handler.ListRedemptionsV2)
+			tenantRedemptions.POST("", handler.CreateRedemptionV2)
+			tenantRedemptions.DELETE("/:id", handler.DeleteRedemptionV2)
+		}
+		apiV2.POST("/:tenant_slug/redeem", middleware.UserAuth(), handler.RedeemCodeV2)
 
 		tenantSessions := apiV2.Group("/:tenant_slug/sessions")
 		tenantSessions.Use(middleware.UserAuth())
