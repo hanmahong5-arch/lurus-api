@@ -101,6 +101,15 @@ spec:
               value: "30s"
             - name: LOG_FORMAT
               value: "json"
+            # Lutu APP web_search tool — proxies to Tavily server-side
+            # so the API key stays off-device. When missing the
+            # /api/v2/lutu/search endpoint returns 503 search_disabled.
+            - name: TAVILY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: lurus-newhub-secrets
+                  key: TAVILY_API_KEY
+                  optional: true
           resources:
             requests:
               memory: "256Mi"
