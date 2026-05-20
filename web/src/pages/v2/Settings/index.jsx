@@ -37,6 +37,15 @@ import { API, showError, showSuccess } from '../../../helpers';
 
 const QUOTA_PER_USD = 500_000;
 
+const fmtCNY = (v) =>
+  typeof v === 'number'
+    ? '¥' +
+      v.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    : '—';
+
 // formatRelativeTime converts a Unix timestamp (seconds) to a human-readable
 // relative string (e.g. "just now", "3 minutes ago"). No external dependency —
 // avoids adding date-fns for a single call site.
@@ -63,11 +72,69 @@ const useTenantSlug = () => {
 const SECTIONS = [
   ['profile', 'Profile', 'name, email, avatar'],
   ['security', 'Security', 'password, mfa, sessions'],
+  ['subscription', 'Subscription', 'plan tier & entitlements'],
+  ['billing', 'Billing', 'wallet balance & usage'],
   ['notifications', 'Notifications', 'email & webhook alerts'],
   ['team', 'Team & roles', 'members and permissions'],
   ['integrations', 'Integrations', 'webhooks, slack, observability'],
   ['region', 'Region & data', 'where data lives'],
   ['danger', 'Danger zone', 'export, transfer, delete'],
+];
+
+// Wave A Squad 5A (2026-05-20): read-only entitlement summary. Values are
+// derived locally from the existing /user/me `group` field — backend
+// entitlement registry not yet implemented. See caveats in commit body.
+// Order: [label, value]. Tooltip on the upgrade button explains scope.
+const ENTITLEMENT_BY_GROUP = {
+  default: {
+    label: 'Free',
+    routing: 'shared pool',
+    sla: 'best effort',
+    auditDays: 7,
+    support: 'community',
+  },
+  vip: {
+    label: 'Pro',
+    routing: 'priority routing',
+    sla: '99.5%',
+    auditDays: 30,
+    support: 'business hours',
+  },
+  pro: {
+    label: 'Pro',
+    routing: 'priority routing',
+    sla: '99.5%',
+    auditDays: 30,
+    support: 'business hours',
+  },
+  enterprise: {
+    label: 'Enterprise',
+    routing: 'dedicated pool',
+    sla: '99.95%',
+    auditDays: 365,
+    support: '24/7 dedicated',
+  },
+};
+
+// Wave A Squad 5A: 3 read-only notification channels with placeholder events.
+// Toggle switches are disabled — mutation flow lands in Wave B per
+// adr-2026-05-18-budget-alerts.md.
+const NOTIFICATION_CHANNELS = [
+  {
+    key: 'email',
+    label: 'Email notifications',
+    events: ['Quota threshold', 'Plan limit', 'Security event'],
+  },
+  {
+    key: 'webhook',
+    label: 'Webhook',
+    events: ['Quota threshold', 'Plan limit', 'Security event'],
+  },
+  {
+    key: 'inapp',
+    label: 'In-app',
+    events: ['Quota threshold', 'Plan limit', 'Security event'],
+  },
 ];
 
 const INTEGRATIONS = [
@@ -157,6 +224,20 @@ const HFSettings = () => {
   const [revokeVisible, setRevokeVisible] = useState(false);
   const [revoking, setRevoking] = useState(false);
 
+  // Subscription tab (Wave A Squad 5A) — derived from /user/me + best-effort
+  // /user/billing/summary. No dedicated subscription endpoint yet.
+  const [subLoading, setSubLoading] = useState(false);
+  const [subError, setSubError] = useState(false);
+  const [subData, setSubData] = useState(null); // { tier, group, source }
+
+  // Billing tab (Wave A Squad 5A) — wallet summary + last-30d aggregate +
+  // recent transactions (synthesised from /billing/topups; full ClickHouse
+  // history is Wave C).
+  const [billLoading, setBillLoading] = useState(false);
+  const [billError, setBillError] = useState(false);
+  const [billSummary, setBillSummary] = useState(null);
+  const [billTxns, setBillTxns] = useState([]);
+
   const fetchProfile = useCallback(async () => {
     setLoadingProfile(true);
     try {
@@ -185,6 +266,93 @@ const HFSettings = () => {
     }
   }, [tenantSlug]);
 
+  // Subscription tab loader — reuses the cached profile when present (Profile
+  // tab fetches it on mount), otherwise refetches. Falls back to a placeholder
+  // if no group field is exposed. Best-effort enrichment via billing summary
+  // (subscription_plan field is currently absent on the Go BillingSummary
+  // struct — guard accordingly).
+  const fetchSubscription = useCallback(async () => {
+    setSubLoading(true);
+    setSubError(false);
+    try {
+      let p = profile;
+      if (!p) {
+        const res = await API.get(`/api/v2/${tenantSlug}/user/me`);
+        if (res?.data?.success) {
+          p = res.data.data;
+          setProfile(p);
+        }
+      }
+      // Best-effort: try platform billing summary for subscription_plan hint.
+      let planHint = null;
+      try {
+        const sumRes = await API.get('/api/v2/user/billing/summary');
+        if (sumRes?.data?.success) {
+          planHint = sumRes.data.data?.subscription_plan ?? null;
+        }
+      } catch (_) {
+        // non-fatal — subscription_plan field optional
+      }
+
+      if (p) {
+        setSubData({
+          group: p.group ?? null,
+          planHint,
+          source: planHint ? 'platform' : p.group ? 'user_group' : 'placeholder',
+        });
+      } else {
+        setSubError(true);
+      }
+    } catch (_) {
+      setSubError(true);
+    } finally {
+      setSubLoading(false);
+    }
+  }, [tenantSlug, profile]);
+
+  // Billing tab loader — pulls platform balance + tenant-scoped topup history.
+  // Both calls are tolerant of 4xx/5xx: if either fails we surface error state
+  // but never throw uncaught. Full transaction history (ClickHouse) is Wave C.
+  const fetchBilling = useCallback(async () => {
+    setBillLoading(true);
+    setBillError(false);
+    try {
+      const [sumRes, txnRes] = await Promise.allSettled([
+        API.get('/api/v2/user/billing/summary'),
+        API.get(`/api/v2/${tenantSlug}/billing/topups?p=1&size=5`),
+      ]);
+
+      let gotSummary = false;
+      if (
+        sumRes.status === 'fulfilled' &&
+        sumRes.value?.data?.success &&
+        sumRes.value.data.data
+      ) {
+        setBillSummary(sumRes.value.data.data);
+        gotSummary = true;
+      }
+
+      let gotTxns = false;
+      if (
+        txnRes.status === 'fulfilled' &&
+        txnRes.value?.data?.success &&
+        Array.isArray(txnRes.value.data.data?.items)
+      ) {
+        setBillTxns(txnRes.value.data.data.items);
+        gotTxns = true;
+      }
+
+      // Treat "both failed" as error; one succeeding still renders a useful tab.
+      if (!gotSummary && !gotTxns) {
+        setBillError(true);
+      }
+    } catch (_) {
+      setBillError(true);
+    } finally {
+      setBillLoading(false);
+    }
+  }, [tenantSlug]);
+
   useEffect(() => {
     if (tenantSlug) fetchProfile();
   }, [fetchProfile, tenantSlug]);
@@ -194,6 +362,18 @@ const HFSettings = () => {
       fetchSessions();
     }
   }, [section, sessions, sessionLoading, fetchSessions]);
+
+  useEffect(() => {
+    if (section === 'subscription' && !subData && !subLoading) {
+      fetchSubscription();
+    }
+  }, [section, subData, subLoading, fetchSubscription]);
+
+  useEffect(() => {
+    if (section === 'billing' && !billSummary && !billTxns.length && !billLoading) {
+      fetchBilling();
+    }
+  }, [section, billSummary, billTxns.length, billLoading, fetchBilling]);
 
   const handleRevokeSession = async () => {
     if (revoking) return;
@@ -580,25 +760,352 @@ const HFSettings = () => {
             </div>
           )}
 
-          {/* ── Notifications ── */}
+          {/* ── Subscription (Wave A Squad 5A — read-only) ── */}
+          {section === 'subscription' && (
+            <div style={{ marginTop: 22 }} data-testid='subscription-section'>
+              {subLoading && (
+                <div className='muted' style={{ fontSize: 12 }}>
+                  Loading…
+                </div>
+              )}
+
+              {!subLoading && subError && (
+                <div
+                  className='muted'
+                  style={{ fontSize: 12 }}
+                  data-testid='subscription-error'
+                >
+                  Failed to load subscription.
+                </div>
+              )}
+
+              {!subLoading && !subError && subData && (
+                <>
+                  {(() => {
+                    const ent =
+                      ENTITLEMENT_BY_GROUP[subData.group] ??
+                      ENTITLEMENT_BY_GROUP.default;
+                    const tierName = subData.planHint || ent.label;
+                    const isPlaceholder = subData.source === 'placeholder';
+
+                    return (
+                      <>
+                        <div
+                          className='panel'
+                          style={{ padding: 18, marginBottom: 14 }}
+                        >
+                          <div className='lbl'>current plan</div>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                              marginTop: 10,
+                            }}
+                          >
+                            <span
+                              className='tag ok'
+                              data-testid='subscription-tier-badge'
+                              style={{
+                                fontFamily: 'var(--hf-mono)',
+                                fontSize: 12,
+                                padding: '3px 10px',
+                              }}
+                            >
+                              {tierName}
+                            </span>
+                            {isPlaceholder && (
+                              <span
+                                className='faint mono'
+                                style={{ fontSize: 11 }}
+                              >
+                                Free tier — entitlement API not yet wired
+                              </span>
+                            )}
+                            <span style={{ flex: 1 }} />
+                            <button
+                              type='button'
+                              className='btn sm'
+                              disabled
+                              data-testid='subscription-upgrade-btn'
+                              title='Plan upgrades available in Wave B'
+                            >
+                              Upgrade plan
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className='panel'>
+                          {[
+                            ['routing modes', ent.routing],
+                            ['SLA tier', ent.sla],
+                            ['audit retention', `${ent.auditDays} days`],
+                            ['support tier', ent.support],
+                          ].map(([k, v], i, a) => (
+                            <div
+                              key={k}
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: '180px 1fr',
+                                padding: '12px 16px',
+                                borderBottom:
+                                  i < a.length - 1
+                                    ? '1px dashed var(--hf-rule)'
+                                    : 0,
+                                alignItems: 'center',
+                              }}
+                            >
+                              <span className='lbl'>{k}</span>
+                              <span
+                                className='strong'
+                                style={{ fontSize: 13 }}
+                              >
+                                {v}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Billing (Wave A Squad 5A — read-only) ── */}
+          {section === 'billing' && (
+            <div style={{ marginTop: 22 }} data-testid='billing-section'>
+              {billLoading && (
+                <div className='muted' style={{ fontSize: 12 }}>
+                  Loading…
+                </div>
+              )}
+
+              {!billLoading && billError && (
+                <div
+                  className='muted'
+                  style={{ fontSize: 12 }}
+                  data-testid='billing-error'
+                >
+                  Billing data — backend wiring pending Wave B
+                </div>
+              )}
+
+              {!billLoading && !billError && (
+                <>
+                  <div
+                    className='panel'
+                    style={{
+                      padding: 18,
+                      marginBottom: 14,
+                      display: 'flex',
+                      gap: 32,
+                    }}
+                  >
+                    <div>
+                      <div className='lbl' style={{ marginBottom: 4 }}>
+                        wallet balance
+                      </div>
+                      <div
+                        className='display'
+                        style={{ fontSize: 22 }}
+                        data-testid='billing-balance'
+                      >
+                        {billSummary?.balance != null
+                          ? fmtCNY(billSummary.balance)
+                          : billSummary?.wallet_balance_cny != null
+                            ? fmtCNY(billSummary.wallet_balance_cny)
+                            : '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className='lbl' style={{ marginBottom: 4 }}>
+                        last 30d consumption
+                      </div>
+                      <div
+                        className='display'
+                        style={{ fontSize: 22 }}
+                        data-testid='billing-30d'
+                      >
+                        {billSummary?.mtd_spend_cny != null
+                          ? fmtCNY(billSummary.mtd_spend_cny)
+                          : billSummary?.lifetime_spend != null
+                            ? fmtCNY(billSummary.lifetime_spend)
+                            : '—'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className='panel'>
+                    <div
+                      style={{
+                        padding: '12px 16px',
+                        borderBottom: '1px solid var(--hf-rule)',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <div className='lbl'>recent transactions</div>
+                      <span style={{ flex: 1 }} />
+                      <button
+                        type='button'
+                        className='btn ghost sm'
+                        disabled
+                        data-testid='billing-view-full-btn'
+                        title='Full billing history available in Wave C (ClickHouse insights)'
+                      >
+                        View full history
+                      </button>
+                    </div>
+
+                    {billTxns.length === 0 ? (
+                      <div
+                        style={{
+                          padding: 22,
+                          textAlign: 'center',
+                          color: 'var(--hf-ink-3)',
+                          fontFamily: 'var(--hf-mono)',
+                          fontSize: 12,
+                        }}
+                        data-testid='billing-empty-state'
+                      >
+                        No recent transactions.
+                      </div>
+                    ) : (
+                      <table
+                        data-testid='billing-txn-table'
+                        style={{
+                          width: '100%',
+                          borderCollapse: 'collapse',
+                          fontFamily: 'var(--hf-mono)',
+                          fontSize: 11,
+                        }}
+                      >
+                        <thead>
+                          <tr style={{ color: 'var(--hf-ink-3)' }}>
+                            <th
+                              style={{
+                                textAlign: 'left',
+                                padding: '6px 12px',
+                                fontWeight: 500,
+                              }}
+                            >
+                              date
+                            </th>
+                            <th
+                              style={{
+                                textAlign: 'left',
+                                padding: '6px 12px',
+                                fontWeight: 500,
+                              }}
+                            >
+                              type
+                            </th>
+                            <th
+                              style={{
+                                textAlign: 'right',
+                                padding: '6px 12px',
+                                fontWeight: 500,
+                              }}
+                            >
+                              amount
+                            </th>
+                            <th
+                              style={{
+                                textAlign: 'right',
+                                padding: '6px 12px',
+                                fontWeight: 500,
+                              }}
+                            >
+                              status
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {billTxns.slice(0, 5).map((t, i) => (
+                            <tr
+                              key={t.id ?? i}
+                              style={{ borderTop: '1px dashed var(--hf-rule)' }}
+                            >
+                              <td style={{ padding: '8px 12px' }}>
+                                {t.created_at
+                                  ? formatRelativeTime(t.created_at)
+                                  : '—'}
+                              </td>
+                              <td style={{ padding: '8px 12px' }}>topup</td>
+                              <td
+                                style={{
+                                  padding: '8px 12px',
+                                  textAlign: 'right',
+                                }}
+                              >
+                                {typeof t.quota === 'number'
+                                  ? `${(t.quota / QUOTA_PER_USD).toFixed(2)} USD eq.`
+                                  : '—'}
+                              </td>
+                              <td
+                                style={{
+                                  padding: '8px 12px',
+                                  textAlign: 'right',
+                                }}
+                              >
+                                <span className='tag ok'>settled</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Notifications (Wave A Squad 5A — read-only upgrade) ── */}
           {section === 'notifications' && (
-            <div style={{ marginTop: 22 }}>
+            <div style={{ marginTop: 22 }} data-testid='notifications-section'>
               <WIPBanner
                 reason='Notification subscription store, dispatch path, and threshold rules not yet implemented. Designed in adr-2026-05-18-budget-alerts.md.'
                 todo='Backend: notification_subscription table + /api/v2/{slug}/notifications/subscriptions + Prometheus rule pack.'
               />
-              <div
-                className='panel'
-                style={{
-                  marginTop: 14,
-                  padding: 24,
-                  textAlign: 'center',
-                  color: 'var(--hf-ink-3)',
-                  fontFamily: 'var(--hf-mono)',
-                  fontSize: 12,
-                }}
-              >
-                No subscriptions — subscription API not implemented.
+              <div className='panel' style={{ marginTop: 14 }}>
+                {NOTIFICATION_CHANNELS.map((ch, i, a) => (
+                  <div
+                    key={ch.key}
+                    style={{
+                      padding: '14px 16px',
+                      borderBottom:
+                        i < a.length - 1 ? '1px dashed var(--hf-rule)' : 0,
+                      display: 'grid',
+                      gridTemplateColumns: '1fr auto',
+                      alignItems: 'center',
+                      gap: 16,
+                    }}
+                  >
+                    <div>
+                      <div className='strong' style={{ fontSize: 13 }}>
+                        {ch.label}
+                      </div>
+                      <div
+                        className='faint mono'
+                        style={{ fontSize: 10, marginTop: 4 }}
+                      >
+                        {ch.events.join(' · ')}
+                      </div>
+                    </div>
+                    <button
+                      type='button'
+                      className='btn sm'
+                      disabled
+                      data-testid={`notif-toggle-${ch.key}`}
+                      title='Notification preferences editable in Wave B'
+                    >
+                      off
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           )}

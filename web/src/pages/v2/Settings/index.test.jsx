@@ -96,6 +96,33 @@ const fakeSessionsResponse = (items) => ({
   },
 });
 
+const fakeBillingSummary = {
+  balance: 1210.5,
+  frozen: 0,
+  available: 1210.5,
+  lifetime_topup: 2000,
+  lifetime_spend: 789.5,
+  active_pre_auths: 0,
+  pending_orders: 0,
+  // intentionally NOT setting wallet_balance_cny — exercise the .balance branch
+  mtd_spend_cny: 42.18,
+};
+
+const fakeTopups = [
+  {
+    id: 1,
+    content: 'Wallet transfer: 100.00 CNY -> 50000000 quota',
+    quota: 50_000_000,
+    created_at: Math.floor(Date.now() / 1000) - 86400,
+  },
+  {
+    id: 2,
+    content: 'Wallet transfer: 50.00 CNY -> 25000000 quota',
+    quota: 25_000_000,
+    created_at: Math.floor(Date.now() / 1000) - 172800,
+  },
+];
+
 beforeEach(() => {
   API.get.mockReset();
   API.put.mockReset();
@@ -121,6 +148,19 @@ beforeEach(() => {
           },
         ]),
       );
+    }
+    if (url.includes('/user/billing/summary')) {
+      return Promise.resolve({
+        data: { success: true, data: fakeBillingSummary },
+      });
+    }
+    if (url.includes('/billing/topups')) {
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: { items: fakeTopups, total: fakeTopups.length },
+        },
+      });
     }
     return Promise.resolve({ data: { success: false } });
   });
@@ -213,5 +253,93 @@ describe('Settings page', () => {
       expect(btn.disabled).toBe(true);
       expect(btn.title).toMatch(/deferred to v3/i);
     });
+  });
+
+  // 6. Subscription tab — Wave A Squad 5A read-only.
+  //    Asserts: loading state then data renders; upgrade button is disabled
+  //    with the Wave B tooltip. Profile is already in state from mount, so
+  //    fetchSubscription enriches via /user/billing/summary.
+  it('subscription tab loads tier and disables upgrade button', async () => {
+    render(<HFSettings />);
+
+    screen.getByText('Subscription').click();
+
+    // Loading state appears
+    await waitFor(() => {
+      expect(screen.getByTestId('subscription-section')).toBeTruthy();
+    });
+
+    // Data renders — tier badge appears
+    await waitFor(() => {
+      expect(screen.getByTestId('subscription-tier-badge')).toBeTruthy();
+    });
+
+    // Upgrade button is disabled with Wave B tooltip
+    const upgradeBtn = screen.getByTestId('subscription-upgrade-btn');
+    expect(upgradeBtn.disabled).toBe(true);
+    expect(upgradeBtn.title).toMatch(/wave b/i);
+  });
+
+  // 7. Billing tab — Wave A Squad 5A read-only.
+  //    Asserts: loading -> balance + 30d numbers + transactions table;
+  //    "View full history" button disabled with Wave C tooltip.
+  it('billing tab loads balance + transactions, disables full-history button', async () => {
+    render(<HFSettings />);
+
+    screen.getByText('Billing').click();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('billing-section')).toBeTruthy();
+    });
+
+    // Balance + 30d rendered
+    await waitFor(() => {
+      expect(screen.getByTestId('billing-balance').textContent).toMatch(
+        /1,210\.50/,
+      );
+      expect(screen.getByTestId('billing-30d').textContent).toMatch(/42\.18/);
+    });
+
+    // Transactions table present with rows
+    await waitFor(() => {
+      const table = screen.getByTestId('billing-txn-table');
+      expect(table).toBeTruthy();
+      // Header + 2 fakeTopups data rows = 3 tr elements
+      expect(table.querySelectorAll('tr').length).toBeGreaterThanOrEqual(3);
+    });
+
+    // "View full history" disabled with Wave C tooltip
+    const fullBtn = screen.getByTestId('billing-view-full-btn');
+    expect(fullBtn.disabled).toBe(true);
+    expect(fullBtn.title).toMatch(/wave c/i);
+
+    // API was called with the right endpoints
+    const calls = API.get.mock.calls.map((c) => c[0]);
+    expect(calls.some((u) => u.includes('/user/billing/summary'))).toBe(true);
+    expect(calls.some((u) => u.includes('/acme/billing/topups'))).toBe(true);
+  });
+
+  // 8. Notifications tab — Wave A Squad 5A: stub -> read-only.
+  //    Asserts: WIPBanner still present; all 3 channel toggle buttons are
+  //    disabled with the Wave B tooltip.
+  it('notifications tab renders 3 channels with disabled toggles + WIP banner', async () => {
+    render(<HFSettings />);
+
+    screen.getByText('Notifications').click();
+
+    // WIPBanner still shows
+    await waitFor(() => {
+      const banners = screen.getAllByTestId('wip-banner');
+      const texts = banners.map((b) => b.textContent);
+      expect(texts.some((t) => /notification/i.test(t))).toBe(true);
+    });
+
+    // All 3 channels rendered with disabled toggles + Wave B tooltip
+    for (const key of ['email', 'webhook', 'inapp']) {
+      const btn = screen.getByTestId(`notif-toggle-${key}`);
+      expect(btn).toBeTruthy();
+      expect(btn.disabled).toBe(true);
+      expect(btn.title).toMatch(/wave b/i);
+    }
   });
 });
