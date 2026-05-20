@@ -56,6 +56,16 @@ func SetApiV2Router(router *gin.Engine) {
 		// {content, latency_ms, prompt_tokens, completion_tokens, error_code}).
 		apiV2.POST("/:tenant_slug/playground/run", middleware.UserAuth(), handler.PlaygroundFanOut)
 
+		// Playground named presets (Wave 3 Phase 1). User-scoped CRUD —
+		// each user manages their own preset list, isolated by (tenant, user).
+		playgroundPresets := apiV2.Group("/:tenant_slug/playground/presets")
+		playgroundPresets.Use(middleware.UserAuth())
+		{
+			playgroundPresets.GET("", handler.ListPresetsV2)
+			playgroundPresets.POST("", handler.CreatePresetV2)
+			playgroundPresets.DELETE("/:id", handler.DeletePresetV2)
+		}
+
 		// ================================================================
 		// Tenant-scoped Token Management (session auth)
 		// ================================================================
@@ -82,6 +92,8 @@ func SetApiV2Router(router *gin.Engine) {
 			tenantChannels.POST("", handler.CreateChannelV2)
 			tenantChannels.PUT("/:id", handler.UpdateChannelV2)
 			tenantChannels.DELETE("/:id", handler.DeleteChannelV2)
+			tenantChannels.POST("/:id/test", handler.TestChannelV2)
+			tenantChannels.GET("/:id/upstream-models", handler.FetchUpstreamModelsV2)
 		}
 
 		// ================================================================
@@ -100,6 +112,7 @@ func SetApiV2Router(router *gin.Engine) {
 		tenantSessions.Use(middleware.UserAuth())
 		{
 			tenantSessions.GET("", handler.ListSessionsV2)
+			tenantSessions.DELETE("/current", handler.RevokeCurrentSessionV2)
 		}
 
 		// ================================================================
@@ -113,12 +126,18 @@ func SetApiV2Router(router *gin.Engine) {
 		tenantModels.Use(middleware.UserAuth())
 		{
 			tenantModels.GET("", handler.ListModelsV2)
+			// Wave 3 Phase 1 (2026-05-20): add / delete wired.
+			// Single-model edit deferred to v3 per scope-cut.
+			tenantModels.POST("", handler.CreateModelV2)
+			tenantModels.DELETE("/:id", handler.DeleteModelV2)
 		}
 
 		tenantPricing := apiV2.Group("/:tenant_slug/pricing")
 		tenantPricing.Use(middleware.UserAuth())
 		{
 			tenantPricing.GET("", handler.GetPricingV2)
+			// Wave 3 Phase 1 (2026-05-20): markup write path.
+			tenantPricing.POST("", handler.UpdatePricingV2)
 		}
 
 		tenantBilling := apiV2.Group("/:tenant_slug/billing")

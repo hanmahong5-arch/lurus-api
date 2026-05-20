@@ -18,7 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useCallback, useEffect, useState } from 'react';
 import HFShell from '../../../components/hifi/HFShell';
-import WIPBanner from '../../../components/hifi/WIPBanner';
 import { API, showError } from '../../../helpers';
 
 // HiFi 11 — Billing. Wired to real APIs (2026-05-19):
@@ -234,23 +233,16 @@ const HFBilling = () => {
                     <td className='mono muted'>{fmtQuota(inv.quota)}</td>
                     <td className='mono muted'>{inv.request_count ?? '—'}</td>
                     <td>
-                      {/* Download PDF — deferred to v2 */}
-                      <span
+                      {/* Download PDF — deferred to Phase 2 */}
+                      <button
+                        type='button'
+                        className='btn ghost sm'
                         data-testid={`billing-download-${i}`}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                        }}
+                        disabled
+                        title='invoice PDF generation deferred — see Phase 2 backlog'
                       >
-                        <button type='button' className='btn ghost sm'>
-                          PDF
-                        </button>
-                        <WIPBanner
-                          reason='PDF generation deferred to v2'
-                          todo=''
-                        />
-                      </span>
+                        PDF
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -298,18 +290,18 @@ const HFBilling = () => {
               </div>
             </div>
             <div style={{ marginTop: 8 }}>
-              <button
-                type='button'
+              {/* Payment method management lives on Platform — link out */}
+              <a
+                href='https://identity.lurus.cn/wallet'
+                target='_blank'
+                rel='noopener noreferrer'
                 className='btn sm'
                 data-testid='billing-edit-payment'
-                disabled
+                style={{ textDecoration: 'none', display: 'inline-block' }}
+                title='payment method management lives on identity.lurus.cn (Platform) — link out instead'
               >
-                edit
-              </button>
-              <WIPBanner
-                reason='payment method editing deferred to v2'
-                todo=''
-              />
+                manage payment ↗
+              </a>
             </div>
           </div>
 

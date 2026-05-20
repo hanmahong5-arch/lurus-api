@@ -155,9 +155,9 @@ describe('Billing page', () => {
     window.location = originalLocation;
   });
 
-  // 3. WIPBanner appears near download (PDF) buttons — asserts inline markers
-  //    are present in the rendered DOM.
-  it('shows WIPBanner near PDF download buttons', async () => {
+  // 3. PDF download buttons are disabled with scope-cut tooltip; edit payment
+  //    is now a real link to identity.lurus.cn/wallet.
+  it('PDF buttons disabled; payment is a link to identity.lurus.cn', async () => {
     API.get
       .mockResolvedValueOnce({
         data: { success: true, data: { items: fakeInvoices } },
@@ -170,22 +170,14 @@ describe('Billing page', () => {
       expect(screen.getByText('2026-05')).toBeTruthy();
     });
 
-    // At least one WIPBanner with PDF reason should be present per invoice row.
-    const pdfBanners = screen
-      .getAllByTestId('wip-banner')
-      .filter((el) => el.dataset.reason && el.dataset.reason.includes('PDF'));
+    // PDF buttons must be disabled with the scope-cut title.
+    const pdfBtn = screen.getByTestId('billing-download-0');
+    expect(pdfBtn.disabled).toBe(true);
+    expect(pdfBtn.title).toMatch(/Phase 2/i);
 
-    expect(pdfBanners.length).toBeGreaterThanOrEqual(1);
-
-    // payment method editing WIPBanner also present
-    const paymentBanners = screen
-      .getAllByTestId('wip-banner')
-      .filter(
-        (el) =>
-          el.dataset.reason &&
-          el.dataset.reason.includes('payment method editing'),
-      );
-
-    expect(paymentBanners.length).toBeGreaterThanOrEqual(1);
+    // "manage payment ↗" link must point to identity.lurus.cn.
+    const payLink = screen.getByTestId('billing-edit-payment');
+    expect(payLink.tagName.toLowerCase()).toBe('a');
+    expect(payLink.href).toContain('identity.lurus.cn');
   });
 });

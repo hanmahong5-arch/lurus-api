@@ -20,6 +20,13 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+// react-router-dom stub — useNavigate returns a spy so tests can assert
+// navigation calls without a full router context.
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => mockNavigate,
+}));
+
 // Mock helpers BEFORE importing the component — vi.mock is hoisted but the
 // component module reads API.get at runtime so mocks resolve at first call.
 vi.mock('../../../helpers', () => ({
@@ -61,6 +68,7 @@ beforeEach(() => {
   API.get.mockReset();
   API.post.mockReset();
   showError.mockReset();
+  mockNavigate.mockReset();
   window.localStorage.clear();
   window.localStorage.setItem('tenant_slug', 'acme');
 });
@@ -173,7 +181,70 @@ describe('Models page', () => {
       expect(banners.length).toBeGreaterThanOrEqual(1);
     });
 
-    // The add button itself should be present (even if disabled)
-    expect(screen.getByTestId('models-add-btn')).toBeDefined();
+    // The add button itself should be present and enabled (Wave 3 Phase 1).
+    const addBtn = screen.getByTestId('models-add-btn');
+    expect(addBtn).toBeDefined();
+    expect(addBtn.disabled).toBe(false);
+  });
+
+  // Wave 3 Phase 1 — "add model opens modal and posts"
+  it('add model opens modal and posts', async () => {
+    // useTenantSlug fires two fetches (default → acme), then one after submit.
+    API.get.mockResolvedValue(fakeModelsResponse([]));
+    API.post.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: { id: 42, model_name: 'my-model', status: 1 },
+      },
+    });
+
+    render(<HFModels />);
+
+    // Wait for component to settle after initial fetches.
+    await waitFor(() => expect(API.get).toHaveBeenCalled());
+
+    // Click "+ 添加模型" to open modal.
+    fireEvent.click(screen.getByTestId('models-add-btn'));
+
+    // Dialog should appear (jsdom doesn't run showModal but the element renders).
+    expect(screen.getByTestId('models-add-dialog')).toBeDefined();
+
+    // Fill in model name.
+    const nameInput = screen.getByTestId('add-model-name');
+    fireEvent.change(nameInput, { target: { value: 'my-model' } });
+
+    // Submit.
+    fireEvent.click(screen.getByTestId('add-model-submit'));
+
+    await waitFor(() => {
+      expect(API.post).toHaveBeenCalledTimes(1);
+    });
+
+    const [url, body] = API.post.mock.calls[0];
+    expect(url).toContain('/api/v2/acme/models');
+    expect(body.model_name).toBe('my-model');
+  });
+
+  // Wave 3 Phase 1 — "试用 navigates with prefill_model param"
+  it('试用 navigates with prefill param', async () => {
+    const items = [
+      { id: 1, model_name: 'gpt-4o', vendor: 'OpenAI', status: 1 },
+    ];
+    API.get.mockResolvedValue(fakeModelsResponse(items));
+
+    render(<HFModels />);
+
+    // Wait for model card to appear.
+    await waitFor(() => {
+      expect(screen.getByTestId('model-card-gpt-4o')).toBeDefined();
+    });
+
+    // Click 试用 button for gpt-4o.
+    fireEvent.click(screen.getByTestId('model-try-gpt-4o'));
+
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+    const navArg = mockNavigate.mock.calls[0][0];
+    expect(navArg).toContain('/console/v2/playground');
+    expect(navArg).toContain('prefill_model=gpt-4o');
   });
 });

@@ -18,16 +18,21 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 // Mock helpers BEFORE importing the component.
 vi.mock('../../../helpers', () => ({
   API: {
     get: vi.fn(),
     put: vi.fn(),
+    delete: vi.fn(),
   },
   showError: vi.fn(),
   showSuccess: vi.fn(),
+}));
+
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
 }));
 
 // HFShell passthrough — isolates Settings from shell/router dependencies.
@@ -44,6 +49,31 @@ vi.mock('../../../components/hifi/WIPBanner', () => ({
       { 'data-testid': 'wip-banner' },
       reason ?? 'WIP',
     ),
+}));
+
+// ConfirmDialog stub — renders a visible modal with a confirm button.
+vi.mock('../../../components/common/ConfirmDialog', () => ({
+  default: ({ visible, title, onConfirm, onCancel }) =>
+    visible
+      ? React.createElement(
+          'div',
+          { 'data-testid': 'confirm-dialog' },
+          React.createElement('span', null, title),
+          React.createElement(
+            'button',
+            {
+              'data-testid': 'confirm-dialog-confirm',
+              onClick: onConfirm,
+            },
+            'confirm',
+          ),
+          React.createElement(
+            'button',
+            { 'data-testid': 'confirm-dialog-cancel', onClick: onCancel },
+            'cancel',
+          ),
+        )
+      : null,
 }));
 
 import HFSettings from './index';
@@ -69,6 +99,7 @@ const fakeSessionsResponse = (items) => ({
 beforeEach(() => {
   API.get.mockReset();
   API.put.mockReset();
+  API.delete.mockReset();
   window.localStorage.clear();
   window.localStorage.setItem('tenant_slug', 'acme');
 
@@ -144,6 +175,43 @@ describe('Settings page', () => {
       const banners = screen.getAllByTestId('wip-banner');
       const texts = banners.map((b) => b.textContent);
       expect(texts.some((t) => /team/i.test(t))).toBe(true);
+    });
+  });
+
+  // 4. Clicking "revoke" on a session row opens the ConfirmDialog.
+  it('opens ConfirmDialog when revoke button clicked', async () => {
+    render(<HFSettings />);
+
+    // Navigate to security section where sessions are shown.
+    screen.getByText('Security').click();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sessions-table')).toBeTruthy();
+    });
+
+    // Before click: dialog must be absent.
+    expect(screen.queryByTestId('confirm-dialog')).toBeNull();
+
+    // Click the revoke button.
+    fireEvent.click(screen.getByTestId('revoke-session-btn'));
+
+    // ConfirmDialog must now be visible.
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-dialog')).toBeTruthy();
+    });
+  });
+
+  // 5. Danger zone delete button is disabled with scope-cut tooltip.
+  it('danger delete button is disabled with title tooltip', async () => {
+    render(<HFSettings />);
+
+    screen.getByText('Danger zone').click();
+
+    await waitFor(() => {
+      const btn = screen.getByTestId('danger-delete-btn');
+      expect(btn).toBeTruthy();
+      expect(btn.disabled).toBe(true);
+      expect(btn.title).toMatch(/deferred to v3/i);
     });
   });
 });

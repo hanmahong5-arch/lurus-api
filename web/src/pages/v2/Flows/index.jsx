@@ -194,11 +194,17 @@ const NewChannelStep = ({ step }) => {
           ))}
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-          <button type='button' className='btn'>
+          <button
+            type='button'
+            className='btn ghost'
+            disabled
+            title='Select a channel in the Channels page to test it'
+            data-testid='flow-test-connection-btn'
+          >
             ▶ test connection
           </button>
-          <span className='pill' style={{ alignSelf: 'center' }}>
-            <span className='dot ok' /> 142ms · 18 models discovered
+          <span className='muted' style={{ alignSelf: 'center', fontSize: 11 }}>
+            → Channels 页选择渠道后点击 &ldquo;测试渠道&rdquo;
           </span>
         </div>
       </div>
@@ -613,7 +619,13 @@ const IncidentScreen = () => {
               <span className='dot err' />{' '}
               <span className='strong'>timeline</span>
               <span style={{ flex: 1 }} />
-              <button type='button' className='btn sm'>
+              <button
+                type='button'
+                className='btn sm'
+                disabled
+                title='incident workflow requires alerting infra (alertmanager + on-call rotations) — deferred to v3'
+                data-testid='incident-post-update-btn'
+              >
                 post update
               </button>
             </div>
@@ -781,16 +793,41 @@ const IncidentScreen = () => {
                 marginTop: 10,
               }}
             >
-              <button type='button' className='btn'>
+              <button
+                type='button'
+                className='btn'
+                disabled
+                title='incident workflow requires alerting infra (alertmanager + on-call rotations) — deferred to v3'
+                data-testid='incident-silence-btn'
+              >
                 silence alert · 30m
               </button>
-              <button type='button' className='btn'>
+              <button
+                type='button'
+                className='btn'
+                disabled
+                title='incident workflow requires alerting infra (alertmanager + on-call rotations) — deferred to v3'
+                data-testid='incident-status-update-btn'
+              >
                 post status update
               </button>
-              <button type='button' className='btn'>
-                disable channel
-              </button>
-              <button type='button' className='btn primary'>
+              {/* "disable channel" navigates to Channel page — no incident context available here */}
+              <a
+                href='/console/v2/channel'
+                className='btn'
+                data-testid='incident-disable-channel-btn'
+                title='go to Channels to disable'
+                style={{ textDecoration: 'none', textAlign: 'center' }}
+              >
+                disable channel ↗
+              </a>
+              <button
+                type='button'
+                className='btn primary'
+                disabled
+                title='incident workflow requires alerting infra (alertmanager + on-call rotations) — deferred to v3'
+                data-testid='incident-resolve-btn'
+              >
                 resolve incident
               </button>
             </div>

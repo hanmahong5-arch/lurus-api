@@ -20,7 +20,8 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import HFShell from '../../../components/hifi/HFShell';
 import WIPBanner from '../../../components/hifi/WIPBanner';
-import { API, showError } from '../../../helpers';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import { API, showError, showSuccess } from '../../../helpers';
 
 /* Wave 2: Chat wired to non-stream POST /api/v2/:slug/chat/send.
    In-memory conversation only — no chat_session table yet, so the
@@ -44,6 +45,8 @@ const HFChat = () => {
   const [sending, setSending] = useState(false);
   const [model] = useState(DEFAULT_MODEL);
   const [sessionStartedAt] = useState(() => Date.now());
+  // "⋯" clear-conversation confirm dialog
+  const [clearVisible, setClearVisible] = useState(false);
 
   const sessionTitle = useMemo(() => {
     const firstUser = messages.find((m) => m.role === 'user');
@@ -118,12 +121,42 @@ const HFChat = () => {
       crumbs={['workspace', 'chat']}
       actions={
         <>
-          <button type='button' className='btn'>
+          <button
+            type='button'
+            className='btn'
+            data-testid='chat-share-btn'
+            onClick={() => {
+              try {
+                navigator.clipboard?.writeText(window.location.href);
+              } catch (_) {}
+              showSuccess('链接已复制');
+            }}
+          >
             share ↗
           </button>
-          <button type='button' className='btn'>
+          <button
+            type='button'
+            className='btn'
+            data-testid='chat-more-btn'
+            onClick={() => setClearVisible(true)}
+          >
             ⋯
           </button>
+          <ConfirmDialog
+            visible={clearVisible}
+            title='清空当前对话'
+            consequenceList={[
+              '当前对话内容将被清除，不可恢复（仅限本地会话）。',
+            ]}
+            confirmText='clear'
+            confirmButtonText='清空对话'
+            confirmButtonType='danger'
+            onConfirm={() => {
+              setMessages([]);
+              setClearVisible(false);
+            }}
+            onCancel={() => setClearVisible(false)}
+          />
         </>
       }
     >

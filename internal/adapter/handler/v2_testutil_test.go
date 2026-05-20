@@ -214,6 +214,8 @@ func SetupV2TestRouter(t *testing.T) *V2TestContext {
 		v2.POST("/channels", CreateChannelV2)
 		v2.PUT("/channels/:id", UpdateChannelV2)
 		v2.DELETE("/channels/:id", DeleteChannelV2)
+		v2.POST("/channels/:id/test", TestChannelV2)
+		v2.GET("/channels/:id/upstream-models", FetchUpstreamModelsV2)
 
 		// Redemption routes
 		v2.POST("/redeem", RedeemCodeV2)

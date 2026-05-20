@@ -32,6 +32,15 @@ vi.mock('../../../helpers', () => ({
   showSuccess: vi.fn(),
 }));
 
+// Mock navigator.clipboard so share tests don't fail in jsdom.
+Object.defineProperty(navigator, 'clipboard', {
+  value: { writeText: vi.fn().mockResolvedValue(undefined) },
+  configurable: true,
+});
+
+// Mock window.prompt so save tests can supply a preset name.
+vi.stubGlobal('prompt', vi.fn());
+
 // HFShell pulls TenantSwitcher → API helper chain → react-router. Stub it
 // to a passthrough wrapper so the test focuses on Playground UI/logic.
 vi.mock('../../../components/hifi/HFShell', () => ({
@@ -45,15 +54,20 @@ vi.mock('../../../components/hifi/HFShell', () => ({
 }));
 
 import HFPlayground from './index';
-import { API, showError } from '../../../helpers';
+import { API, showError, showSuccess } from '../../../helpers';
 
 beforeEach(() => {
   API.get.mockReset();
   API.post.mockReset();
   showError.mockReset();
+  showSuccess.mockReset();
+  window.prompt.mockReset();
+  navigator.clipboard.writeText.mockReset();
   window.localStorage.clear();
   window.localStorage.setItem('user', JSON.stringify({ id: 'pg-tester' }));
   window.localStorage.setItem('tenant_slug', 'acme');
+  // Reset URL to avoid cross-test URL pollution from share tests.
+  window.history.replaceState({}, '', '/playground');
 });
 
 afterEach(() => {
@@ -262,5 +276,115 @@ describe('Playground page', () => {
     expect(body.params.temperature).toBe(0.3);
     expect(body.params.top_p).toBe(0.9);
     expect(body.params.max_tokens).toBe(256);
+  });
+
+  // 8. save — window.prompt returns a name → POST /playground/presets,
+  //    showSuccess called on success.
+  it('save: posts preset and shows success toast', async () => {
+    window.prompt.mockReturnValueOnce('my-save');
+    API.post.mockResolvedValueOnce({
+      data: { success: true, data: { id: 1, name: 'my-save' } },
+    });
+
+    render(<HFPlayground />);
+    fireEvent.click(screen.getByTestId('playground-save-btn'));
+
+    await waitFor(() => {
+      expect(API.post).toHaveBeenCalledTimes(1);
+    });
+    const [url, body] = API.post.mock.calls[0];
+    expect(url).toBe('/api/v2/acme/playground/presets');
+    expect(body.name).toBe('my-save');
+    await waitFor(() => {
+      expect(showSuccess).toHaveBeenCalledWith('预设已保存');
+    });
+  });
+
+  // 9. blank▾ — opens dropdown, click on a preset item loads it into the
+  //    user textarea.
+  it('blank: loads preset prompt into user textarea', async () => {
+    API.get.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: [
+          {
+            id: 42,
+            name: 'test-preset',
+            prompt: 'loaded-prompt',
+            models: '["gpt-4o"]',
+            params: '{"temperature":0.2,"top_p":0.8,"max_tokens":512}',
+          },
+        ],
+      },
+    });
+
+    render(<HFPlayground />);
+    fireEvent.click(screen.getByTestId('playground-blank-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('playground-blank-dropdown')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId('playground-preset-item-42'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('playground-user').value).toBe('loaded-prompt');
+    });
+  });
+
+  // 10. share — copies URL containing current prompt/models/params as query
+  //     params to clipboard; showSuccess toast fires.
+  it('share: copies URL with form state to clipboard', async () => {
+    render(<HFPlayground />);
+
+    // Set a known user prompt so we can assert it appears in the URL.
+    fireEvent.change(screen.getByTestId('playground-user'), {
+      target: { value: 'share-me' },
+    });
+
+    fireEvent.click(screen.getByTestId('playground-share-btn'));
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledTimes(1);
+    });
+    const copiedURL = navigator.clipboard.writeText.mock.calls[0][0];
+    expect(copiedURL).toContain('prompt=');
+    expect(copiedURL).toContain(encodeURIComponent('share-me'));
+    expect(copiedURL).toContain('models=');
+    expect(showSuccess).toHaveBeenCalledWith('分享链接已复制');
+  });
+
+  // 11. swap▾ — opens model dropdown, clicking a model toggles it in/out of
+  //     form.models. Model already present → removed; absent → appended.
+  it('swap: toggles model in the models array', async () => {
+    // Provide a model list that includes a model not in DEFAULT_MODELS.
+    API.get.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: [
+          { model_name: 'gpt-4o' },
+          { model_name: 'claude-3.5-sonnet' },
+          { model_name: 'gemini-1.5-pro' },
+          { model_name: 'o1-mini' },
+        ],
+      },
+    });
+
+    render(<HFPlayground />);
+
+    // Open swap dropdown for column 0.
+    fireEvent.click(screen.getByTestId('playground-swap-btn-0'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('playground-swap-dropdown-0')).toBeTruthy();
+    });
+
+    // Click o1-mini (not in default models) to add it.
+    fireEvent.click(screen.getByTestId('playground-swap-model-o1-mini'));
+
+    // After clicking, the model count in the header should have increased.
+    await waitFor(() => {
+      expect(screen.getByText(/4 models, one prompt/i)).toBeTruthy();
+    });
   });
 });

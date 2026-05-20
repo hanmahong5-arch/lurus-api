@@ -273,6 +273,8 @@ func migrateDB() error {
 		// Tenant credit pools (Reseller mode, ADR 2026-05-18)
 		&entity.TenantCreditPool{},
 		&entity.TenantCreditPoolDraw{},
+		// Playground named presets (Wave 3 Phase 1)
+		&PlaygroundPreset{},
 	)
 	if err != nil {
 		return err

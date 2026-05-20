@@ -17,18 +17,21 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import HFShell from '../../../components/hifi/HFShell';
 import WIPBanner from '../../../components/hifi/WIPBanner';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { API, showError, showSuccess } from '../../../helpers';
 
 // Wave 2: only security section is wired; notifications/team/integrations/MFA remain stubs pending infra.
+// Wave 3 Phase 1 (2026-05-20): revoke session wired to DELETE /sessions/current.
 
 /*
  * HiFi 12 — Settings.
  * Profile: wired to GET/PUT /api/v2/:tenant_slug/user/me
  * Security/Sessions: wired to GET /api/v2/:tenant_slug/sessions (Wave 2).
  *   Returns single synthetic session (auth_method + active_tokens + request_count).
- *   Multi-device tracking + per-session revoke deferred to v3.
+ *   Single-device revoke wired (Wave 3 Phase 1). Multi-device tracking deferred to v3.
  * Notifications + Team: mocked; see adr-2026-05-18-budget-alerts.md / -tenant-credit-pool.md.
  */
 
@@ -137,6 +140,7 @@ const ComingSoon = () => (
 
 const HFSettings = () => {
   const tenantSlug = useTenantSlug();
+  const navigate = useNavigate();
   const [section, setSection] = useState('profile');
 
   // Profile state
@@ -148,6 +152,10 @@ const HFSettings = () => {
   // Session state — single-session for now (backend has no device list)
   const [sessions, setSessions] = useState(null);
   const [sessionLoading, setSessionLoading] = useState(false);
+
+  // Revoke session confirm dialog
+  const [revokeVisible, setRevokeVisible] = useState(false);
+  const [revoking, setRevoking] = useState(false);
 
   const fetchProfile = useCallback(async () => {
     setLoadingProfile(true);
@@ -186,6 +194,25 @@ const HFSettings = () => {
       fetchSessions();
     }
   }, [section, sessions, sessionLoading, fetchSessions]);
+
+  const handleRevokeSession = async () => {
+    if (revoking) return;
+    setRevoking(true);
+    try {
+      const res = await API.delete(`/api/v2/${tenantSlug}/sessions/current`);
+      if (res?.data?.success) {
+        const redirect = res.data.data?.redirect ?? '/console/v2/login';
+        navigate(redirect);
+      } else {
+        showError(res?.data?.message || '撤销会话失败');
+      }
+    } catch (_) {
+      // interceptor handles toast
+    } finally {
+      setRevoking(false);
+      setRevokeVisible(false);
+    }
+  };
 
   const handleSaveField = async (field, value) => {
     setEditField(null);
@@ -391,11 +418,12 @@ const HFSettings = () => {
                   <span className='dot ok' />{' '}
                   <span className='strong'>authenticator app · enabled</span>
                   <span style={{ flex: 1 }} />
-                  <WIPBanner
-                    reason='MFA regenerate not implemented — no TOTP seed store wired.'
-                    todo='Backend: totp_seed table + POST /api/v2/:slug/mfa/regenerate'
-                  />
-                  <button type='button' className='btn sm' disabled>
+                  <button
+                    type='button'
+                    className='btn sm'
+                    disabled
+                    title='MFA infra pending — totp_seed table not yet provisioned'
+                  >
                     regenerate
                   </button>
                 </div>
@@ -519,11 +547,12 @@ const HFSettings = () => {
                           <td
                             style={{ padding: '8px 8px', textAlign: 'right' }}
                           >
-                            <WIPBanner
-                              reason='session revocation deferred to v3'
-                              todo='Backend: device session store + DELETE /api/v2/:slug/sessions/:id'
-                            />
-                            <button type='button' className='btn sm' disabled>
+                            <button
+                              type='button'
+                              className='btn sm'
+                              data-testid='revoke-session-btn'
+                              onClick={() => setRevokeVisible(true)}
+                            >
                               revoke
                             </button>
                           </td>
@@ -533,6 +562,21 @@ const HFSettings = () => {
                   </table>
                 )}
               </div>
+
+              {/* Revoke current session confirm dialog */}
+              <ConfirmDialog
+                visible={revokeVisible}
+                title='撤销当前会话'
+                consequenceList={[
+                  '当前浏览器会话将立即失效。',
+                  '你将被重定向到登录页，需要重新登录。',
+                ]}
+                confirmText='revoke'
+                confirmButtonText='撤销会话'
+                confirmButtonType='danger'
+                onConfirm={handleRevokeSession}
+                onCancel={() => setRevokeVisible(false)}
+              />
             </div>
           )}
 
@@ -604,7 +648,12 @@ const HFSettings = () => {
                         {r[0]}
                       </span>
                       <span style={{ flex: 1 }} />
-                      <button type='button' className='btn sm' disabled>
+                      <button
+                        type='button'
+                        className='btn sm'
+                        disabled
+                        title='integration registry deferred to v3'
+                      >
                         {r[2] === 'ok' ? 'configure' : 'connect'}
                       </button>
                     </div>
@@ -690,6 +739,8 @@ const HFSettings = () => {
                   type='button'
                   className='btn'
                   disabled
+                  data-testid='danger-delete-btn'
+                  title='account deletion requires data-export + cascade-purge design — deferred to v3'
                   style={{
                     marginTop: 12,
                     color: 'var(--hf-err)',

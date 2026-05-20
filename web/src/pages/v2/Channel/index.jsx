@@ -28,6 +28,224 @@ import HFShell from '../../../components/hifi/HFShell';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { API, showError, showSuccess } from '../../../helpers';
 
+// ─── SyncModelsModal ─────────────────────────────────────────────────────────
+
+const SyncModelsModal = ({ tenantSlug, channel, onClose, onApply }) => {
+  const { t } = useTranslation();
+  const [loading, setLoading] = useState(true);
+  const [diff, setDiff] = useState(null);
+  const [selected, setSelected] = useState(new Set());
+  const [applying, setApplying] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    API.get(`/api/v2/${tenantSlug}/channels/${channel.Id}/upstream-models`)
+      .then((res) => {
+        if (res?.data?.success) {
+          const d = res.data.data;
+          setDiff(d);
+          // Pre-select new models by default.
+          setSelected(new Set(d.new ?? []));
+        } else {
+          showError(t('获取上游模型失败'));
+          onClose();
+        }
+      })
+      .catch(() => {
+        showError(t('获取上游模型失败'));
+        onClose();
+      })
+      .finally(() => setLoading(false));
+  }, [tenantSlug, channel.Id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleModel = (m) => {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(m)) n.delete(m);
+      else n.add(m);
+      return n;
+    });
+  };
+
+  const handleApply = async () => {
+    if (!diff) return;
+    setApplying(true);
+    try {
+      // Merge: start from current list, add selected new, remove missing that are deselected.
+      const currentSet = new Set(
+        (channel.Models || '')
+          .split(',')
+          .map((m) => m.trim())
+          .filter(Boolean),
+      );
+      // Add selected new models.
+      for (const m of selected) {
+        currentSet.add(m);
+      }
+      const newModels = [...currentSet].join(',');
+      const res = await API.put(
+        `/api/v2/${tenantSlug}/channels/${channel.Id}`,
+        { models: newModels },
+      );
+      if (res?.data?.success) {
+        showSuccess(t('同步上游模型'));
+        onApply();
+      }
+    } catch (_) {
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const pillStyle = (active) => ({
+    display: 'inline-block',
+    fontFamily: 'var(--hf-mono)',
+    fontSize: 10,
+    padding: '2px 6px',
+    borderRadius: 3,
+    border: `1px solid ${active ? 'var(--hf-ok)' : 'var(--hf-rule)'}`,
+    background: active ? 'rgba(40,200,90,0.1)' : 'var(--hf-sunken)',
+    color: active ? 'var(--hf-ok)' : 'var(--hf-ink)',
+    cursor: 'pointer',
+    userSelect: 'none',
+  });
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.45)',
+        zIndex: 500,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        style={{
+          background: 'var(--hf-paper)',
+          border: '1px solid var(--hf-rule)',
+          borderRadius: 4,
+          padding: 28,
+          width: 560,
+          maxHeight: '80vh',
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 14,
+        }}
+      >
+        <div className='strong' style={{ fontSize: 15 }}>
+          {t('同步上游模型')} · {channel.Name}
+        </div>
+
+        {loading ? (
+          <div className='muted' style={{ fontSize: 12 }}>
+            {t('正在获取上游模型…')}
+          </div>
+        ) : diff ? (
+          <>
+            <div>
+              <div className='lbl' style={{ marginBottom: 6 }}>
+                {t('上游模型 (共 {{count}} 个)', {
+                  count: diff.upstream?.length ?? 0,
+                })}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {(diff.upstream ?? []).map((m) => (
+                  <span key={m} style={pillStyle(false)}>
+                    {m}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {diff.new?.length > 0 && (
+              <div>
+                <div
+                  className='lbl'
+                  style={{ marginBottom: 6, color: 'var(--hf-ok)' }}
+                >
+                  {t('新增 {{count}} 个模型', { count: diff.new.length })} —
+                  点击切换
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {diff.new.map((m) => (
+                    <span
+                      key={m}
+                      data-testid={`sync-new-${m}`}
+                      style={pillStyle(selected.has(m))}
+                      onClick={() => toggleModel(m)}
+                    >
+                      + {m}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {diff.missing?.length > 0 && (
+              <div>
+                <div
+                  className='lbl'
+                  style={{ marginBottom: 6, color: 'var(--hf-warn)' }}
+                >
+                  {t('已移除 {{count}} 个模型', { count: diff.missing.length })}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {diff.missing.map((m) => (
+                    <span
+                      key={m}
+                      style={{
+                        ...pillStyle(false),
+                        color: 'var(--hf-warn)',
+                        borderColor: 'var(--hf-warn)',
+                        textDecoration: 'line-through',
+                      }}
+                    >
+                      {m}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {diff.new?.length === 0 && diff.missing?.length === 0 && (
+              <div className='muted' style={{ fontSize: 12 }}>
+                模型列表已是最新，无需同步。
+              </div>
+            )}
+          </>
+        ) : null}
+
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            justifyContent: 'flex-end',
+            marginTop: 4,
+          }}
+        >
+          <button type='button' className='btn ghost' onClick={onClose}>
+            取消
+          </button>
+          <button
+            type='button'
+            className='btn primary'
+            data-testid='sync-apply-btn'
+            disabled={applying || loading || selected.size === 0}
+            onClick={handleApply}
+          >
+            {applying ? '应用中…' : t('应用所选模型')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /*
  * HiFi 2 — Channel management wired to live backend.
  * Pattern follows Token page (web/src/pages/v2/Token/index.jsx).
@@ -677,6 +895,7 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 const HFChannel = () => {
+  const { t } = useTranslation();
   const tenantSlug = useTenantSlug();
 
   const [channels, setChannels] = useState([]);
@@ -686,6 +905,9 @@ const HFChannel = () => {
   const [open, setOpen] = useState(-1);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(null); // channel object being edited
+  const [syncTarget, setSyncTarget] = useState(null); // channel being synced
+  // testState: { [channelId]: 'testing' | { latency_ms, success, error? } }
+  const [testState, setTestState] = useState({});
 
   const fetchChannels = useCallback(async () => {
     setLoading(true);
@@ -723,6 +945,31 @@ const HFChannel = () => {
     setCreating(false);
     setEditing(null);
     await fetchChannels();
+  };
+
+  const handleTestChannel = async (e, ch) => {
+    e.stopPropagation();
+    const id = ch.Id;
+    setTestState((prev) => ({ ...prev, [id]: 'testing' }));
+    try {
+      const res = await API.post(
+        `/api/v2/${tenantSlug}/channels/${id}/test`,
+        {},
+      );
+      const data = res?.data ?? {};
+      setTestState((prev) => ({ ...prev, [id]: data }));
+      if (data.success) {
+        showSuccess(t('渠道延迟 {{ms}}ms', { ms: data.latency_ms ?? 0 }));
+      } else {
+        showError(t('渠道测试失败') + (data.error ? `: ${data.error}` : ''));
+      }
+    } catch (err) {
+      setTestState((prev) => ({
+        ...prev,
+        [id]: { success: false, error: String(err) },
+      }));
+      showError(t('渠道测试失败'));
+    }
   };
 
   // Derived summary counts
@@ -1040,11 +1287,41 @@ const HFChannel = () => {
                       <span className={statusTag(st)}>{st}</span>
                     </td>
 
-                    {/* Expand toggle */}
-                    <td>
+                    {/* Row actions: test + expand */}
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {(() => {
+                        const ts = testState[ch.Id];
+                        const isTesting = ts === 'testing';
+                        const testLabel = isTesting
+                          ? t('测试中…')
+                          : t('测试渠道');
+                        const testColor =
+                          ts && ts !== 'testing'
+                            ? ts.success
+                              ? 'var(--hf-ok)'
+                              : 'var(--hf-err)'
+                            : undefined;
+                        return (
+                          <button
+                            type='button'
+                            className='btn ghost sm'
+                            data-testid={`test-btn-${ch.Id}`}
+                            disabled={isTesting}
+                            style={
+                              testColor
+                                ? { color: testColor, borderColor: testColor }
+                                : undefined
+                            }
+                            onClick={(e) => handleTestChannel(e, ch)}
+                          >
+                            {testLabel}
+                          </button>
+                        );
+                      })()}
                       <button
                         type='button'
                         className='btn ghost'
+                        style={{ marginLeft: 4 }}
                         onClick={() => setOpen(isOpen ? -1 : i)}
                       >
                         {isOpen ? '▾' : '▸'}
@@ -1082,6 +1359,14 @@ const HFChannel = () => {
                           >
                             edit all fields
                           </button>
+                          <button
+                            type='button'
+                            className='btn sm'
+                            data-testid={`sync-btn-${ch.Id}`}
+                            onClick={() => setSyncTarget(ch)}
+                          >
+                            {t('同步上游模型')}
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1110,6 +1395,19 @@ const HFChannel = () => {
           existing={editing}
           onDone={handleModalDone}
           onClose={() => setEditing(null)}
+        />
+      )}
+
+      {/* Sync upstream models modal */}
+      {syncTarget && (
+        <SyncModelsModal
+          tenantSlug={tenantSlug}
+          channel={syncTarget}
+          onClose={() => setSyncTarget(null)}
+          onApply={async () => {
+            setSyncTarget(null);
+            await fetchChannels();
+          }}
         />
       )}
     </HFShell>

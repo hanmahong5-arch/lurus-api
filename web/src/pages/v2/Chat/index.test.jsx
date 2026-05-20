@@ -23,6 +23,29 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 vi.mock('../../../helpers', () => ({
   API: { get: vi.fn(), post: vi.fn() },
   showError: vi.fn(),
+  showSuccess: vi.fn(),
+}));
+
+// ConfirmDialog stub — renders visible modal with confirm + cancel.
+vi.mock('../../../components/common/ConfirmDialog', () => ({
+  default: ({ visible, title, onConfirm, onCancel }) =>
+    visible
+      ? React.createElement(
+          'div',
+          { 'data-testid': 'confirm-dialog' },
+          React.createElement('span', null, title),
+          React.createElement(
+            'button',
+            { 'data-testid': 'confirm-dialog-confirm', onClick: onConfirm },
+            'confirm',
+          ),
+          React.createElement(
+            'button',
+            { 'data-testid': 'confirm-dialog-cancel', onClick: onCancel },
+            'cancel',
+          ),
+        )
+      : null,
 }));
 
 vi.mock('../../../components/hifi/HFShell', () => ({
@@ -40,11 +63,12 @@ vi.mock('react-router-dom', () => ({
 }));
 
 import HFChat from './index';
-import { API, showError } from '../../../helpers';
+import { API, showError, showSuccess } from '../../../helpers';
 
 beforeEach(() => {
   API.post.mockReset();
   showError.mockReset();
+  showSuccess.mockReset();
 });
 
 const chatResponse = (content, latencyMs = 120) => ({
@@ -157,5 +181,33 @@ describe('Chat page', () => {
     fireEvent.click(screen.getByText(/\+ new chat/i).closest('button'));
     expect(screen.getByText(/ask anything to begin/i)).toBeTruthy();
     expect(screen.queryByText(/hi back/i)).toBeNull();
+  });
+
+  // 6. "⋯" button opens ConfirmDialog; confirming clears the conversation.
+  it('opens ConfirmDialog on ⋯ click and clears messages on confirm', async () => {
+    API.post.mockResolvedValueOnce(chatResponse('hello response'));
+    render(<HFChat />);
+
+    // Send a message so the conversation is non-empty.
+    fireEvent.change(screen.getByLabelText('message-input'), {
+      target: { value: 'test msg' },
+    });
+    fireEvent.click(screen.getByText(/▶ send/i).closest('button'));
+    await waitFor(() =>
+      expect(screen.getByText(/hello response/i)).toBeTruthy(),
+    );
+
+    // ConfirmDialog not yet visible.
+    expect(screen.queryByTestId('confirm-dialog')).toBeNull();
+
+    // Click ⋯ — dialog should open.
+    fireEvent.click(screen.getByTestId('chat-more-btn'));
+    expect(screen.getByTestId('confirm-dialog')).toBeTruthy();
+
+    // Confirm — conversation cleared.
+    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
+    await waitFor(() => {
+      expect(screen.getByText(/ask anything to begin/i)).toBeTruthy();
+    });
   });
 });

@@ -85,6 +85,10 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k) => k }),
 }));
 
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+}));
+
 import HFFlows from './index';
 import { API, showError } from '../../../helpers';
 
@@ -235,5 +239,28 @@ describe('Flows page — newToken wizard', () => {
     // Switch to retry.
     fireEvent.click(screen.getByTestId('flows-tab-retry'));
     expect(document.body.textContent).toMatch(/wired in v3/);
+  });
+
+  // 5. Incident action buttons are disabled scope-cut with tooltips.
+  it('incident action buttons are disabled with scope-cut tooltips', () => {
+    render(<HFFlows />);
+    fireEvent.click(screen.getByTestId('flows-tab-incident'));
+
+    const silenceBtn = screen.getByTestId('incident-silence-btn');
+    expect(silenceBtn.disabled).toBe(true);
+    expect(silenceBtn.title).toMatch(/deferred to v3/);
+
+    const statusBtn = screen.getByTestId('incident-status-update-btn');
+    expect(statusBtn.disabled).toBe(true);
+    expect(statusBtn.title).toMatch(/deferred to v3/);
+
+    const resolveBtn = screen.getByTestId('incident-resolve-btn');
+    expect(resolveBtn.disabled).toBe(true);
+    expect(resolveBtn.title).toMatch(/deferred to v3/);
+
+    // "disable channel" is a link navigating to the channel page.
+    const disableLink = screen.getByTestId('incident-disable-channel-btn');
+    expect(disableLink.tagName.toLowerCase()).toBe('a');
+    expect(disableLink.href).toMatch(/channel/);
   });
 });
