@@ -123,9 +123,9 @@ development_status:
                                                      #    BufferedResponseWriter (64KiB cap) + ExtractImageURL 3-tier walker
   8-2.4-nats-usage-milestone-port:  review           # ✅ port done; story-8-2.4-nats-usage-milestone-port.md
                                                      #    decision: new event type (not merged with quota.threshold)
-  8-3-provider-parity-audit:        blocked          # blocked by 8-2
-  8-4-cutover-plan:                 blocked          # blocked by 8-3
-  8-5-newapi-archive-yaml-revise:   blocked          # blocked by 8-4 cutover
+  8-3-provider-parity-audit:        backlog          # 2026-05-20 unblocked by D1 = Option B accepted
+  8-4-cutover-plan:                 backlog          # 2026-05-20 unblocked by D1 = Option B accepted
+                                                     # newhub→newapi cutover plan to draft post 8-3
 
   # Epic 9: Modality Slim-Down (P1)
   epic-9: in-progress
@@ -293,12 +293,54 @@ phase2_self_audit_2026_05_19:
 # OPEN STRATEGIC DECISIONS (need Anita confirmation)
 # ============================================================
 open_decisions:
-  D1_fork_strategy:    pending   # 8-1 audit 颠覆原假设；现需选 Option A/B/C
-                                 # see: doc/decisions/2026-05-05-newapi-newhub-fork-audit.md
-                                 # Q1: Option A/B/C? (recommend A)
-                                 # Q2: 切流时间窗口? (recommend 2026-07 月初)
-                                 # Q3: newapi repo 归档 vs 只读保留? (recommend 归档+90d 只读)
-                                 # Q4: lurus.yaml 修订? (recommend yes, 由 8-5 完成)
+  D1_fork_strategy:    accepted  # Option B — newhub 吃掉 newapi (Anita 确认 2026-05-20)
+                                 # ADR: doc/decisions/2026-05-20-d1-newapi-newhub-fork-final.md
+                                 # 迁移路径: R6 STAGE 演练 → 5% 镜像 → DNS 切 → 14d 观察 → 归档
+                                 # 回滚: ≤15min(DNS) / ≤30min(image+DB restore,7d 内有效)
+                                 # 历史 audit (2026-05-05): doc/decisions/2026-05-05-newapi-newhub-fork-audit.md
+                                 # Q2 切流时间: 待 STAGE 演练后定(原推荐 2026-07 月初)
+                                 # Q3 newapi repo: 归档+90d 只读
+                                 # Q4 lurus.yaml: 由 8-5 完成(含"newhub on top of newapi"错误表述修订)
   D2_external_saas:    accepted  # "2026 内部为主，Q4 起准备外部 SaaS"
   D3_tier3_modality:   accepted  # "砍 MJ/Suno/Realtime/Music/Video" — 由 E9 执行
   D4_insights_backend: accepted  # "Q3 自建 ClickHouse；先 Langfuse OSS 跑 PoC"
+
+# ============================================================
+# WAVE A KICKOFF — 2026-05-20 (Industrial-Grade Plan, Squad 1A done)
+# ============================================================
+wave_a_kickoff_2026_05_20:
+  plan_source: "in-conversation 2026-05-20 plan: Newhub 70% → industrial-grade, 3-wave"
+  status: in-progress
+  day_1_artifacts_committed:
+    - doc/decisions/2026-05-20-d1-newapi-newhub-fork-final.md   # D1 ADR — Option B accepted
+    - doc/decisions/2026-05-20-orphan-features-1-ionet.md
+    - doc/decisions/2026-05-20-orphan-features-2-openrouter-pool.md
+    - doc/decisions/2026-05-20-orphan-features-3-whitelabel-hmac.md
+    - doc/decisions/2026-05-20-orphan-features-4-console-migrate-not-found.md   # 不存在调查闭合
+    - _bmad-output/planning-artifacts/story-15-0-smart-routing-baseline.md       # v0 已上线但未接入路由
+  day_1_recon_findings:
+    drill_scripts:
+      chaos-drill_sh:      "154 行；缺 Prometheus metric 验证 / log assertion / 自动 teardown"
+      pg-restore-drill_sh: "145 行；缺 RTO/RPO enforcement + 绝对路径 env file"
+      stage-smoke_sh:      "217 行；多数 check 仅 wiring；缺 schema validation + curl timeout"
+      e9-1-prod-usage_sql: "不存在 — 需新写（9-1 done 前置）"
+    grafana:
+      slo_panels: 17        # newhub-slo.json，含 Story 7/8 + Phase 2 Credit Pool 面板
+      alerts: 14           # newhub-alerts.yaml，6 group，Page/Ticket/Info 分级
+      receiver_wired: false # alertmanager receiver 未配（无 Slack/PagerDuty）
+    e2e_11_2:
+      specs_exist: 1       # tests/e2e/story-11-2-token-persistence.spec.ts
+      blocked_on: "E2E_BRIDGE_TOKEN 未注入；Layer C 桥获取"
+      settings_tabs_actual: ["profile", "security", "notifications-stub", "team-stub",
+                             "integrations-stub", "region-stub", "danger-stub"]
+      settings_tabs_in_plan: ["profile", "subscription", "billing", "notifications"]
+      mismatch_flagged_to_user: true     # plan 提到 subscription/billing 不在现有 tab 列表
+  wave_a_next_decisions_pending_anita:
+    - "Squad 5A: 修订 11-2 plan — Settings 实际 tabs 与 plan 文本不一致（subscription/billing 不存在）"
+    - "Squad 2A: 是否先补 4 个 drill 脚本缺口再跑 STAGE drill，还是先 dry-run 摸现状？"
+    - "Alertmanager receiver 接 Slack webhook 的优先级（plan 把它列在 Wave A 7-5 done 判据）"
+    - "本次 commit 是否要 push 到 GitHub？（D1 ADR 是商业决策，可见性影响）"
+  blocked_until_user_says_proceed:
+    - "push commit 到 origin/main"
+    - "派下一批 Sonnet 补 drill 脚本 + Settings tabs"
+    - "SSH R6 跑 chaos / pg-restore drill"
