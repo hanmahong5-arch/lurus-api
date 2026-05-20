@@ -1,0 +1,26 @@
+Timing is on.
+=== Query 1: requests + total quota per tier-3 model (last 30d) ===
+ model_name | requests | total_quota 
+------------+----------+-------------
+(0 rows)
+
+Time: 41.495 ms
+
+=== Query 2: total quota per tier-3 category (last 30d) ===
+ category | total_quota | requests 
+----------+-------------+----------
+ Music    |             |        0
+ Suno     |             |        0
+ MJ       |             |        0
+ Realtime |             |        0
+ Video    |             |        0
+(5 rows)
+
+Time: 46.515 ms
+
+=== Query 3: active channels by tier-3 type (status=1=enabled) ===
+ type | channel_name | total_channels | enabled_channels 
+------+--------------+----------------+------------------
+(0 rows)
+
+Time: 2.856 ms

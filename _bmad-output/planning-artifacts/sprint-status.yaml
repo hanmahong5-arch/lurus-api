@@ -133,10 +133,14 @@ development_status:
 
   # Epic 9: Modality Slim-Down (P1)
   epic-9: in-progress
-  9-1-tier3-usage-audit:            review           # ✅ code audit done; story-9-1-tier3-usage-audit.md
-                                                     #    7,082 LOC + 8 ChannelTypes + 2 DB tables identified
-                                                     #    awaiting live usage SQL on PROD before marking done
-  9-2-tier3-deprecate-announce:     backlog          # blocked by 9-1 live usage numbers
+  9-1-tier3-usage-audit:            done             # 2026-05-20: PROD + STAGE e9-1 SQL ran (exit=0)
+                                                     # PROD R1 19,291 LLM logs / 0 tier-3 调用 / 0 tier-3 channel
+                                                     # STAGE R6 同 0 / 0 / 0
+                                                     # 报告: doc/reports/e9-1-tier3-usage-20260520.md
+                                                     # 决策: 推荐 E9-2 announce + E9-3 code removal
+                                                     # unblocks 9-2 (announce) + 9-3 (90d 后 code removal)
+  9-2-tier3-deprecate-announce:     backlog          # 2026-05-20 unblocked; 9-1 数据 = 全 0 调用
+                                                     # 90-day window per D3 decision
   9-3-tier3-code-removal:           backlog          # blocked by 9-2 (90-day window)
 
   # ============================================================
