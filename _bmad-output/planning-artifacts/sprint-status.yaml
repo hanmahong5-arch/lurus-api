@@ -126,6 +126,10 @@ development_status:
   8-3-provider-parity-audit:        backlog          # 2026-05-20 unblocked by D1 = Option B accepted
   8-4-cutover-plan:                 backlog          # 2026-05-20 unblocked by D1 = Option B accepted
                                                      # newhub→newapi cutover plan to draft post 8-3
+  8-5-newapi-archive-yaml-revise:   backlog          # 2026-05-20 unblocked by D1 = Option B accepted
+                                                     # scope: lurus.yaml + lurus/CLAUDE.md "newhub on top of newapi"
+                                                     #        revise + newapi repo 归档 (90d 只读)
+                                                     # depends on 8-4 cutover complete
 
   # Epic 9: Modality Slim-Down (P1)
   epic-9: in-progress
