@@ -266,5 +266,13 @@ func SetApiV2Router(router *gin.Engine) {
 			}
 			adminRoute.GET("/audit/events", middleware.CriticalRateLimit(), handler.GetAuditEvents)
 		}
+
+		// ================================================================
+		// Lutu APP integration — server-side web search (Tavily proxy).
+		// Used by the Lutu Flutter APP to give chat models a `web_search`
+		// tool without exposing the Tavily API key to clients. Auth is
+		// the standard tenant bearer the APP already attaches.
+		// ================================================================
+		apiV2.POST("/lutu/search", handler.PostWebSearch)
 	}
 }
