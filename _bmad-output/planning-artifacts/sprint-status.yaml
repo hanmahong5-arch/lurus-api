@@ -343,12 +343,32 @@ wave_a_kickoff_2026_05_20:
                              "integrations-stub", "region-stub", "danger-stub"]
       settings_tabs_in_plan: ["profile", "subscription", "billing", "notifications"]
       mismatch_flagged_to_user: true     # plan 提到 subscription/billing 不在现有 tab 列表
-  wave_a_next_decisions_pending_anita:
-    - "Squad 5A: 修订 11-2 plan — Settings 实际 tabs 与 plan 文本不一致（subscription/billing 不存在）"
-    - "Squad 2A: 是否先补 4 个 drill 脚本缺口再跑 STAGE drill，还是先 dry-run 摸现状？"
-    - "Alertmanager receiver 接 Slack webhook 的优先级（plan 把它列在 Wave A 7-5 done 判据）"
-    - "本次 commit 是否要 push 到 GitHub？（D1 ADR 是商业决策，可见性影响）"
+  wave_a_progress_2026_05_20_evening:
+    completed:
+      - "Day-1 全部 (D1+ADRs+drill scripts patched+Settings tabs)"
+      - "Day-2.A: e9-1 PROD+STAGE 跑通 0 tier-3 → 9-1 done"
+      - "Day-2.B: Reseller onboarding pack → G1/G2/G3 物料 ready (3 文件)"
+      - "Day-2.C: Alertmanager receiver E2E 验证 — PrometheusRule applied → alertmanager → alert-sink WaveADryRunTest fingerprint=f14966ad6d4c0133"
+    blocked_drills:
+      chaos_drill:
+        reason: "R6 STAGE newhub DB 是空 seed - channels/tokens/logs 都 0 行 + admin user (id=1 Postgres) access_token NULL"
+        evidence: "kubectl exec lurus-pg-0 psql newhub -c 'SELECT COUNT(*) FROM {channels,tokens,logs}' = 0/0/0"
+        plan_assumption_violated: "Plan 假设 R6 有真 channel + 真 user 可 chaos；实际 schema-only"
+        options_pending_anita:
+          a: "Anita 从 Zitadel 登陆 newhub UI 后导出 admin JWT + seed 1 test channel + 1 test token → drill 才有真 signal"
+          b: "推迟 chaos drill 到 G3 reseller pilot 上线后 (STAGE 有真 data 时再 drill)"
+          c: "跳过 chaos drill, 7-1/8-2.1 review→done 用 unit test evidence 关闭"
+        recommendation: "B - 与 reseller onboarding 自然对齐; chaos 才有 meaningful signal"
+      pg_restore_drill:
+        reason: "R6 上没装 wal-g (kubectl get pods -A | grep wal-g 空); pg-restore-drill.sh line 73-76 检测 WALG_S3_PREFIX 缺失 直接 exit 0 skip; 现有 daily-pg-dump cron 只 dump lurus-identity DB, 不覆盖 newhub"
+        evidence: "/backups/lurus-identity-20260520-180002.dump (270K); 无 newhub dump"
+        options_pending_anita:
+          a: "Anita 给 R6 装 wal-g + S3 bucket (基础设施改造)"
+          b: "改 pg-restore-drill.sh 支持 pg_dump 模式 (engineering, ~1h) + 改 daily-pg-dump cron 把 newhub 加进去"
+          c: "跳过 pg-restore drill, 7-2.1 review→backlog (等 wal-g 部署后再跑)"
+        recommendation: "B - 工作量小, 立即跑得通; A 是更大的 infra 决策"
+
   blocked_until_user_says_proceed:
-    - "push commit 到 origin/main"
-    - "派下一批 Sonnet 补 drill 脚本 + Settings tabs"
-    - "SSH R6 跑 chaos / pg-restore drill"
+    - "Chaos drill option A/B/C 决定"
+    - "PG-restore drill option A/B/C 决定"
+    - "11-2 Layer C bridge token (G1 dep)"
