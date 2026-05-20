@@ -1,0 +1,168 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: lurus-hub-alerts
+  namespace: monitoring
+  labels:
+    app: lurus-hub
+    release: kube-prom
+spec:
+  groups:
+    - name: lurus-hub-availability
+      interval: 30s
+      rules:
+        - alert: HubAvailabilityBelowSLO
+          expr: |
+            (
+              1 - sum(rate(lurus_gateway_requests_total{status=~"5.."}[5m]))
+                / sum(rate(lurus_gateway_requests_total[5m]))
+            ) * 100 < 99.5
+          for: 10m
+          labels:
+            severity: page
+            service: lurus-hub
+          annotations:
+            summary: "newhub availability {{ printf \"%.3f\" $value }}% < 99.5% SLO"
+            description: "5xx rate exceeded budget for 10m. Check upstream provider health and circuit breaker dashboard."
+
+        - alert: HubAvailabilityCritical
+          expr: |
+            (
+              1 - sum(rate(lurus_gateway_requests_total{status=~"5.."}[5m]))
+                / sum(rate(lurus_gateway_requests_total[5m]))
+            ) * 100 < 95
+          for: 2m
+          labels:
+            severity: page
+            service: lurus-hub
+          annotations:
+            summary: "newhub availability {{ printf \"%.2f\" $value }}% < 95% — major outage"
+
+    - name: lurus-hub-latency
+      interval: 30s
+      rules:
+        - alert: HubP95LatencyHigh
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(lurus_gateway_request_duration_seconds_bucket[5m])) by (le)
+            ) > 3
+          for: 10m
+          labels:
+            severity: ticket
+            service: lurus-hub
+          annotations:
+            summary: "p95 latency {{ printf \"%.2f\" $value }}s > 3s"
+            description: "Sustained slow requests; check upstream timeouts and channel selection."
+
+        - alert: HubGatewayOverheadHigh
+          expr: |
+            (
+              histogram_quantile(0.95, sum(rate(lurus_gateway_request_duration_seconds_bucket[5m])) by (le))
+              -
+              histogram_quantile(0.95, sum(rate(lurus_gateway_relay_duration_seconds_bucket[5m])) by (le))
+            ) > 0.1
+          for: 15m
+          labels:
+            severity: ticket
+            service: lurus-hub
+          annotations:
+            summary: "gateway overhead {{ printf \"%.3f\" $value }}s > 0.1s"
+            description: "newhub adding >100ms on top of upstream — north-star target <50ms."
+
+    - name: lurus-hub-circuit-breaker
+      interval: 30s
+      rules:
+        - alert: ChannelBreakerStuckOpen
+          expr: lurus_gateway_circuit_breaker_state == 1
+          for: 30m
+          labels:
+            severity: ticket
+            service: lurus-hub
+          annotations:
+            summary: "channel {{ $labels.channel_id }} breaker open for 30m+"
+            description: "Channel hasn't recovered. Confirm upstream provider is healthy or disable the channel manually."
+
+        - alert: ChannelBreakerFlapping
+          expr: changes(lurus_gateway_circuit_breaker_state[10m]) > 5
+          for: 5m
+          labels:
+            severity: info
+            service: lurus-hub
+          annotations:
+            summary: "channel {{ $labels.channel_id }} breaker flapping (>5 changes/10m)"
+            description: "Indicates marginal upstream health. Consider raising the breaker threshold or removing the channel."
+
+    - name: lurus-hub-quota-spikes
+      interval: 30s
+      rules:
+        - alert: CostSpikeBurstHigh
+          expr: sum(rate(lurus_gateway_requests_total{status="429"}[5m])) > 1
+          for: 5m
+          labels:
+            severity: ticket
+            service: lurus-hub
+          annotations:
+            summary: "cost-spike 429s firing at {{ printf \"%.2f\" $value }}/s"
+            description: "Multiple users hitting the 5-min quota guard simultaneously. Could be coordinated abuse OR a too-tight threshold."
+
+        - alert: QuotaCapBurstHigh
+          expr: sum(rate(lurus_gateway_requests_total{status="402"}[5m])) > 5
+          for: 10m
+          labels:
+            severity: info
+            service: lurus-hub
+          annotations:
+            summary: "402 quota-capped at {{ printf \"%.1f\" $value }}/s"
+            description: "Many users hitting MaxQuota."
+
+    - name: lurus-hub-billing
+      interval: 60s
+      rules:
+        - alert: PlatformBreakerOpen
+          expr: lurus_billing_circuit_breaker_state == 1
+          for: 5m
+          labels:
+            severity: page
+            service: lurus-hub
+          annotations:
+            summary: "lurus-platform breaker open — settlement halted"
+            description: "newhub stopped settling pre-auths to platform. Check platform health."
+
+        - alert: BillingOutboxBacklog
+          expr: lurus_billing_outbox_pending > 100
+          for: 15m
+          labels:
+            severity: ticket
+            service: lurus-hub
+          annotations:
+            summary: "billing outbox depth {{ $value }} > 100"
+
+        - alert: BillingOutboxFailures
+          expr: rate(lurus_billing_outbox_failed_total[1h]) > 0
+          for: 5m
+          labels:
+            severity: ticket
+            service: lurus-hub
+          annotations:
+            summary: "{{ $value }} pre-auths permanently failed"
+
+        - alert: CreditPoolBalanceLow
+          expr: lurus_gateway_credit_pool_balance < 1000 and lurus_gateway_credit_pool_balance > 0
+          for: 10m
+          labels:
+            severity: warning
+            service: lurus-hub
+            component: tenant_credit_pool
+          annotations:
+            summary: "Tenant {{ $labels.tenant_id }} credit pool balance {{ $value }} below threshold"
+            description: "See doc/runbook/pool-threshold-alert.md"
+
+        - alert: CreditPoolExhausted
+          expr: lurus_gateway_credit_pool_balance <= 0
+          for: 5m
+          labels:
+            severity: page
+            service: lurus-hub
+            component: tenant_credit_pool
+          annotations:
+            summary: "Tenant {{ $labels.tenant_id }} credit pool EXHAUSTED — relay returning HTTP 402"
