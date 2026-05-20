@@ -80,6 +80,11 @@ spec:
                 secretKeyRef:
                   name: lurus-newhub-secrets
                   key: IDENTITY_SESSION_SECRET
+            - name: LURUS_WHITELABEL_MASTER_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: lurus-newhub-secrets
+                  key: LURUS_WHITELABEL_MASTER_SECRET
             - name: ALLOWED_ORIGINS
               value: "https://test-newhub.lurus.cn"
             - name: LLM_QUOTA_NATS_ENABLED
