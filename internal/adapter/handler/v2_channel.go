@@ -18,6 +18,31 @@ import (
 // Channels are tenant-level resources managed by tenant admins
 // ============================================================================
 
+// channelView is the field-whitelisted projection returned by ListChannelsV2.
+// It excludes the raw key and per-channel secrets (other, setting,
+// param_override, header_override, other_info) plus tenant_id (implicit from
+// route), so a tenant admin only sees the display surface — never another
+// channel's credentials. Mirrors redemptionView.
+type channelView struct {
+	Id           int     `json:"id"`
+	Name         string  `json:"name"`
+	Type         int     `json:"type"`
+	Key          string  `json:"key"` // always masked; repo omits the key column
+	Status       int     `json:"status"`
+	Group        string  `json:"group"`
+	Models       string  `json:"models"`
+	ModelMapping *string `json:"model_mapping"`
+	Priority     *int64  `json:"priority"`
+	Weight       *uint   `json:"weight"`
+	Tag          *string `json:"tag"`
+	BaseURL      *string `json:"base_url"`
+	Balance      float64 `json:"balance"`
+	UsedQuota    int64   `json:"used_quota"`
+	ResponseTime int     `json:"response_time"`
+	TestTime     int64   `json:"test_time"`
+	CreatedTime  int64   `json:"created_time"`
+}
+
 // ListChannelsV2 retrieves channels for the tenant (admin only)
 // Route: GET /api/v2/:tenant_slug/channels
 func ListChannelsV2(c *gin.Context) {
@@ -65,8 +90,8 @@ func ListChannelsV2(c *gin.Context) {
 
 	// Build query based on filters
 	if keyword != "" || group != "" || modelFilter != "" {
-		// Use search function
-		allChannels, searchErr := repo.SearchChannels(keyword, group, modelFilter, idSort)
+		// Use search function (tenant-scoped: never matches other tenants' channels)
+		allChannels, searchErr := repo.SearchChannelsByTenant(tenantCtx.TenantID, keyword, group, modelFilter, idSort)
 		if searchErr != nil {
 			common.SysError("Failed to search channels: " + searchErr.Error())
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -85,8 +110,8 @@ func ListChannelsV2(c *gin.Context) {
 			channels = allChannels[startIdx:end]
 		}
 	} else if tag != "" {
-		// Filter by tag
-		allChannels, tagErr := repo.GetChannelsByTag(tag, idSort, false)
+		// Filter by tag (tenant-scoped)
+		allChannels, tagErr := repo.GetChannelsByTagAndTenant(tenantCtx.TenantID, tag, idSort)
 		if tagErr != nil {
 			common.SysError("Failed to get channels by tag: " + tagErr.Error())
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -105,9 +130,9 @@ func ListChannelsV2(c *gin.Context) {
 			channels = allChannels[startIdx:end]
 		}
 	} else {
-		// Get all channels with pagination
+		// Get this tenant's channels with pagination
 		var getAllErr error
-		channels, getAllErr = repo.GetAllChannels(startIdx, pageSize, false, idSort)
+		channels, getAllErr = repo.GetChannelsByTenant(tenantCtx.TenantID, startIdx, pageSize, idSort)
 		if getAllErr != nil {
 			common.SysError("Failed to get channels: " + getAllErr.Error())
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -116,18 +141,37 @@ func ListChannelsV2(c *gin.Context) {
 			})
 			return
 		}
-		total, _ = repo.CountAllChannels()
+		total, _ = repo.GetTenantChannelCount(tenantCtx.TenantID)
 	}
 
-	// Mask sensitive keys in response
+	// Project to the field-whitelisted view (masked/empty key, no secrets).
+	items := make([]channelView, 0, len(channels))
 	for _, ch := range channels {
-		ch.Key = maskKey(ch.Key)
+		items = append(items, channelView{
+			Id:           ch.Id,
+			Name:         ch.Name,
+			Type:         ch.Type,
+			Key:          maskKey(ch.Key),
+			Status:       ch.Status,
+			Group:        ch.Group,
+			Models:       ch.Models,
+			ModelMapping: ch.ModelMapping,
+			Priority:     ch.Priority,
+			Weight:       ch.Weight,
+			Tag:          ch.Tag,
+			BaseURL:      ch.BaseURL,
+			Balance:      ch.Balance,
+			UsedQuota:    ch.UsedQuota,
+			ResponseTime: ch.ResponseTime,
+			TestTime:     ch.TestTime,
+			CreatedTime:  ch.CreatedTime,
+		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"channels":  channels,
+			"channels":  items,
 			"total":     total,
 			"page":      page,
 			"page_size": pageSize,

@@ -377,6 +377,7 @@ func SeedV2Channel(t *testing.T, ctx *V2TestContext, name string) *repo.Channel 
 	t.Helper()
 	channel := &repo.Channel{
 		Name:        name,
+		TenantId:    ctx.TenantID,
 		Key:         "sk-test-" + common.GetRandomString(24),
 		Status:      common.ChannelStatusEnabled,
 		Type:        1, // OpenAI type

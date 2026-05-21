@@ -316,12 +316,27 @@ func GetAllChannels(startIdx int, num int, selectAll bool, idSort bool) ([]*Chan
 }
 
 func GetChannelsByTag(tag string, idSort bool, selectAll bool) ([]*Channel, error) {
+	return getChannelsByTagScoped("", tag, idSort, selectAll)
+}
+
+// GetChannelsByTagAndTenant is the tenant-scoped sibling of GetChannelsByTag.
+// The explicit tenant_id filter is the security boundary for the v2 console:
+// repo callers use the bare DB handle (no GORM tenant-context), so the
+// TenantPlugin auto-filter does not fire here. Mirrors GetRedemptionsByTenant.
+func GetChannelsByTagAndTenant(tenantID string, tag string, idSort bool) ([]*Channel, error) {
+	return getChannelsByTagScoped(tenantID, tag, idSort, false)
+}
+
+func getChannelsByTagScoped(tenantID string, tag string, idSort bool, selectAll bool) ([]*Channel, error) {
 	var channels []*Channel
 	order := "priority desc"
 	if idSort {
 		order = "id desc"
 	}
 	query := DB.Where("tag = ?", tag).Order(order)
+	if tenantID != "" {
+		query = query.Where("tenant_id = ?", tenantID)
+	}
 	if !selectAll {
 		query = query.Omit("key")
 	}
@@ -329,7 +344,31 @@ func GetChannelsByTag(tag string, idSort bool, selectAll bool) ([]*Channel, erro
 	return channels, err
 }
 
+// GetChannelsByTenant lists channels for a single tenant with pagination. The
+// explicit tenant_id filter is the security boundary: repo callers use the bare
+// DB handle, so the TenantPlugin auto-filter does not fire. key column omitted.
+func GetChannelsByTenant(tenantID string, startIdx int, num int, idSort bool) ([]*Channel, error) {
+	var channels []*Channel
+	order := "priority desc"
+	if idSort {
+		order = "id desc"
+	}
+	err := DB.Where("tenant_id = ?", tenantID).Order(order).Limit(num).Offset(startIdx).Omit("key").Find(&channels).Error
+	return channels, err
+}
+
 func SearchChannels(keyword string, group string, model string, idSort bool) ([]*Channel, error) {
+	return searchChannelsScoped("", keyword, group, model, idSort)
+}
+
+// SearchChannelsByTenant is the tenant-scoped sibling of SearchChannels. Used by
+// the v2 console so a tenant admin's keyword/group/model search never matches
+// another tenant's channels.
+func SearchChannelsByTenant(tenantID string, keyword string, group string, model string, idSort bool) ([]*Channel, error) {
+	return searchChannelsScoped(tenantID, keyword, group, model, idSort)
+}
+
+func searchChannelsScoped(tenantID string, keyword string, group string, model string, idSort bool) ([]*Channel, error) {
 	var channels []*Channel
 	modelsCol := "`models`"
 
@@ -351,6 +390,9 @@ func SearchChannels(keyword string, group string, model string, idSort bool) ([]
 
 	// 构造基础查询
 	baseQuery := DB.Model(&Channel{}).Omit("key")
+	if tenantID != "" {
+		baseQuery = baseQuery.Where("tenant_id = ?", tenantID)
+	}
 
 	// 构造WHERE子句
 	var whereClause string
