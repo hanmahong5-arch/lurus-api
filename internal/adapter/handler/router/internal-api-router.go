@@ -121,9 +121,10 @@ func SetInternalApiRouter(router *gin.Engine) {
 		modelReadGroup.GET("/video-status", handler.InternalGetVideoStatus)
 	}
 
-	// Admin operations (requires wildcard scope)
+	// Admin operations (requires the admin scope; ScopeAll keys still pass via
+	// HasScope's wildcard, so existing platform-admin keys keep working).
 	adminGroup := internalGroup.Group("/admin")
-	adminGroup.Use(middleware.RequireScope(repo.ScopeAll))
+	adminGroup.Use(middleware.RequireScope(repo.ScopeAdmin))
 	{
 		adminGroup.POST("/backfill-token-accounts", handler.InternalBackfillTokenAccountIDs)
 	}
