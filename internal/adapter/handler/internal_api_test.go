@@ -471,9 +471,10 @@ func TestAdminGetApiKeyScopes(t *testing.T) {
 		t.Fatal("Expected data to be an array")
 	}
 
-	// Should have 17 scopes
-	if len(data) != 17 {
-		t.Errorf("Expected 17 scopes, got %d", len(data))
+	// Should match repo.GetAvailableScopes (19: 16 data scopes + provisioning
+	// + admin + wildcard). Kept in sync with repo's TestGetAvailableScopes.
+	if len(data) != 19 {
+		t.Errorf("Expected 19 scopes, got %d", len(data))
 	}
 
 	// Check each scope has required fields

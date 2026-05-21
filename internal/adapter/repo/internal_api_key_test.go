@@ -96,6 +96,12 @@ func TestHasScope(t *testing.T) {
 		{"wildcard_matches_balance", []string{"*"}, "balance:write", true},
 		{"wildcard_with_others", []string{"user:read", "*"}, "quota:write", true},
 
+		// ScopeAdmin (A5): wildcard keys still satisfy it (backward compat);
+		// narrow keys do not; an explicit admin scope does.
+		{"wildcard_satisfies_admin", []string{"*"}, ScopeAdmin, true},
+		{"admin_exact_match", []string{ScopeAdmin}, ScopeAdmin, true},
+		{"narrow_key_lacks_admin", []string{"user:read", "quota:write"}, ScopeAdmin, false},
+
 		// No match tests
 		{"no_match_different", []string{"user:read"}, "user:write", false},
 		{"no_match_partial", []string{"user:read"}, "user", false},
@@ -195,10 +201,10 @@ func TestHashKey(t *testing.T) {
 func TestGetAvailableScopes(t *testing.T) {
 	scopes := GetAvailableScopes()
 
-	// Should return 18 scopes: 13 original + log:read + model:read + auth:login
-	// + provisioning (ADR 2026-05-18) + all
-	if len(scopes) != 18 {
-		t.Errorf("GetAvailableScopes() returned %d scopes, want 18", len(scopes))
+	// Should return 19 scopes: 13 original + log:read + model:read + auth:login
+	// + provisioning (ADR 2026-05-18) + admin (Phase A A5) + all
+	if len(scopes) != 19 {
+		t.Errorf("GetAvailableScopes() returned %d scopes, want 19", len(scopes))
 	}
 
 	// Check required fields
@@ -223,6 +229,7 @@ func TestGetAvailableScopes(t *testing.T) {
 		ScopeTokenRead, ScopeTokenWrite,
 		ScopeAuthLogin,
 		ScopeProvisioning,
+		ScopeAdmin,
 		ScopeAll,
 	}
 

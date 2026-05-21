@@ -31,6 +31,7 @@ const (
 	ScopeLogRead           = entity.ScopeLogRead
 	ScopeModelRead         = entity.ScopeModelRead
 	ScopeProvisioning      = entity.ScopeProvisioning
+	ScopeAdmin             = entity.ScopeAdmin
 	ScopeAll               = entity.ScopeAll
 )
 
@@ -200,6 +201,7 @@ func GetAvailableScopes() []map[string]string {
 		{"key": ScopeModelRead, "name": "Read Models", "description": "View model catalog and pricing"},
 		{"key": ScopeAuthLogin, "name": "Auth Login", "description": "Authenticate users via login"},
 		{"key": ScopeProvisioning, "name": "Provisioning", "description": "Reseller sub-tenant key issuance / revocation"},
+		{"key": ScopeAdmin, "name": "Platform Admin", "description": "Platform admin operations (backfill jobs, etc.) under /internal/admin"},
 		{"key": ScopeAll, "name": "All Permissions", "description": "Full access to all internal APIs"},
 	}
 }
