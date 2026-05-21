@@ -11,6 +11,58 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// logView is the field-whitelisted projection returned by the v2 log endpoints.
+// It excludes tenant_id (implicit from route), the caller IP (PII), the raw
+// `other` payload, and the governance-internal fingerprint/upstream-model/
+// channel-type/relay-mode columns. Mirrors redemptionView.
+type logView struct {
+	Id               int    `json:"id"`
+	UserId           int    `json:"user_id"`
+	CreatedAt        int64  `json:"created_at"`
+	Type             int    `json:"type"`
+	Content          string `json:"content"`
+	Username         string `json:"username"`
+	TokenName        string `json:"token_name"`
+	ModelName        string `json:"model_name"`
+	Quota            int    `json:"quota"`
+	PromptTokens     int    `json:"prompt_tokens"`
+	CompletionTokens int    `json:"completion_tokens"`
+	UseTime          int    `json:"use_time"`
+	IsStream         bool   `json:"is_stream"`
+	ChannelId        int    `json:"channel"`
+	ChannelName      string `json:"channel_name"`
+	TokenId          int    `json:"token_id"`
+	Group            string `json:"group"`
+	TotalLatencyMs   int    `json:"total_latency_ms"`
+}
+
+func toLogViews(logs []*repo.Log) []logView {
+	items := make([]logView, 0, len(logs))
+	for _, l := range logs {
+		items = append(items, logView{
+			Id:               l.Id,
+			UserId:           l.UserId,
+			CreatedAt:        l.CreatedAt,
+			Type:             l.Type,
+			Content:          l.Content,
+			Username:         l.Username,
+			TokenName:        l.TokenName,
+			ModelName:        l.ModelName,
+			Quota:            l.Quota,
+			PromptTokens:     l.PromptTokens,
+			CompletionTokens: l.CompletionTokens,
+			UseTime:          l.UseTime,
+			IsStream:         l.IsStream,
+			ChannelId:        l.ChannelId,
+			ChannelName:      l.ChannelName,
+			TokenId:          l.TokenId,
+			Group:            l.Group,
+			TotalLatencyMs:   l.TotalLatencyMs,
+		})
+	}
+	return items
+}
+
 // GetLogsV2 retrieves the current user's logs (v2 API with tenant context)
 // Route: GET /api/v2/:tenant_slug/logs
 func GetLogsV2(c *gin.Context) {
@@ -69,7 +121,7 @@ func GetLogsV2(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"logs":      logs,
+			"logs":      toLogViews(logs),
 			"total":     total,
 			"page":      page,
 			"page_size": pageSize,
@@ -136,7 +188,7 @@ func GetAllLogsV2(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"logs":      logs,
+			"logs":      toLogViews(logs),
 			"total":     total,
 			"page":      page,
 			"page_size": pageSize,

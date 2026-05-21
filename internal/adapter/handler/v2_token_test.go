@@ -321,6 +321,34 @@ func TestListTokensV2_UserIsolation(t *testing.T) {
 	}
 }
 
+// TestListTokensV2_ForbiddenFields guards the tokenView whitelist: the list
+// endpoint must never expose the raw bearer key or tenant/linkage internals.
+func TestListTokensV2_ForbiddenFields(t *testing.T) {
+	ctx := SetupV2TestRouter(t)
+	defer ctx.Cleanup()
+
+	SeedV2Token(t, ctx, ctx.NormalUser.Id, "Field Whitelist Token")
+
+	w := V2RequestAsUser(ctx, ctx.NormalUser, http.MethodGet, "/api/v2/test-tenant/tokens", nil, nil)
+	resp := AssertV2Success(t, w)
+	data := resp["data"].(map[string]interface{})
+	items := data["items"].([]interface{})
+	if len(items) != 1 {
+		t.Fatalf("expected 1 token, got %d", len(items))
+	}
+	tk := items[0].(map[string]interface{})
+
+	for _, f := range []string{"key", "tenant_id", "user_id", "identity_account_id", "creator_user_id", "DeletedAt"} {
+		if _, exists := tk[f]; exists {
+			t.Errorf("forbidden field %q leaked through tokenView", f)
+		}
+	}
+	// sanity: the curated fields are present
+	if _, ok := tk["name"]; !ok {
+		t.Error("expected name field in tokenView")
+	}
+}
+
 func TestUpdateTokenV2_InvalidID(t *testing.T) {
 	ctx := SetupV2TestRouter(t)
 	defer ctx.Cleanup()

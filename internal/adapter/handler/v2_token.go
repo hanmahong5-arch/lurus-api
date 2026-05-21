@@ -15,6 +15,48 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// tokenView is the field-whitelisted projection returned by ListTokensV2. It
+// excludes the raw Key (the bearer secret — must never appear in a list, only
+// once on create), tenant_id (implicit from route) and the platform/provisioning
+// linkage IDs (identity_account_id, creator_user_id). Mirrors redemptionView.
+type tokenView struct {
+	Id                 int     `json:"id"`
+	Name               string  `json:"name"`
+	Status             int     `json:"status"`
+	CreatedTime        int64   `json:"created_time"`
+	AccessedTime       int64   `json:"accessed_time"`
+	ExpiredTime        int64   `json:"expired_time"`
+	RemainQuota        int     `json:"remain_quota"`
+	UsedQuota          int     `json:"used_quota"`
+	UnlimitedQuota     bool    `json:"unlimited_quota"`
+	ModelLimitsEnabled bool    `json:"model_limits_enabled"`
+	ModelLimits        string  `json:"model_limits"`
+	AllowIps           *string `json:"allow_ips"`
+	Group              string  `json:"group"`
+}
+
+func toTokenViews(tokens []*repo.Token) []tokenView {
+	items := make([]tokenView, 0, len(tokens))
+	for _, t := range tokens {
+		items = append(items, tokenView{
+			Id:                 t.Id,
+			Name:               t.Name,
+			Status:             t.Status,
+			CreatedTime:        t.CreatedTime,
+			AccessedTime:       t.AccessedTime,
+			ExpiredTime:        t.ExpiredTime,
+			RemainQuota:        t.RemainQuota,
+			UsedQuota:          t.UsedQuota,
+			UnlimitedQuota:     t.UnlimitedQuota,
+			ModelLimitsEnabled: t.ModelLimitsEnabled,
+			ModelLimits:        t.ModelLimits,
+			AllowIps:           t.AllowIps,
+			Group:              t.Group,
+		})
+	}
+	return items
+}
+
 // ListTokensV2 retrieves the current user's tokens (v2 API with tenant context)
 // Route: GET /api/v2/:tenant_slug/tokens
 func ListTokensV2(c *gin.Context) {
@@ -58,7 +100,7 @@ func ListTokensV2(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"items":     tokens,
+			"items":     toTokenViews(tokens),
 			"total":     total,
 			"page":      page,
 			"page_size": pageSize,

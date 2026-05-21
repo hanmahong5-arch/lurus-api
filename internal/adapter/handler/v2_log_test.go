@@ -240,6 +240,48 @@ func TestGetAllLogsV2_NonAdminRejected(t *testing.T) {
 	AssertV2Status(t, w, http.StatusOK)
 }
 
+// TestGetLogsV2_ForbiddenFields guards the logView whitelist: the log endpoints
+// must not expose tenant_id, caller IP (PII), the raw `other` payload, or the
+// governance-internal fingerprint/upstream-model columns.
+func TestGetLogsV2_ForbiddenFields(t *testing.T) {
+	ctx := SetupV2TestRouter(t)
+	defer ctx.Cleanup()
+
+	sensitive := &repo.Log{
+		UserId:             ctx.NormalUser.Id,
+		TenantId:           ctx.TenantID,
+		Type:               repo.LogTypeConsume,
+		Content:            "log with secrets",
+		ModelName:          "gpt-4",
+		CreatedAt:          1700000000,
+		Ip:                 "203.0.113.7",
+		Other:              `{"secret":"payload"}`,
+		RequestFingerprint: "fp-abc123",
+		UpstreamModel:      "gpt-4-internal",
+	}
+	if err := ctx.DB.Create(sensitive).Error; err != nil {
+		t.Fatalf("failed to seed sensitive log: %v", err)
+	}
+
+	w := V2RequestAsUser(ctx, ctx.NormalUser, http.MethodGet, "/api/v2/test-tenant/logs", nil, nil)
+	resp := AssertV2Success(t, w)
+	data := resp["data"].(map[string]interface{})
+	logs := data["logs"].([]interface{})
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 log, got %d", len(logs))
+	}
+	lg := logs[0].(map[string]interface{})
+
+	for _, f := range []string{"tenant_id", "ip", "other", "request_fingerprint", "upstream_model", "channel_type", "relay_mode"} {
+		if _, exists := lg[f]; exists {
+			t.Errorf("forbidden field %q leaked through logView", f)
+		}
+	}
+	if _, ok := lg["model_name"]; !ok {
+		t.Error("expected model_name field in logView")
+	}
+}
+
 func TestGetLogsV2_TypeFilter(t *testing.T) {
 	ctx := SetupV2TestRouter(t)
 	defer ctx.Cleanup()
