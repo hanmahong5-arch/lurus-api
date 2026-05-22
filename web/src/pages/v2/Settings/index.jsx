@@ -298,7 +298,11 @@ const HFSettings = () => {
         setSubData({
           group: p.group ?? null,
           planHint,
-          source: planHint ? 'platform' : p.group ? 'user_group' : 'placeholder',
+          source: planHint
+            ? 'platform'
+            : p.group
+              ? 'user_group'
+              : 'placeholder',
         });
       } else {
         setSubError(true);
@@ -370,7 +374,12 @@ const HFSettings = () => {
   }, [section, subData, subLoading, fetchSubscription]);
 
   useEffect(() => {
-    if (section === 'billing' && !billSummary && !billTxns.length && !billLoading) {
+    if (
+      section === 'billing' &&
+      !billSummary &&
+      !billTxns.length &&
+      !billLoading
+    ) {
       fetchBilling();
     }
   }, [section, billSummary, billTxns.length, billLoading, fetchBilling]);
@@ -856,10 +865,7 @@ const HFSettings = () => {
                               }}
                             >
                               <span className='lbl'>{k}</span>
-                              <span
-                                className='strong'
-                                style={{ fontSize: 13 }}
-                              >
+                              <span className='strong' style={{ fontSize: 13 }}>
                                 {v}
                               </span>
                             </div>
