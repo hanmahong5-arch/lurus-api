@@ -398,7 +398,7 @@ const HFLog = () => {
                   <tbody>
                     {logs.map((r, i) => (
                       <tr
-                        key={r.Id ?? i}
+                        key={r.id ?? i}
                         onClick={() => setSelRow(i)}
                         style={{
                           background:
@@ -410,21 +410,21 @@ const HFLog = () => {
                               : '2px solid transparent',
                         }}
                       >
-                        <td className='mono muted'>{fmtTime(r.CreatedAt)}</td>
+                        <td className='mono muted'>{fmtTime(r.created_at)}</td>
                         <td className='mono'>
-                          {r.Duration ?? '—'}
-                          {r.Duration != null && (
+                          {r.total_latency_ms ?? '—'}
+                          {r.total_latency_ms != null && (
                             <span className='faint'>ms</span>
                           )}
                         </td>
                         <td className='mono'>—</td>
-                        <td className='strong'>{r.ModelName || '—'}</td>
+                        <td className='strong'>{r.model_name || '—'}</td>
                         <td className='mono muted'>—</td>
-                        <td className='mono muted'>{r.TokenName || '—'}</td>
+                        <td className='mono muted'>{r.token_name || '—'}</td>
                         <td className='mono muted'>
-                          {fmtTok(r.PromptTokens, r.CompletionTokens)}
+                          {fmtTok(r.prompt_tokens, r.completion_tokens)}
                         </td>
-                        <td className='mono'>{fmtCost(r.Quota)}</td>
+                        <td className='mono'>{fmtCost(r.quota)}</td>
                         <td>
                           <span className='tag ok'>200</span>
                         </td>
@@ -446,10 +446,10 @@ const HFLog = () => {
                     }}
                   >
                     <div className='lbl' style={{ marginBottom: 4 }}>
-                      request · {fmtTime(selectedLog.CreatedAt)}
+                      request · {fmtTime(selectedLog.created_at)}
                     </div>
                     <div className='display' style={{ fontSize: 19 }}>
-                      {selectedLog.ModelName || '—'}
+                      {selectedLog.model_name || '—'}
                     </div>
                     <div
                       style={{
@@ -461,13 +461,15 @@ const HFLog = () => {
                       }}
                     >
                       <span className='tag ok'>200</span>
-                      {selectedLog.ModelName && (
-                        <span className='pill'>{selectedLog.ModelName}</span>
+                      {selectedLog.model_name && (
+                        <span className='pill'>{selectedLog.model_name}</span>
                       )}
-                      {selectedLog.Duration != null && (
-                        <span className='pill'>{selectedLog.Duration}ms</span>
+                      {selectedLog.total_latency_ms != null && (
+                        <span className='pill'>
+                          {selectedLog.total_latency_ms}ms
+                        </span>
                       )}
-                      {selectedLog.IsStream && (
+                      {selectedLog.is_stream && (
                         <span className='pill'>stream</span>
                       )}
                     </div>
@@ -488,38 +490,38 @@ const HFLog = () => {
                     >
                       <div>
                         <span className='muted'>model:</span>{' '}
-                        {selectedLog.ModelName || '—'}
+                        {selectedLog.model_name || '—'}
                       </div>
                       <div>
                         <span className='muted'>token name:</span>{' '}
-                        {selectedLog.TokenName || '—'}
+                        {selectedLog.token_name || '—'}
                       </div>
                       <div>
                         <span className='muted'>prompt tokens:</span>{' '}
-                        {selectedLog.PromptTokens ?? '—'}
+                        {selectedLog.prompt_tokens ?? '—'}
                       </div>
                       <div>
                         <span className='muted'>completion tokens:</span>{' '}
-                        {selectedLog.CompletionTokens ?? '—'}
+                        {selectedLog.completion_tokens ?? '—'}
                       </div>
                       <div>
                         <span className='muted'>cost:</span>{' '}
-                        {fmtCost(selectedLog.Quota)}
+                        {fmtCost(selectedLog.quota)}
                       </div>
                       <div>
                         <span className='muted'>duration:</span>{' '}
-                        {selectedLog.Duration != null
-                          ? `${selectedLog.Duration}ms`
+                        {selectedLog.total_latency_ms != null
+                          ? `${selectedLog.total_latency_ms}ms`
                           : '—'}
                       </div>
                       <div>
                         <span className='muted'>streaming:</span>{' '}
-                        {selectedLog.IsStream ? 'yes' : 'no'}
+                        {selectedLog.is_stream ? 'yes' : 'no'}
                       </div>
-                      {selectedLog.Content && (
+                      {selectedLog.content && (
                         <div>
                           <span className='muted'>note:</span>{' '}
-                          {selectedLog.Content}
+                          {selectedLog.content}
                         </div>
                       )}
                     </div>

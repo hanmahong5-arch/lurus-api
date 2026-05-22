@@ -75,12 +75,12 @@ import { API, showError, showSuccess } from '../../../helpers';
 // ─── fixtures ────────────────────────────────────────────────────────────────
 
 const makeChannel = (id, name) => ({
-  Id: id,
-  Name: name,
-  Type: 1,
-  Models: 'gpt-4,gpt-3.5-turbo',
-  Status: 1,
-  Group: 'default',
+  id,
+  name,
+  type: 1,
+  models: 'gpt-4,gpt-3.5-turbo',
+  status: 1,
+  group: 'default',
 });
 
 const mockListResponse = (channels) => ({

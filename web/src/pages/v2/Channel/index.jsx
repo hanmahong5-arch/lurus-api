@@ -39,7 +39,7 @@ const SyncModelsModal = ({ tenantSlug, channel, onClose, onApply }) => {
 
   useEffect(() => {
     setLoading(true);
-    API.get(`/api/v2/${tenantSlug}/channels/${channel.Id}/upstream-models`)
+    API.get(`/api/v2/${tenantSlug}/channels/${channel.id}/upstream-models`)
       .then((res) => {
         if (res?.data?.success) {
           const d = res.data.data;
@@ -56,7 +56,7 @@ const SyncModelsModal = ({ tenantSlug, channel, onClose, onApply }) => {
         onClose();
       })
       .finally(() => setLoading(false));
-  }, [tenantSlug, channel.Id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tenantSlug, channel.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleModel = (m) => {
     setSelected((prev) => {
@@ -73,7 +73,7 @@ const SyncModelsModal = ({ tenantSlug, channel, onClose, onApply }) => {
     try {
       // Merge: start from current list, add selected new, remove missing that are deselected.
       const currentSet = new Set(
-        (channel.Models || '')
+        (channel.models || '')
           .split(',')
           .map((m) => m.trim())
           .filter(Boolean),
@@ -84,7 +84,7 @@ const SyncModelsModal = ({ tenantSlug, channel, onClose, onApply }) => {
       }
       const newModels = [...currentSet].join(',');
       const res = await API.put(
-        `/api/v2/${tenantSlug}/channels/${channel.Id}`,
+        `/api/v2/${tenantSlug}/channels/${channel.id}`,
         { models: newModels },
       );
       if (res?.data?.success) {
@@ -138,7 +138,7 @@ const SyncModelsModal = ({ tenantSlug, channel, onClose, onApply }) => {
         }}
       >
         <div className='strong' style={{ fontSize: 15 }}>
-          {t('同步上游模型')} · {channel.Name}
+          {t('同步上游模型')} · {channel.name}
         </div>
 
         {loading ? (
@@ -267,8 +267,8 @@ const useTenantSlug = () => {
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
 const channelStatus = (ch) => {
-  if (ch.Status === 1) return 'ok';
-  if (ch.Status === 2) return 'disabled';
+  if (ch.status === 1) return 'ok';
+  if (ch.status === 2) return 'disabled';
   return 'error';
 };
 
@@ -377,19 +377,19 @@ const ChannelModal = ({ tenantSlug, existing, onDone, onClose }) => {
   const [form, setForm] = useState(
     existing
       ? {
-          name: existing.Name ?? '',
+          name: existing.name ?? '',
           key: '',
-          type: existing.Type ?? 1,
-          baseURL: existing.BaseURL ?? '',
-          models: Array.isArray(existing.Models)
-            ? existing.Models.join(',')
-            : (existing.Models ?? ''),
-          group: existing.Group ?? 'default',
-          weight: existing.Weight ?? 1,
-          priority: existing.Priority ?? 0,
-          modelMapping: existing.ModelMapping ?? '',
-          tag: existing.Tag ?? '',
-          remark: existing.Remark ?? '',
+          type: existing.type ?? 1,
+          baseURL: existing.base_url ?? '',
+          models: Array.isArray(existing.models)
+            ? existing.models.join(',')
+            : (existing.models ?? ''),
+          group: existing.group ?? 'default',
+          weight: existing.weight ?? 1,
+          priority: existing.priority ?? 0,
+          modelMapping: existing.model_mapping ?? '',
+          tag: existing.tag ?? '',
+          remark: existing.remark ?? '',
         }
       : { ...EMPTY_FORM },
   );
@@ -411,12 +411,12 @@ const ChannelModal = ({ tenantSlug, existing, onDone, onClose }) => {
       const body = {
         name: form.name.trim(),
         type: Number(form.type),
-        baseURL: form.baseURL.trim(),
+        base_url: form.baseURL.trim(),
         models: form.models.trim(),
         group: form.group.trim() || 'default',
         weight: Number(form.weight) || 1,
         priority: Number(form.priority) || 0,
-        modelMapping: form.modelMapping.trim(),
+        model_mapping: form.modelMapping.trim(),
         tag: form.tag.trim(),
         remark: form.remark.trim(),
       };
@@ -425,7 +425,7 @@ const ChannelModal = ({ tenantSlug, existing, onDone, onClose }) => {
       let res;
       if (existing) {
         res = await API.put(
-          `/api/v2/${tenantSlug}/channels/${existing.Id}`,
+          `/api/v2/${tenantSlug}/channels/${existing.id}`,
           body,
         );
       } else {
@@ -495,7 +495,7 @@ const ChannelModal = ({ tenantSlug, existing, onDone, onClose }) => {
         }}
       >
         <div className='strong' style={{ fontSize: 15 }}>
-          {existing ? `Edit · ${existing.Name}` : 'New channel'}
+          {existing ? `Edit · ${existing.name}` : 'New channel'}
         </div>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -626,12 +626,13 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const mappings = parseMapping(channel.ModelMapping);
+  const mappings = parseMapping(channel.model_mapping);
 
   const modelsList = (() => {
-    if (!channel.Models) return [];
-    if (Array.isArray(channel.Models)) return channel.Models;
-    return channel.Models.split(',')
+    if (!channel.models) return [];
+    if (Array.isArray(channel.models)) return channel.models;
+    return channel.models
+      .split(',')
       .map((m) => m.trim())
       .filter(Boolean);
   })();
@@ -639,18 +640,18 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
   const saveField = async (field, value) => {
     setEditField(null);
     const body = {};
-    if (field === 'baseURL') body.baseURL = value;
+    if (field === 'baseURL') body.base_url = value;
     else if (field === 'group') body.group = value || 'default';
     else if (field === 'weight') body.weight = Number(value) || 1;
     else if (field === 'priority') body.priority = Number(value) || 0;
     else if (field === 'remark') body.remark = value;
     else if (field === 'models') body.models = value;
-    else if (field === 'modelMapping') body.modelMapping = value;
+    else if (field === 'modelMapping') body.model_mapping = value;
     if (Object.keys(body).length === 0) return;
     setSaving(true);
     try {
       const res = await API.put(
-        `/api/v2/${tenantSlug}/channels/${channel.Id}`,
+        `/api/v2/${tenantSlug}/channels/${channel.id}`,
         body,
       );
       if (res?.data?.success) {
@@ -670,7 +671,7 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
     setSaving(true);
     try {
       const res = await API.delete(
-        `/api/v2/${tenantSlug}/channels/${channel.Id}`,
+        `/api/v2/${tenantSlug}/channels/${channel.id}`,
       );
       if (res?.data?.success) {
         showSuccess('Channel deleted');
@@ -684,11 +685,11 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
   };
 
   const toggleStatus = async () => {
-    const newStatus = channel.Status === 1 ? 2 : 1;
+    const newStatus = channel.status === 1 ? 2 : 1;
     setSaving(true);
     try {
       const res = await API.put(
-        `/api/v2/${tenantSlug}/channels/${channel.Id}`,
+        `/api/v2/${tenantSlug}/channels/${channel.id}`,
         { status: newStatus },
       );
       if (res?.data?.success) {
@@ -754,11 +755,11 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
           channel settings
         </div>
         <div>
-          {row('base url', channel.BaseURL, 'baseURL')}
-          {row('group', channel.Group, 'group')}
-          {row('weight', channel.Weight, 'weight')}
-          {row('priority', channel.Priority, 'priority')}
-          {row('remark', channel.Remark, 'remark')}
+          {row('base url', channel.base_url, 'baseURL')}
+          {row('group', channel.group, 'group')}
+          {row('weight', channel.weight, 'weight')}
+          {row('priority', channel.priority, 'priority')}
+          {row('remark', channel.remark, 'remark')}
         </div>
       </div>
 
@@ -839,7 +840,7 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
           {editField === 'modelMapping' ? (
             <div style={{ marginTop: 4 }}>
               <InlineEdit
-                value={channel.ModelMapping ?? ''}
+                value={channel.model_mapping ?? ''}
                 onSave={(v) => saveField('modelMapping', v)}
                 onCancel={() => setEditField(null)}
               />
@@ -866,7 +867,7 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
             disabled={saving}
             onClick={toggleStatus}
           >
-            {channel.Status === 1 ? 'disable' : 'enable'}
+            {channel.status === 1 ? 'disable' : 'enable'}
           </button>
           <button
             type='button'
@@ -882,9 +883,9 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
 
       <ConfirmDialog
         visible={confirmDelete}
-        title={t('删除渠道 "{{name}}" ?', { name: channel.Name })}
+        title={t('删除渠道 "{{name}}" ?', { name: channel.name })}
         consequenceList={[t('停止通过此渠道路由请求'), t('此操作无法撤销')]}
-        confirmText={channel.Name}
+        confirmText={channel.name}
         onConfirm={performDelete}
         onCancel={() => !saving && setConfirmDelete(false)}
       />
@@ -949,7 +950,7 @@ const HFChannel = () => {
 
   const handleTestChannel = async (e, ch) => {
     e.stopPropagation();
-    const id = ch.Id;
+    const id = ch.id;
     setTestState((prev) => ({ ...prev, [id]: 'testing' }));
     try {
       const res = await API.post(
@@ -988,7 +989,7 @@ const HFChannel = () => {
     try {
       await Promise.all(
         targets.map((ch) =>
-          API.put(`/api/v2/${tenantSlug}/channels/${ch.Id}`, { status }),
+          API.put(`/api/v2/${tenantSlug}/channels/${ch.id}`, { status }),
         ),
       );
       showSuccess(`${targets.length} channel(s) updated`);
@@ -1141,15 +1142,16 @@ const HFChannel = () => {
               const isOpen = open === i;
 
               const modelsList = (() => {
-                if (!ch.Models) return [];
-                if (Array.isArray(ch.Models)) return ch.Models;
-                return ch.Models.split(',')
+                if (!ch.models) return [];
+                if (Array.isArray(ch.models)) return ch.models;
+                return ch.models
+                  .split(',')
                   .map((m) => m.trim())
                   .filter(Boolean);
               })();
 
               return (
-                <Fragment key={ch.Id ?? i}>
+                <Fragment key={ch.id ?? i}>
                   <tr
                     style={{
                       background: sel.has(i)
@@ -1177,10 +1179,10 @@ const HFChannel = () => {
                       >
                         <span className={statusDot(st)} />
                         <div>
-                          <div className='strong'>{ch.Name}</div>
+                          <div className='strong'>{ch.name}</div>
                           <div className='faint mono' style={{ fontSize: 9 }}>
-                            {ch.Group || 'default'}
-                            {ch.Tag ? ` · ${ch.Tag}` : ''}
+                            {ch.group || 'default'}
+                            {ch.tag ? ` · ${ch.tag}` : ''}
                           </div>
                         </div>
                       </div>
@@ -1192,7 +1194,7 @@ const HFChannel = () => {
                       style={{ fontSize: 11 }}
                       onClick={() => setOpen(isOpen ? -1 : i)}
                     >
-                      {ch.Type ?? '—'}
+                      {ch.type ?? '—'}
                     </td>
 
                     {/* Model count */}
@@ -1223,7 +1225,7 @@ const HFChannel = () => {
 
                     {/* Success rate */}
                     <td onClick={() => setOpen(isOpen ? -1 : i)}>
-                      {ch.SuccessRate != null && ch.SuccessRate > 0 ? (
+                      {ch.success_rate != null && ch.success_rate > 0 ? (
                         <div
                           style={{
                             display: 'flex',
@@ -1240,12 +1242,12 @@ const HFChannel = () => {
                           >
                             <div
                               style={{
-                                width: `${Math.min(ch.SuccessRate, 100)}%`,
+                                width: `${Math.min(ch.success_rate, 100)}%`,
                                 height: '100%',
                                 background:
-                                  ch.SuccessRate >= 99
+                                  ch.success_rate >= 99
                                     ? 'var(--hf-ok)'
-                                    : ch.SuccessRate >= 95
+                                    : ch.success_rate >= 95
                                       ? 'var(--hf-warn)'
                                       : 'var(--hf-err)',
                               }}
@@ -1256,14 +1258,14 @@ const HFChannel = () => {
                             style={{
                               fontSize: 11,
                               color:
-                                ch.SuccessRate >= 99
+                                ch.success_rate >= 99
                                   ? 'var(--hf-ok)'
-                                  : ch.SuccessRate >= 95
+                                  : ch.success_rate >= 95
                                     ? 'var(--hf-warn)'
                                     : 'var(--hf-err)',
                             }}
                           >
-                            {Number(ch.SuccessRate).toFixed(1)}%
+                            {Number(ch.success_rate).toFixed(1)}%
                           </span>
                         </div>
                       ) : (
@@ -1290,7 +1292,7 @@ const HFChannel = () => {
                     {/* Row actions: test + expand */}
                     <td style={{ whiteSpace: 'nowrap' }}>
                       {(() => {
-                        const ts = testState[ch.Id];
+                        const ts = testState[ch.id];
                         const isTesting = ts === 'testing';
                         const testLabel = isTesting
                           ? t('测试中…')
@@ -1305,7 +1307,7 @@ const HFChannel = () => {
                           <button
                             type='button'
                             className='btn ghost sm'
-                            data-testid={`test-btn-${ch.Id}`}
+                            data-testid={`test-btn-${ch.id}`}
                             disabled={isTesting}
                             style={
                               testColor
@@ -1362,7 +1364,7 @@ const HFChannel = () => {
                           <button
                             type='button'
                             className='btn sm'
-                            data-testid={`sync-btn-${ch.Id}`}
+                            data-testid={`sync-btn-${ch.id}`}
                             onClick={() => setSyncTarget(ch)}
                           >
                             {t('同步上游模型')}

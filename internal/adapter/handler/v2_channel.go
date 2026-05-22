@@ -35,6 +35,7 @@ type channelView struct {
 	Priority     *int64  `json:"priority"`
 	Weight       *uint   `json:"weight"`
 	Tag          *string `json:"tag"`
+	Remark       *string `json:"remark"`
 	BaseURL      *string `json:"base_url"`
 	Balance      float64 `json:"balance"`
 	UsedQuota    int64   `json:"used_quota"`
@@ -159,6 +160,7 @@ func ListChannelsV2(c *gin.Context) {
 			Priority:     ch.Priority,
 			Weight:       ch.Weight,
 			Tag:          ch.Tag,
+			Remark:       ch.Remark,
 			BaseURL:      ch.BaseURL,
 			Balance:      ch.Balance,
 			UsedQuota:    ch.UsedQuota,

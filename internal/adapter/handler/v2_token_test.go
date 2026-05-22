@@ -327,7 +327,7 @@ func TestListTokensV2_ForbiddenFields(t *testing.T) {
 	ctx := SetupV2TestRouter(t)
 	defer ctx.Cleanup()
 
-	SeedV2Token(t, ctx, ctx.NormalUser.Id, "Field Whitelist Token")
+	seeded := SeedV2Token(t, ctx, ctx.NormalUser.Id, "Field Whitelist Token")
 
 	w := V2RequestAsUser(ctx, ctx.NormalUser, http.MethodGet, "/api/v2/test-tenant/tokens", nil, nil)
 	resp := AssertV2Success(t, w)
@@ -338,10 +338,21 @@ func TestListTokensV2_ForbiddenFields(t *testing.T) {
 	}
 	tk := items[0].(map[string]interface{})
 
-	for _, f := range []string{"key", "tenant_id", "user_id", "identity_account_id", "creator_user_id", "DeletedAt"} {
+	for _, f := range []string{"tenant_id", "user_id", "identity_account_id", "creator_user_id", "DeletedAt"} {
 		if _, exists := tk[f]; exists {
 			t.Errorf("forbidden field %q leaked through tokenView", f)
 		}
+	}
+	// The key is exposed only in masked form — never the raw bearer secret.
+	maskedKey, ok := tk["key"].(string)
+	if !ok {
+		t.Fatal("expected masked key field in tokenView")
+	}
+	if maskedKey == seeded.Key {
+		t.Error("tokenView returned the raw bearer key; expected a masked value")
+	}
+	if maskedKey != maskKey(seeded.Key) {
+		t.Errorf("expected masked key %q, got %q", maskKey(seeded.Key), maskedKey)
 	}
 	// sanity: the curated fields are present
 	if _, ok := tk["name"]; !ok {

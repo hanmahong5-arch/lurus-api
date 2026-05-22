@@ -22,6 +22,7 @@ import (
 type tokenView struct {
 	Id                 int     `json:"id"`
 	Name               string  `json:"name"`
+	Key                string  `json:"key"` // masked (first4****last4); full key returned only on create/rotate
 	Status             int     `json:"status"`
 	CreatedTime        int64   `json:"created_time"`
 	AccessedTime       int64   `json:"accessed_time"`
@@ -41,6 +42,7 @@ func toTokenViews(tokens []*repo.Token) []tokenView {
 		items = append(items, tokenView{
 			Id:                 t.Id,
 			Name:               t.Name,
+			Key:                maskKey(t.Key),
 			Status:             t.Status,
 			CreatedTime:        t.CreatedTime,
 			AccessedTime:       t.AccessedTime,

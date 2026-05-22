@@ -40,12 +40,12 @@ const useTenantSlug = () => {
 const quotaToUSD = (q) => (q / QUOTA_PER_USD).toFixed(2);
 
 const tokenStatus = (t) => {
-  if (!t || t.Status !== 1) return 'disabled';
-  if (t.ExpiredTime > 0 && t.ExpiredTime < Math.floor(Date.now() / 1000))
+  if (!t || t.status !== 1) return 'disabled';
+  if (t.expired_time > 0 && t.expired_time < Math.floor(Date.now() / 1000))
     return 'expired';
-  if (!t.UnlimitedQuota) {
-    const total = t.UsedQuota + t.RemainQuota;
-    if (t.RemainQuota <= 0 || (total > 0 && t.UsedQuota / total >= 0.9))
+  if (!t.unlimited_quota) {
+    const total = t.used_quota + t.remain_quota;
+    if (t.remain_quota <= 0 || (total > 0 && t.used_quota / total >= 0.9))
       return 'near-cap';
   }
   return 'live';
@@ -68,7 +68,7 @@ const fmtExpiry = (ts) => {
 };
 
 const fmtModels = (t) =>
-  t.ModelLimitsEnabled && t.ModelLimits ? t.ModelLimits : 'all models';
+  t.model_limits_enabled && t.model_limits ? t.model_limits : 'all models';
 
 const fmtIPs = (ip) => (!ip ? 'any' : ip);
 
@@ -397,25 +397,25 @@ const HFToken = () => {
 
   const activeCount = tokens.filter((t) => tokenStatus(t) === 'live').length;
   const totalUsedUSD = tokens
-    .reduce((s, t) => s + t.UsedQuota / QUOTA_PER_USD, 0)
+    .reduce((s, t) => s + t.used_quota / QUOTA_PER_USD, 0)
     .toFixed(2);
   const totalCapUSD = tokens
-    .filter((t) => !t.UnlimitedQuota)
-    .reduce((s, t) => s + (t.UsedQuota + t.RemainQuota) / QUOTA_PER_USD, 0)
+    .filter((t) => !t.unlimited_quota)
+    .reduce((s, t) => s + (t.used_quota + t.remain_quota) / QUOTA_PER_USD, 0)
     .toFixed(2);
 
   // ── Per-token derived values ──────────────────────────────────────────────
 
-  const getKey = (t) => {
-    if (!t) return 'YOUR_KEY';
-    if (rotatedKeys[t.Id]) return rotatedKeys[t.Id];
-    return `sk-${t.Key}`;
-  };
+  // Full plaintext key is available only transiently right after rotation
+  // (rotatedKeys). For existing tokens the backend returns a masked key only —
+  // the plaintext is shown exactly once, on create or rotate.
+  const rotatedKey = (t) => (t && rotatedKeys[t.id]) || null;
 
   const displayKey = (t) => {
-    const full = getKey(t);
-    if (revealed.has(t.Id) || rotatedKeys[t.Id]) return full;
-    return maskKey(t.Key);
+    if (!t) return 'sk-...????';
+    const full = rotatedKey(t);
+    if (full && revealed.has(t.id)) return full;
+    return maskKey(t.key);
   };
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -423,8 +423,8 @@ const HFToken = () => {
   const handleReveal = (t) => {
     setRevealed((prev) => {
       const next = new Set(prev);
-      if (next.has(t.Id)) next.delete(t.Id);
-      else next.add(t.Id);
+      if (next.has(t.id)) next.delete(t.id);
+      else next.add(t.id);
       return next;
     });
   };
@@ -446,14 +446,14 @@ const HFToken = () => {
     setSaving(true);
     try {
       const res = await API.post(
-        `/api/v2/${tenantSlug}/tokens/${token.Id}/rotate`,
+        `/api/v2/${tenantSlug}/tokens/${token.id}/rotate`,
         {},
         { skipErrorHandler: false },
       );
       if (res?.data?.success) {
         const newKey = res.data.data.key;
-        setRotatedKeys((prev) => ({ ...prev, [token.Id]: newKey }));
-        setRevealed((prev) => new Set([...prev, token.Id]));
+        setRotatedKeys((prev) => ({ ...prev, [token.id]: newKey }));
+        setRevealed((prev) => new Set([...prev, token.id]));
         showSuccess('Key rotated — copy the new key now.');
         setConfirmIntent(null);
       }
@@ -466,7 +466,7 @@ const HFToken = () => {
   const performRevoke = async () => {
     setSaving(true);
     try {
-      const res = await API.delete(`/api/v2/${tenantSlug}/tokens/${token.Id}`);
+      const res = await API.delete(`/api/v2/${tenantSlug}/tokens/${token.id}`);
       if (res?.data?.success) {
         showSuccess('Token revoked');
         setConfirmIntent(null);
@@ -494,7 +494,7 @@ const HFToken = () => {
       } else {
         const newTotalUnits = Math.round(usd * QUOTA_PER_USD);
         body.unlimited_quota = false;
-        body.remain_quota = Math.max(0, newTotalUnits - token.UsedQuota);
+        body.remain_quota = Math.max(0, newTotalUnits - token.used_quota);
       }
     } else if (field === 'expires') {
       body.expired_time =
@@ -508,7 +508,7 @@ const HFToken = () => {
     setSaving(true);
     try {
       const res = await API.put(
-        `/api/v2/${tenantSlug}/tokens/${token.Id}`,
+        `/api/v2/${tenantSlug}/tokens/${token.id}`,
         body,
       );
       if (res?.data?.success) {
@@ -533,15 +533,15 @@ const HFToken = () => {
     st === 'live' ? 'tag ok' : st === 'near-cap' ? 'tag warn' : 'tag';
 
   const capDisplay = (t) => {
-    if (t.UnlimitedQuota) return '∞';
-    const total = t.UsedQuota + t.RemainQuota;
-    return `$${quotaToUSD(t.UsedQuota)} / $${quotaToUSD(total)}`;
+    if (t.unlimited_quota) return '∞';
+    const total = t.used_quota + t.remain_quota;
+    return `$${quotaToUSD(t.used_quota)} / $${quotaToUSD(total)}`;
   };
 
   const capRatio = (t) => {
-    if (t.UnlimitedQuota) return 0;
-    const total = t.UsedQuota + t.RemainQuota;
-    return total > 0 ? t.UsedQuota / total : 0;
+    if (t.unlimited_quota) return 0;
+    const total = t.used_quota + t.remain_quota;
+    return total > 0 ? t.used_quota / total : 0;
   };
 
   const settingsRows = token
@@ -549,17 +549,17 @@ const HFToken = () => {
         ['model scope', fmtModels(token), 'models'],
         [
           'monthly cap',
-          token.UnlimitedQuota
+          token.unlimited_quota
             ? '∞'
-            : `$${quotaToUSD(token.UsedQuota + token.RemainQuota)}`,
+            : `$${quotaToUSD(token.used_quota + token.remain_quota)}`,
           'cap',
         ],
-        ['expires', fmtExpiry(token.ExpiredTime), 'expires'],
-        ['allowed ips', fmtIPs(token.AllowIps), 'ips'],
+        ['expires', fmtExpiry(token.expired_time), 'expires'],
+        ['allowed ips', fmtIPs(token.allow_ips), 'ips'],
       ]
     : [];
 
-  const snippetMap = buildSnippets(token ? getKey(token) : 'YOUR_KEY');
+  const snippetMap = buildSnippets(rotatedKey(token) || 'YOUR_KEY');
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -644,7 +644,7 @@ const HFToken = () => {
             const ratio = capRatio(t);
             return (
               <div
-                key={t.Id}
+                key={t.id}
                 onClick={() => setSel(i)}
                 style={{
                   padding: '14px 22px',
@@ -665,7 +665,7 @@ const HFToken = () => {
                   }}
                 >
                   <span className='strong' style={{ fontSize: 13 }}>
-                    {t.Name}
+                    {t.name}
                   </span>
                   <span className={statusClass(st)}>{st}</span>
                 </div>
@@ -673,20 +673,22 @@ const HFToken = () => {
                   className='mono muted'
                   style={{ fontSize: 10, marginTop: 4 }}
                 >
-                  {maskKey(t.Key)}
+                  {maskKey(t.key)}
                 </div>
                 <div
                   className='mono faint'
                   style={{ fontSize: 9, marginTop: 2 }}
                 >
-                  created {relTime(t.CreatedTime)} · last used{' '}
-                  {relTime(t.AccessedTime)}
-                  {t.CreatorUserId > 0 && <> · by user #{t.CreatorUserId}</>}
+                  created {relTime(t.created_time)} · last used{' '}
+                  {relTime(t.accessed_time)}
+                  {t.creator_user_id > 0 && (
+                    <> · by user #{t.creator_user_id}</>
+                  )}
                 </div>
                 <div className='muted' style={{ fontSize: 11, marginTop: 2 }}>
                   {fmtModels(t)}
                 </div>
-                {!t.UnlimitedQuota && t.UsedQuota + t.RemainQuota > 0 && (
+                {!t.unlimited_quota && t.used_quota + t.remain_quota > 0 && (
                   <div style={{ marginTop: 8 }}>
                     <div
                       style={{
@@ -780,7 +782,7 @@ const HFToken = () => {
               )}
 
               <div className='lbl' style={{ marginBottom: 4 }}>
-                integration · {token.Name}
+                integration · {token.name}
               </div>
               <h1
                 className='display'
@@ -835,22 +837,31 @@ const HFToken = () => {
                   >
                     {displayKey(token)}
                   </span>
-                  <button
-                    type='button'
-                    className='btn sm'
-                    onClick={() => handleReveal(token)}
-                  >
-                    {revealed.has(token.Id) || rotatedKeys[token.Id]
-                      ? 'hide'
-                      : 'reveal'}
-                  </button>
-                  <button
-                    type='button'
-                    className='btn sm'
-                    onClick={() => copy(getKey(token))}
-                  >
-                    copy
-                  </button>
+                  {rotatedKey(token) ? (
+                    <>
+                      <button
+                        type='button'
+                        className='btn sm'
+                        onClick={() => handleReveal(token)}
+                      >
+                        {revealed.has(token.id) ? 'hide' : 'reveal'}
+                      </button>
+                      <button
+                        type='button'
+                        className='btn sm'
+                        onClick={() => copy(rotatedKey(token))}
+                      >
+                        copy
+                      </button>
+                    </>
+                  ) : (
+                    <span
+                      className='faint'
+                      style={{ fontSize: 10, gridColumn: '3 / span 2' }}
+                    >
+                      full key shown once · on create / rotate
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -1010,18 +1021,18 @@ const HFToken = () => {
 
       <ConfirmDialog
         visible={confirmIntent === 'revoke'}
-        title={t('撤销令牌 "{{name}}"?', { name: token?.Name || '' })}
+        title={t('撤销令牌 "{{name}}"?', { name: token?.name || '' })}
         consequenceList={[t('旧密钥将立即失效'), t('此操作无法撤销')]}
-        confirmText={token?.Name || ''}
+        confirmText={token?.name || ''}
         onConfirm={performRevoke}
         onCancel={() => !saving && setConfirmIntent(null)}
       />
 
       <ConfirmDialog
         visible={confirmIntent === 'rotate'}
-        title={t('轮换密钥 "{{name}}"?', { name: token?.Name || '' })}
+        title={t('轮换密钥 "{{name}}"?', { name: token?.name || '' })}
         consequenceList={[t('旧密钥将立即失效')]}
-        confirmText={token?.Name || ''}
+        confirmText={token?.name || ''}
         confirmButtonType='warning'
         onConfirm={performRotate}
         onCancel={() => !saving && setConfirmIntent(null)}
