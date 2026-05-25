@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/LurusTech/lurus-hub/internal/domain/entity"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -46,6 +47,14 @@ func setupSQLiteDB(t *testing.T) func() {
 		&InternalApiKey{},
 		&TenantCreditPool{},
 		&TenantCreditPoolDraw{},
+		// Extended tables for broader coverage
+		&entity.AuditEvent{},
+		&Task{},
+		&Model{},
+		&PrefillGroup{},
+		&PlaygroundPreset{},
+		&Vendor{},
+		&OpenRouterSyncJob{},
 	}
 	for _, tbl := range tables {
 		if err := db.AutoMigrate(tbl); err != nil {
