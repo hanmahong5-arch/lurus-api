@@ -26,6 +26,26 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check out lurus-proto-go (sibling dep)
+        uses: actions/checkout@v4
+        with:
+          repository: LurusTech/lurus-proto-go
+          path: _sibling/lurus-proto-go
+          fetch-depth: 1
+
+      - name: Check out zita-sdk-go (pinned sibling dep)
+        uses: actions/checkout@v4
+        with:
+          repository: hanmahong5-arch/zita-sdk-go
+          ref: e2611da1e01ef77b8227571204d6780a6364fea3
+          path: _sibling/zita-sdk-go
+          fetch-depth: 1
+
+      - name: Arrange sibling dependencies
+        run: |
+          mv _sibling/lurus-proto-go ../shared/lurus-proto-go
+          mv _sibling/zita-sdk-go ../shared/zita-sdk-go
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:

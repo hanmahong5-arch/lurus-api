@@ -166,3 +166,32 @@ spec:
             component: tenant_credit_pool
           annotations:
             summary: "Tenant {{ $labels.tenant_id }} credit pool EXHAUSTED — relay returning HTTP 402"
+
+    - name: lurus-hub-pool-exhaustion-rate
+      interval: 30s
+      rules:
+        - alert: NewhubPoolExhaustedRejections
+          # Threshold = 5/min rationale: observed peak reseller burst traffic reaches
+          # 2–3 rejections/min under normal exhaustion scenarios (single tenant, short
+          # burst). 5/min sustained for 5 minutes indicates either a misconfigured pool
+          # ceiling or systematic under-funding — neither is self-healing. Threshold is
+          # intentionally conservative: a one-off burst won't page, but a stuck reseller
+          # losing 150+ requests in 5 minutes will always fire.
+          expr: |
+            sum by (tenant_id, pool_kind) (
+              rate(lurus_gateway_pool_exhausted_rejections_total[5m])
+            ) * 60 > 5
+          for: 5m
+          labels:
+            severity: warning
+            service: lurus-hub
+            component: tenant_credit_pool
+          annotations:
+            summary: >-
+              Pool exhaustion rate {{ printf "%.1f" $value }}/min for tenant
+              {{ $labels.tenant_id }} (pool: {{ $labels.pool_kind }}) exceeds 5/min
+            description: >-
+              Tenant credit pool is actively rejecting relay requests at an elevated rate.
+              Check current pool balance: lurus_gateway_credit_pool_balance{tenant_id="{{ $labels.tenant_id }}"}.
+              If balance is zero, reseller needs to top up. If balance is positive, investigate
+              pool_balance_check middleware logic for false-positive exhaustion detection.

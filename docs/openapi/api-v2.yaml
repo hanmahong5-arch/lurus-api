@@ -1145,6 +1145,171 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  # ============================================================
+  # Models
+  # ============================================================
+
+  /api/v2/{tenant_slug}/models:
+    get:
+      tags: [Channels]
+      summary: List Available Models
+      description: |
+        Returns the list of models available to the tenant, derived from the
+        tenant's active channels. Shape mirrors the OpenAI /v1/models response
+        so SDK clients work without modification.
+      operationId: listModelsV2
+      security:
+        - ZitadelJWT: []
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+      responses:
+        '200':
+          description: Model list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  object:
+                    type: string
+                    example: list
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ModelInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Tenant not found
+
+  # ============================================================
+  # Settings (Tenant config alias used by the frontend Settings page)
+  # ============================================================
+
+  /api/v2/{tenant_slug}/settings:
+    get:
+      tags: [Tenant Config]
+      summary: Get Tenant Settings
+      description: |
+        Returns all tenant-scoped configuration key/value pairs.
+        Alias of GET /api/v2/{tenant_slug}/config used by the frontend
+        Settings page.
+      operationId: getTenantSettingsV2
+      security:
+        - ZitadelJWT: []
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+      responses:
+        '200':
+          description: Tenant settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TenantConfigEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ============================================================
+  # Playground (chat via user session, not token auth)
+  # ============================================================
+
+  /pg/chat/completions:
+    post:
+      tags: [Relay]
+      summary: Playground Chat Completions
+      description: |
+        OpenAI-compatible chat completions endpoint for the in-browser Playground.
+        Uses user session auth (not API token). Sends quota consumption to the
+        user's account. Not suitable for production API client use — use /v1/chat/completions
+        with a token instead.
+      operationId: playgroundChatCompletions
+      security:
+        - SessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatCompletionRequest'
+      responses:
+        '200':
+          description: Chat completion response (or SSE stream if stream=true)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatCompletionResponse'
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-Sent Events stream of chat delta chunks
+        '402':
+          description: Insufficient quota
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ============================================================
+  # Relay (token auth — primary LLM API surface)
+  # ============================================================
+
+  /v1/chat/completions:
+    post:
+      tags: [Relay]
+      summary: Chat Completions
+      description: |
+        OpenAI-compatible chat completions relay. Supports streaming (SSE) when
+        stream=true. Auth: Bearer token issued by POST /api/v2/{tenant_slug}/tokens.
+      operationId: relayChatCompletions
+      security:
+        - BearerToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatCompletionRequest'
+      responses:
+        '200':
+          description: Completion response or SSE stream
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatCompletionResponse'
+            text/event-stream:
+              schema:
+                type: string
+        '402':
+          description: Quota exhausted (user or tenant credit pool)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: pool_exhausted
+                      message:
+                        type: string
+                      tenant_id:
+                        type: string
+        '429':
+          description: Rate limited (cost spike guard)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
 # ============================================================
 # Components
 # ============================================================
@@ -1161,6 +1326,10 @@ components:
       in: cookie
       name: session
       description: Session cookie for platform admin
+    BearerToken:
+      type: http
+      scheme: bearer
+      description: API token issued by POST /api/v2/{tenant_slug}/tokens (sk-xxx)
 
   parameters:
     TenantSlug:
@@ -1688,3 +1857,118 @@ components:
           type: integer
         total_tokens:
           type: integer
+
+    ModelInfo:
+      type: object
+      description: Model descriptor (OpenAI /v1/models shape)
+      properties:
+        id:
+          type: string
+          example: gpt-4o
+        object:
+          type: string
+          example: model
+        owned_by:
+          type: string
+          example: openai
+
+    TenantConfigEntry:
+      type: object
+      properties:
+        key:
+          type: string
+          example: default_model
+        value:
+          type: string
+          example: gpt-4o
+
+    ChatMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [system, user, assistant, tool]
+        content:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  text:
+                    type: string
+
+    ChatCompletionRequest:
+      type: object
+      required: [model, messages]
+      properties:
+        model:
+          type: string
+          example: gpt-4o
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+        stream:
+          type: boolean
+          default: false
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+        max_tokens:
+          type: integer
+          minimum: 1
+        top_p:
+          type: number
+        stop:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+
+    ChatCompletionChoice:
+      type: object
+      properties:
+        index:
+          type: integer
+        message:
+          $ref: '#/components/schemas/ChatMessage'
+        finish_reason:
+          type: string
+          enum: [stop, length, tool_calls, content_filter]
+
+    ChatCompletionUsage:
+      type: object
+      properties:
+        prompt_tokens:
+          type: integer
+        completion_tokens:
+          type: integer
+        total_tokens:
+          type: integer
+
+    ChatCompletionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: chatcmpl-abc123
+        object:
+          type: string
+          example: chat.completion
+        created:
+          type: integer
+          description: Unix timestamp
+        model:
+          type: string
+        choices:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatCompletionChoice'
+        usage:
+          $ref: '#/components/schemas/ChatCompletionUsage'

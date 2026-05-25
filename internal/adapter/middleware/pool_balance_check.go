@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/app"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/pkg/metrics"
 
@@ -62,6 +63,7 @@ func PoolBalanceCheck() gin.HandlerFunc {
 		}
 
 		if pool.IsExhausted() {
+			app.RecordPoolExhausted(tenantID, "relay")
 			c.JSON(http.StatusPaymentRequired, gin.H{
 				"error": gin.H{
 					"code":      "pool_exhausted",
