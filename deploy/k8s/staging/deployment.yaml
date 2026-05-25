@@ -1,19 +1,24 @@
-# Staging deployment with reduced resources
+# Staging deployment for lurus-newhub.
+# Deployed by .github/workflows/deploy-staging.yml on every push to main.
+# Lives in the same namespace as r6-stage manual apply (lurus-newhub),
+# but tracks the :staging floating tag instead of :main so the GHA-built
+# image is what runs in CI-driven STAGE while r6-stage YAML stays as a
+# manual fallback (kept in repo as a reference for disaster recovery).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: lurus-api
-  namespace: lurus-staging
+  name: lurus-newhub
+  namespace: lurus-newhub
   labels:
-    app: lurus-api
-    app.kubernetes.io/name: lurus-api
+    app: lurus-newhub
+    app.kubernetes.io/name: lurus-newhub
     app.kubernetes.io/part-of: lurus
     environment: staging
 spec:
   replicas: 1  # Single replica for staging
   selector:
     matchLabels:
-      app: lurus-api
+      app: lurus-newhub
       environment: staging
   strategy:
     type: RollingUpdate
@@ -23,14 +28,14 @@ spec:
   template:
     metadata:
       labels:
-        app: lurus-api
+        app: lurus-newhub
         environment: staging
     spec:
       nodeSelector:
         lurus.cn/vpn: "true"
       containers:
-        - name: lurus-api
-          image: ghcr.io/hanmahong5-arch/lurus-api:staging
+        - name: lurus-newhub
+          image: ghcr.io/hanmahong5-arch/lurus-newhub:staging
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
@@ -46,13 +51,13 @@ spec:
             - name: SESSION_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: lurus-api-staging-secrets
+                  name: lurus-newhub-staging-secrets
                   key: SESSION_SECRET
             # Staging database (separate schema)
             - name: SQL_DSN
               valueFrom:
                 secretKeyRef:
-                  name: lurus-api-staging-secrets
+                  name: lurus-newhub-staging-secrets
                   key: SQL_DSN
             # Redis (shared, different db) - cross-namespace reference
             - name: REDIS_CONN_STRING
@@ -80,7 +85,7 @@ spec:
             - name: ZITADEL_CLIENT_ID
               valueFrom:
                 secretKeyRef:
-                  name: lurus-api-staging-secrets
+                  name: lurus-newhub-staging-secrets
                   key: ZITADEL_CLIENT_ID
             - name: ZITADEL_REDIRECT_URI
               value: "https://staging-api.lurus.cn/api/v2/oauth/callback"
@@ -94,6 +99,15 @@ spec:
               value: "true"
             - name: ZITADEL_ALLOWED_REDIRECT_DOMAINS
               value: "lurus.cn,staging-api.lurus.cn"
+            # E2E bridge token — gates POST /api/v2/bridge/exchange.
+            # Empty in prod (route not registered); set in STAGE to enable
+            # Playwright auth-bypass for e2e specs.
+            - name: E2E_BRIDGE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: lurus-newhub-staging-secrets
+                  key: E2E_BRIDGE_TOKEN
+                  optional: true
             # Tracing (enabled for staging) - cross-namespace reference
             - name: OTEL_TRACING_ENABLED
               value: "true"
