@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 )
 
@@ -446,5 +447,71 @@ func TestCreateTokenV2_UnlimitedQuota(t *testing.T) {
 	key, ok := data["key"].(string)
 	if !ok || key == "" {
 		t.Error("expected key to be returned on token creation")
+	}
+}
+
+// TestListTokensV2_CrossTenantIsolation guards the tokenView whitelist and
+// proves cross-tenant isolation: a user in tenant-A cannot read tokens seeded
+// directly into tenant-B by asserting that the list response only contains
+// the caller's own tenant data.
+func TestListTokensV2_CrossTenantIsolation(t *testing.T) {
+	ctx := SetupV2TestRouter(t)
+	defer ctx.Cleanup()
+
+	// Seed one token in the test tenant (belongs to normalUser).
+	SeedV2Token(t, ctx, ctx.NormalUser.Id, "Own Tenant Token")
+
+	// Seed a second token directly in a different tenant — simulating a
+	// row that leaked or was written by another tenant's user.
+	otherTenantToken := &repo.Token{
+		UserId:         ctx.NormalUser.Id,
+		TenantId:       "other-tenant-xyz",
+		Key:            common.GetRandomString(48),
+		Status:         common.TokenStatusEnabled,
+		Name:           "Cross-tenant Token",
+		CreatedTime:    common.GetTimestamp(),
+		AccessedTime:   common.GetTimestamp(),
+		ExpiredTime:    -1,
+		UnlimitedQuota: true,
+		Group:          "default",
+	}
+	if err := ctx.DB.Create(otherTenantToken).Error; err != nil {
+		t.Fatalf("failed to seed cross-tenant token: %v", err)
+	}
+
+	// List as normalUser in the test tenant — must only see 1 token.
+	w := V2RequestAsUser(ctx, ctx.NormalUser, http.MethodGet, "/api/v2/test-tenant/tokens", nil, nil)
+	resp := AssertV2Success(t, w)
+	data := resp["data"].(map[string]interface{})
+
+	total := int(data["total"].(float64))
+	if total != 1 {
+		t.Errorf("expected 1 token (own tenant), got %d — possible cross-tenant leak", total)
+	}
+
+	items := data["items"].([]interface{})
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item in list, got %d", len(items))
+	}
+
+	tk := items[0].(map[string]interface{})
+	if name, _ := tk["name"].(string); name == "Cross-tenant Token" {
+		t.Error("cross-tenant token leaked into the response")
+	}
+
+	// Verify forbidden fields are absent from the view shape.
+	for _, f := range []string{"tenant_id", "user_id", "identity_account_id", "creator_user_id", "DeletedAt"} {
+		if _, exists := tk[f]; exists {
+			t.Errorf("forbidden field %q leaked through tokenView in cross-tenant test", f)
+		}
+	}
+
+	// The raw bearer key must never appear; only the masked form.
+	maskedKey, ok := tk["key"].(string)
+	if !ok {
+		t.Fatal("expected masked key field in tokenView")
+	}
+	if maskedKey == otherTenantToken.Key {
+		t.Error("tokenView returned the raw bearer key; expected masked value")
 	}
 }

@@ -85,8 +85,10 @@ func ListTokensV2(c *gin.Context) {
 
 	offset := (page - 1) * pageSize
 
-	// Get tokens for the user (filtered by tenant_id implicitly through user ownership)
-	tokens, err := repo.GetAllUserTokens(tenantCtx.UserID, offset, pageSize)
+	// Get tokens for the user scoped to the current tenant. Explicit
+	// tenant_id filter is defence-in-depth — prevents cross-tenant leakage
+	// even when TenantPlugin is not registered (e.g. hermetic tests).
+	tokens, err := repo.GetUserTokensByTenant(tenantCtx.UserID, tenantCtx.TenantID, offset, pageSize)
 	if err != nil {
 		common.SysError("Failed to get tokens: " + err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -96,8 +98,8 @@ func ListTokensV2(c *gin.Context) {
 		return
 	}
 
-	// Get total count
-	total, _ := repo.CountUserTokens(tenantCtx.UserID)
+	// Get total count (same tenant scope as the list query)
+	total, _ := repo.CountUserTokensByTenant(tenantCtx.UserID, tenantCtx.TenantID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

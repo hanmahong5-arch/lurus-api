@@ -387,6 +387,25 @@ func CountUserTokens(userId int) (int64, error) {
 	return total, err
 }
 
+// GetUserTokensByTenant returns tokens for the given user scoped to a specific
+// tenant. This is the v2 list function — the explicit tenant_id clause is
+// defence-in-depth (TenantPlugin also filters, but the explicit clause keeps
+// hermetic tests honest without the plugin registered).
+func GetUserTokensByTenant(userID int, tenantID string, startIdx int, num int) ([]*Token, error) {
+	var tokens []*Token
+	err := DB.Where("user_id = ? AND tenant_id = ?", userID, tenantID).
+		Order("id desc").Limit(num).Offset(startIdx).Find(&tokens).Error
+	return tokens, err
+}
+
+// CountUserTokensByTenant returns the total token count for the given user
+// within the specified tenant. Pairs with GetUserTokensByTenant for pagination.
+func CountUserTokensByTenant(userID int, tenantID string) (int64, error) {
+	var total int64
+	err := DB.Model(&Token{}).Where("user_id = ? AND tenant_id = ?", userID, tenantID).Count(&total).Error
+	return total, err
+}
+
 // GetProvisionedTokensByTenant returns Tokens issued via the Provisioning API
 // for a specific (Reseller user, tenant) pair, ordered by id DESC. Used by
 // GET /internal/v1/provisioning/tenants/:slug/keys (Tier 1.1, 2026-05-19).
