@@ -223,7 +223,7 @@ const StatsDrawer = ({ tenant, onClose }) => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await API.get(`/api/v2/admin/tenants/${tenant.Id}/stats`);
+        const res = await API.get(`/api/v2/admin/tenants/${tenant.id}/stats`);
         if (!cancelled && res?.data?.success) {
           setStats(res.data.data);
         }
@@ -236,7 +236,7 @@ const StatsDrawer = ({ tenant, onClose }) => {
     return () => {
       cancelled = true;
     };
-  }, [tenant.Id]);
+  }, [tenant.id]);
 
   return (
     <div
@@ -271,7 +271,7 @@ const StatsDrawer = ({ tenant, onClose }) => {
           }}
         >
           <div className='strong' style={{ fontSize: 15 }}>
-            {tenant.Name} · stats
+            {tenant.name} · stats
           </div>
           <button type='button' className='btn ghost sm' onClick={onClose}>
             ✕
@@ -342,7 +342,7 @@ const HFTenants = () => {
       if (kw.trim()) params.set('keyword', kw.trim());
       const res = await API.get(`/api/v2/admin/tenants?${params}`);
       if (res?.data?.success) {
-        setTenants(res.data.data.items ?? []);
+        setTenants(res.data.data.tenants ?? res.data.data.items ?? []);
       }
     } catch (err) {
       if (err?.response?.status === 403) {
@@ -373,10 +373,10 @@ const HFTenants = () => {
     const label = { enable: 'enable', disable: 'disable', suspend: 'suspend' }[
       action
     ];
-    setActioning(tenant.Id);
+    setActioning(tenant.id);
     try {
       const res = await API.post(
-        `/api/v2/admin/tenants/${tenant.Id}/${action}`,
+        `/api/v2/admin/tenants/${tenant.id}/${action}`,
         {},
       );
       if (res?.data?.success) {
@@ -397,7 +397,7 @@ const HFTenants = () => {
   };
 
   const totalUsedUSD = tenants
-    .reduce((s, t) => s + (t.UsedQuota || 0) / QUOTA_PER_USD, 0)
+    .reduce((s, t) => s + (t.used_quota || 0) / QUOTA_PER_USD, 0)
     .toFixed(2);
 
   return (
@@ -519,16 +519,16 @@ const HFTenants = () => {
                 </thead>
                 <tbody>
                   {tenants.map((t) => {
-                    const usedUSD = parseFloat(quotaToUSD(t.UsedQuota || 0));
+                    const usedUSD = parseFloat(quotaToUSD(t.used_quota || 0));
                     const capUSD =
-                      t.QuotaLimit > 0
-                        ? parseFloat(quotaToUSD(t.QuotaLimit))
+                      t.max_quota > 0
+                        ? parseFloat(quotaToUSD(t.max_quota))
                         : null;
                     const pct = capUSD ? Math.min(usedUSD / capUSD, 1) : 0;
-                    const isActioning = actioning === t.Id;
+                    const isActioning = actioning === t.id;
 
                     return (
-                      <tr key={t.Id}>
+                      <tr key={t.id} data-testid={`tenant-row-${t.id}`}>
                         <td>
                           <div
                             style={{
@@ -551,37 +551,40 @@ const HFTenants = () => {
                                 flexShrink: 0,
                               }}
                             >
-                              {(t.Name || t.Slug || '?')[0].toUpperCase()}
+                              {(t.name || t.slug || '?')[0].toUpperCase()}
                             </div>
                             <div>
-                              <div className='strong'>{t.Name}</div>
+                              <div className='strong'>{t.name}</div>
                               <div
                                 className='faint mono'
                                 style={{ fontSize: 10 }}
                               >
-                                {t.Slug}
+                                {t.slug}
                               </div>
                             </div>
                           </div>
                         </td>
 
                         <td>
-                          <span className={planTagClass(t.Plan)}>
-                            {t.Plan || '—'}
+                          <span className={planTagClass(t.plan_type)}>
+                            {t.plan_type || '—'}
                           </span>
                         </td>
 
                         <td>
-                          <span className={tenantStatusClass(t.Status)}>
-                            {tenantStatusLabel(t.Status)}
+                          <span
+                            data-testid={`tenant-status-${t.id}`}
+                            className={tenantStatusClass(t.status)}
+                          >
+                            {tenantStatusLabel(t.status)}
                           </span>
                         </td>
 
-                        <td className='mono'>{t.UserCount ?? '—'}</td>
+                        <td className='mono'>{t.user_count ?? '—'}</td>
 
                         <td>
                           <span className='display' style={{ fontSize: 15 }}>
-                            ${quotaToUSD(t.UsedQuota || 0)}
+                            ${quotaToUSD(t.used_quota || 0)}
                           </span>
                         </td>
 
@@ -619,7 +622,7 @@ const HFTenants = () => {
                                 className='mono muted'
                                 style={{ fontSize: 10 }}
                               >
-                                ${quotaToUSD(t.QuotaLimit)}
+                                ${quotaToUSD(t.max_quota)}
                               </span>
                             </div>
                           ) : (
@@ -643,6 +646,7 @@ const HFTenants = () => {
                             <button
                               type='button'
                               className='btn ghost sm'
+                              data-testid={`tenant-stats-btn-${t.id}`}
                               disabled={isActioning}
                               onClick={() => setStatsTarget(t)}
                             >
@@ -656,30 +660,33 @@ const HFTenants = () => {
                             >
                               pool
                             </button>
-                            {t.Status !== 1 && (
+                            {t.status !== 1 && (
                               <button
                                 type='button'
                                 className='btn ghost sm'
+                                data-testid={`tenant-enable-btn-${t.id}`}
                                 disabled={isActioning}
                                 onClick={() => handleAction(t, 'enable')}
                               >
                                 {isActioning ? '…' : 'enable'}
                               </button>
                             )}
-                            {t.Status === 1 && (
+                            {t.status === 1 && (
                               <button
                                 type='button'
                                 className='btn ghost sm'
+                                data-testid={`tenant-disable-btn-${t.id}`}
                                 disabled={isActioning}
                                 onClick={() => handleAction(t, 'disable')}
                               >
                                 {isActioning ? '…' : 'disable'}
                               </button>
                             )}
-                            {t.Status !== 3 && (
+                            {t.status !== 3 && (
                               <button
                                 type='button'
                                 className='btn ghost sm'
+                                data-testid={`tenant-suspend-btn-${t.id}`}
                                 disabled={isActioning}
                                 style={{ color: 'var(--hf-warn)' }}
                                 onClick={() => handleAction(t, 'suspend')}
@@ -715,8 +722,8 @@ const HFTenants = () => {
 
       {poolTarget && (
         <CreditPoolDrawer
-          tenantId={poolTarget.Id}
-          tenantName={poolTarget.Name}
+          tenantId={poolTarget.id}
+          tenantName={poolTarget.name}
           onClose={() => setPoolTarget(null)}
         />
       )}
@@ -724,17 +731,17 @@ const HFTenants = () => {
       <ConfirmDialog
         visible={!!actionConfirm}
         title={t('对租户 "{{name}}" 执行 {{action}} 操作?', {
-          name: actionConfirm?.tenant?.Name || '',
+          name: actionConfirm?.tenant?.name || '',
           action: actionConfirm?.action || '',
         })}
         consequenceList={[t('该操作会影响该租户下所有 token 与 channel')]}
-        confirmText={actionConfirm?.tenant?.Name || ''}
+        confirmText={actionConfirm?.tenant?.name || ''}
         confirmButtonType={
           actionConfirm?.action === 'enable' ? 'warning' : 'danger'
         }
         onConfirm={performAction}
         onCancel={() =>
-          !(actioning && actioning === actionConfirm?.tenant?.Id) &&
+          !(actioning && actioning === actionConfirm?.tenant?.id) &&
           setActionConfirm(null)
         }
       />

@@ -51,6 +51,7 @@
     "eslint:fix": "bunx eslint \"**/*.{js,jsx}\" --fix --cache",
     "preview": "vite preview",
     "test": "vitest run",
+    "check:casing": "node scripts/check-page-casing.mjs",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
