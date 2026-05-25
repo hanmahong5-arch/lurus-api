@@ -324,3 +324,51 @@ func TestV2Billing_TenantIsolation(t *testing.T) {
 		t.Errorf("tenantB quota = %v, want 1111 (not tenantA's 9999)", quotaB)
 	}
 }
+
+// TestV2Billing_InvoiceViewForbiddenFields verifies that invoiceMonthBucket
+// (the view struct returned by ListInvoicesV2) does not expose raw payment
+// provider IDs, internal transaction references, or tenant-scoped counters.
+// invoiceMonthBucket only carries month/quota/amount_cny/amount_usd/request_count
+// so this test confirms no raw entity fields bleed through.
+func TestV2Billing_InvoiceViewForbiddenFields(t *testing.T) {
+	ctx := setupInvoiceRouter(t)
+
+	// Seed one consume log so the bucket has a row to return.
+	seedLog(t, ctx, 5000, monthStart(2026, time.January)+60)
+
+	w := getInvoices(ctx, "from=2026-01&to=2026-01")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
+	}
+	resp := parseInvoiceResp(t, w)
+	data := resp["data"].(map[string]interface{})
+	items := data["items"].([]interface{})
+	if len(items) != 1 {
+		t.Fatalf("expected 1 invoice bucket, got %d", len(items))
+	}
+	bucket := items[0].(map[string]interface{})
+
+	// Fields that must NOT appear in the invoice bucket view.
+	for _, forbidden := range []string{
+		"stripe_id", "alipay_id", "wechat_id", "payment_method_id",
+		"tenant_id", "user_id", "internal_id",
+	} {
+		if _, ok := bucket[forbidden]; ok {
+			t.Errorf("forbidden field %q leaked through invoiceMonthBucket", forbidden)
+		}
+	}
+
+	// Fields that must be present (the whitelisted invoice shape).
+	for _, required := range []string{"month", "quota", "amount_cny", "amount_usd", "request_count"} {
+		if _, ok := bucket[required]; !ok {
+			t.Errorf("expected field %q in invoice bucket, not found", required)
+		}
+	}
+
+	// amount_cny must be consistent with quota for the billing model.
+	if quota := bucket["quota"].(float64); quota > 0 {
+		if amountCNY := bucket["amount_cny"].(float64); amountCNY <= 0 {
+			t.Errorf("quota=%v > 0 but amount_cny=%v <= 0 — billing calculation is wrong", quota, amountCNY)
+		}
+	}
+}
