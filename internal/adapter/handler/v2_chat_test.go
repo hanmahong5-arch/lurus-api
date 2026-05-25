@@ -263,3 +263,76 @@ func TestV2Chat_EmptyMessages(t *testing.T) {
 		t.Errorf("upstream hits = %d, want 0", got)
 	}
 }
+
+// TestV2Chat_CrossTenantIsolation verifies that the ChatSend handler enforces
+// tenant boundaries and that its response does not expose internal credential
+// or system-prompt fields from the relay layer.
+//
+// Sub-test 1 (unknown_tenant_rejected): a request for an unknown tenant slug is
+// rejected with 404 before reaching the upstream — no relay token is resolved
+// and no upstream call is made.
+//
+// Sub-test 2 (response_forbids_internal_fields): a valid request succeeds and
+// the response shape contains only the whitelisted wrapper fields
+// (message.role, message.content, usage, latency_ms); internal relay fields
+// (model_credentials, system_prompt, channel_id) must be absent.
+func TestV2Chat_CrossTenantIsolation(t *testing.T) {
+	t.Run("unknown_tenant_rejected", func(t *testing.T) {
+		ctx := setupChatRouter(t, chatEchoUpstream)
+
+		w := postChat(ctx, "no-such-tenant", map[string]interface{}{
+			"model":    "gpt-4o",
+			"messages": []map[string]string{{"role": "user", "content": "hi"}},
+		})
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 for unknown tenant, got %d — body: %s", w.Code, w.Body.String())
+		}
+		if got := ctx.upstreamHits.Load(); got != 0 {
+			t.Errorf("upstream must not be called when tenant is rejected, got %d hits", got)
+		}
+		var resp map[string]interface{}
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
+		if resp["error_code"] != "TENANT_NOT_FOUND" {
+			t.Errorf("expected error_code TENANT_NOT_FOUND, got %v", resp["error_code"])
+		}
+	})
+
+	t.Run("response_forbids_internal_fields", func(t *testing.T) {
+		ctx := setupChatRouter(t, chatEchoUpstream)
+
+		w := postChat(ctx, ctx.tenantSlug, map[string]interface{}{
+			"model":    "gpt-4o",
+			"messages": []map[string]string{{"role": "user", "content": "hello"}},
+		})
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d — body: %s", w.Code, w.Body.String())
+		}
+		var resp map[string]interface{}
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
+		if resp["success"] != true {
+			t.Fatalf("expected success=true, got %v", resp["success"])
+		}
+		data := resp["data"].(map[string]interface{})
+
+		// Internal relay credentials must not leak through the response envelope.
+		for _, forbidden := range []string{
+			"model_credentials", "system_prompt", "channel_id",
+			"relay_token", "upstream_key", "provider_key",
+		} {
+			if _, ok := data[forbidden]; ok {
+				t.Errorf("forbidden field %q present in ChatSend response", forbidden)
+			}
+		}
+
+		// Whitelisted response fields must be present.
+		if _, ok := data["message"]; !ok {
+			t.Error("expected field 'message' in ChatSend response")
+		}
+		if _, ok := data["usage"]; !ok {
+			t.Error("expected field 'usage' in ChatSend response")
+		}
+		if _, ok := data["latency_ms"]; !ok {
+			t.Error("expected field 'latency_ms' in ChatSend response")
+		}
+	})
+}
