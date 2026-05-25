@@ -310,6 +310,105 @@ func TestGetTopUpsV2_UserIsolation(t *testing.T) {
 }
 
 // ============================================================================
+// billingView — ForbiddenFields + CrossTenantIsolation
+// ============================================================================
+
+// TestGetTopUpsV2_ForbiddenFields asserts that the topup history endpoint
+// never exposes payment_method_id, raw provider transaction IDs, or internal
+// tenant-scoped billing counters in the response items. The response shape is
+// a gin.H literal (not a raw entity) so this test verifies the literal keys.
+func TestGetTopUpsV2_ForbiddenFields(t *testing.T) {
+	ctx := SetupV2TestRouter(t)
+	defer ctx.Cleanup()
+
+	// Seed one topup log.
+	log := &repo.Log{
+		UserId:    ctx.UserID,
+		TenantId:  ctx.TenantID,
+		Type:      repo.LogTypeTopup,
+		Content:   "Wallet transfer: 5.00 CNY -> quota. [IK:testik]",
+		Quota:     25000,
+		CreatedAt: common.GetTimestamp(),
+	}
+	ctx.DB.Create(log)
+
+	w := V2RequestWithContext(ctx, http.MethodGet,
+		fmt.Sprintf("/api/v2/%s/billing/topups", ctx.TenantID), nil)
+
+	AssertV2Status(t, w, http.StatusOK)
+	resp := AssertV2Success(t, w)
+	data := resp["data"].(map[string]interface{})
+	items := data["items"].([]interface{})
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+	item := items[0].(map[string]interface{})
+
+	// These fields must not appear in the response.
+	for _, forbidden := range []string{
+		"payment_method_id", "stripe_id", "alipay_id", "wechat_id",
+		"tenant_id", "user_id", "internal_counter",
+	} {
+		if _, ok := item[forbidden]; ok {
+			t.Errorf("forbidden field %q leaked through billing topup response", forbidden)
+		}
+	}
+
+	// Whitelisted fields must be present.
+	for _, required := range []string{"id", "content", "quota", "created_at"} {
+		if _, ok := item[required]; !ok {
+			t.Errorf("expected field %q in billing topup response, not found", required)
+		}
+	}
+}
+
+// TestGetTopUpsV2_CrossTenantIsolation seeds logs for two different tenants
+// and verifies the endpoint only returns the caller's own tenant data.
+func TestGetTopUpsV2_CrossTenantIsolation(t *testing.T) {
+	ctx := SetupV2TestRouter(t)
+	defer ctx.Cleanup()
+
+	// Seed 2 topup logs for the test tenant user.
+	for i := 0; i < 2; i++ {
+		l := &repo.Log{
+			UserId:    ctx.UserID,
+			TenantId:  ctx.TenantID,
+			Type:      repo.LogTypeTopup,
+			Content:   fmt.Sprintf("Own-tenant transfer #%d", i+1),
+			CreatedAt: common.GetTimestamp() + int64(i),
+		}
+		ctx.DB.Create(l)
+	}
+
+	// Seed 3 topup logs for a different tenant (same user_id to maximise leak
+	// surface — any query without tenant filter would return 5 instead of 2).
+	for i := 0; i < 3; i++ {
+		l := &repo.Log{
+			UserId:    ctx.UserID,
+			TenantId:  "other-tenant-billing",
+			Type:      repo.LogTypeTopup,
+			Content:   fmt.Sprintf("Cross-tenant transfer #%d", i+1),
+			CreatedAt: common.GetTimestamp() + int64(i+10),
+		}
+		ctx.DB.Create(l)
+	}
+
+	w := V2RequestWithContext(ctx, http.MethodGet,
+		fmt.Sprintf("/api/v2/%s/billing/topups", ctx.TenantID), nil)
+
+	AssertV2Status(t, w, http.StatusOK)
+	resp := AssertV2Success(t, w)
+	data := resp["data"].(map[string]interface{})
+	items := data["items"].([]interface{})
+	if len(items) != 2 {
+		t.Errorf("expected 2 items (own-tenant only), got %d — possible cross-tenant leak", len(items))
+	}
+	if total := data["total"].(float64); total != 2 {
+		t.Errorf("expected total=2, got %v — cross-tenant rows must not be counted", total)
+	}
+}
+
+// ============================================================================
 // Helpers
 // ============================================================================
 
