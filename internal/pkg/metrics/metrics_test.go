@@ -132,3 +132,63 @@ func TestSetChannelHealth(t *testing.T) {
 		t.Errorf("expected health 0 for unhealthy, got %f", health)
 	}
 }
+
+// TestPoolExhaustedRejections verifies that RecordPoolExhaustedRejection increments
+// the counter with the expected label combination. Simulates the pool_balance_check
+// middleware rejecting a relay request for an exhausted pool.
+func TestPoolExhaustedRejections(t *testing.T) {
+	tenantID := "tenant-pool-test-1"
+	poolKind := "relay"
+
+	before := testutil.ToFloat64(PoolExhaustedRejections.WithLabelValues(tenantID, poolKind))
+
+	RecordPoolExhaustedRejection(tenantID, poolKind)
+	RecordPoolExhaustedRejection(tenantID, poolKind)
+
+	after := testutil.ToFloat64(PoolExhaustedRejections.WithLabelValues(tenantID, poolKind))
+	if after-before != 2 {
+		t.Errorf("expected 2 increments, got delta %f", after-before)
+	}
+
+	// Different tenant — must be independent
+	otherTenant := "tenant-pool-test-2"
+	RecordPoolExhaustedRejection(otherTenant, poolKind)
+	otherCount := testutil.ToFloat64(PoolExhaustedRejections.WithLabelValues(otherTenant, poolKind))
+	if otherCount != 1 {
+		t.Errorf("expected 1 for other tenant, got %f", otherCount)
+	}
+	// Ensure first tenant unchanged
+	if testutil.ToFloat64(PoolExhaustedRejections.WithLabelValues(tenantID, poolKind)) != after {
+		t.Errorf("first tenant count changed unexpectedly")
+	}
+}
+
+// TestBillingDebitAmountCNY verifies that RecordBillingDebit populates the histogram.
+// HistogramVec.WithLabelValues returns Observer (not Collector), so we test via
+// testutil.CollectAndCount on the parent vec which counts metric families produced.
+func TestBillingDebitAmountCNY(t *testing.T) {
+	tenantID := "tenant-billing-test-3" // unique label to avoid cross-test interference
+
+	// Before any observation the vec may or may not expose this label set.
+	// Prime the label set so the next CollectAndCount reflects our observations.
+	RecordBillingDebit(tenantID, 0.05)
+	RecordBillingDebit(tenantID, 1.50)
+	RecordBillingDebit(tenantID, 10.0)
+
+	// The HistogramVec itself is a Collector; CollectAndCount counts the number of
+	// unique metric time series it emits. After three observations the vec must have
+	// at least one time series with this tenant label.
+	count := testutil.CollectAndCount(BillingDebitAmountCNY)
+	if count == 0 {
+		t.Errorf("expected at least one metric series from BillingDebitAmountCNY, got 0")
+	}
+
+	// Cross-tenant isolation: a second tenant gets its own time series.
+	otherTenant := "tenant-billing-test-4"
+	RecordBillingDebit(otherTenant, 0.01)
+
+	countAfter := testutil.CollectAndCount(BillingDebitAmountCNY)
+	if countAfter <= count {
+		t.Errorf("expected a new series after recording other tenant, count %d -> %d", count, countAfter)
+	}
+}

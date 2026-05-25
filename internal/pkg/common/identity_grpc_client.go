@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	identityv1 "github.com/LurusTech/lurus-proto-go/identity/v1"
+	"github.com/LurusTech/lurus-hub/internal/pkg/metrics"
 )
 
 // identityGRPCAddr is the gRPC address for lurus-platform core (host:port).
@@ -198,6 +199,14 @@ func DebitWalletGRPC(ctx context.Context, accountID int64, amount float64, txTyp
 	if err != nil {
 		slog.Debug("identity grpc WalletDebit failed, falling back to HTTP", "err", err)
 		return DebitWallet(ctx, accountID, amount, txType, description, productID)
+	}
+
+	// Record billing debit metric after confirmed success.
+	// tenantID is not available at this call-site; label uses productID as the
+	// closest scoping key. Relay-path callers that have tenantID should use
+	// metrics.RecordBillingDebit(tenantID, amount) directly for finer granularity.
+	if resp.Success {
+		metrics.RecordBillingDebit(productID, amount)
 	}
 
 	return &DebitWalletResult{

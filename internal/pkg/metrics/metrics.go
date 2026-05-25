@@ -255,6 +255,36 @@ var (
 		},
 		[]string{"tenant_id"},
 	)
+
+	// PoolExhaustedRejections counts relay requests rejected because the
+	// tenant credit pool balance reached zero. Labeled by tenant_id and
+	// pool_kind (currently always "relay" — extensible for future pool types).
+	//
+	// Alert: NewhubPoolExhaustedRejections fires when rate > 5/min sustained
+	// for 5 minutes (see deploy/k8s/r6-stage/newhub-prometheus-rule.yaml).
+	PoolExhaustedRejections = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "pool_exhausted_rejections_total",
+			Help:      "Total relay requests denied because the tenant credit pool is exhausted",
+		},
+		[]string{"tenant_id", "pool_kind"},
+	)
+
+	// BillingDebitAmountCNY observes the CNY amount of every successful
+	// WalletDebit call to lurus-platform. Labeled by tenant_id.
+	// Buckets cover typical LLM cost range: fractions of fen to hundreds of yuan.
+	BillingDebitAmountCNY = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "billing_debit_amount_cny",
+			Help:      "CNY amount per successful WalletDebit call to lurus-platform, by tenant",
+			Buckets:   []float64{0.0001, 0.001, 0.01, 0.05, 0.1, 0.5, 1, 5, 10, 50, 100},
+		},
+		[]string{"tenant_id"},
+	)
 )
 
 // RecordRelayRequest records a relay request with its outcome
@@ -323,4 +353,16 @@ func RecordRelayOverhead(durationSec float64) {
 // status must be "success" or "error".
 func RecordRelayTotal(provider, model, status string, durationSec float64) {
 	RelayTotalDuration.WithLabelValues(provider, model, status).Observe(durationSec)
+}
+
+// RecordPoolExhaustedRejection increments the pool exhaustion rejection counter.
+// poolKind should be "relay" for relay-path rejections.
+func RecordPoolExhaustedRejection(tenantID, poolKind string) {
+	PoolExhaustedRejections.WithLabelValues(tenantID, poolKind).Inc()
+}
+
+// RecordBillingDebit records the CNY amount of a successful WalletDebit.
+// tenantID may be empty for requests not linked to a tenant (recorded under "").
+func RecordBillingDebit(tenantID string, amountCNY float64) {
+	BillingDebitAmountCNY.WithLabelValues(tenantID).Observe(amountCNY)
 }
