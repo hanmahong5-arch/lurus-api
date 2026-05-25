@@ -111,6 +111,13 @@ func ZitaBootstrap(c *gin.Context) {
 		string(details),
 	))
 
+	// tenant_slug lets the v2 frontend route every subsequent API call
+	// through /api/v2/:tenant_slug/... without an extra round trip to look
+	// up the slug. user.TenantId is a UUID; resolve it to the human-readable
+	// slug here. Missing/empty TenantId falls back to "default" so the
+	// frontend still has a routable value.
+	tenantSlug := resolveTenantSlug(user.TenantId)
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
@@ -121,8 +128,29 @@ func ZitaBootstrap(c *gin.Context) {
 			"status":       user.Status,
 			"group":        user.Group,
 			"email":        user.Email,
+			"tenant_slug":  tenantSlug,
 		},
 	})
+}
+
+// resolveTenantSlug converts a tenant UUID into its human-readable slug.
+// On lookup failure (tenant deleted, "default" placeholder, DB hiccup) it
+// returns "default" rather than failing the bootstrap — the bridge is on
+// the login critical path and we'd rather log the user in with a fallback
+// slug than block them from the console entirely.
+func resolveTenantSlug(tenantID string) string {
+	if tenantID == "" || tenantID == "default" {
+		return "default"
+	}
+	tenant, err := repo.GetTenantByID(tenantID)
+	if err != nil || tenant == nil {
+		common.SysError(fmt.Sprintf("zita-bootstrap: tenant slug lookup failed for tenant_id=%s: %v", tenantID, err))
+		return "default"
+	}
+	if tenant.Slug == "" {
+		return "default"
+	}
+	return tenant.Slug
 }
 
 // autoCreateBridgedUser provisions a minimum-viable newhub user for a

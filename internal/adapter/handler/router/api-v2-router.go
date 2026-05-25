@@ -39,6 +39,14 @@ func SetApiV2Router(router *gin.Engine) {
 			apiV2.POST("/auth/zita-bootstrap", middleware.BootstrapRateLimit(), common.ZitaClient.AuthMiddleware(), handler.ZitaBootstrap)
 		}
 
+		// E2E bridge: STAGE/CI only. Registers ONLY when env E2E_BRIDGE_TOKEN
+		// is non-empty so the route does not exist in prod (defense in depth).
+		// Same rate-limit bucket as zita-bootstrap — a brute-force attempt on
+		// the bridge token is structurally identical to a bootstrap replay.
+		if handler.BridgeEnabled() {
+			apiV2.POST("/bridge/exchange", middleware.BootstrapRateLimit(), handler.BridgeExchange)
+		}
+
 		// Tenant-scoped user endpoint (session auth — called by frontend in V2 mode)
 		apiV2.GET("/:tenant_slug/user/me", middleware.UserAuth(), handler.GetSelf)
 

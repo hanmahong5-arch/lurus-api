@@ -20,6 +20,7 @@ import { useEffect, useState } from 'react';
 import Loading from '../common/ui/Loading';
 import { Card, Typography } from '@douyinfe/semi-ui';
 import { API } from '../../helpers';
+import { setTenantSlug } from '../../helpers/apiMode';
 
 // register prop kept for backward compat with the route declaration in
 // App.jsx; platform identity.lurus.cn renders a unified "登录/注册" UI
@@ -55,6 +56,12 @@ const ZitadelRedirect = (_props) => {
         if (cancelled) return;
         if (res?.data?.success && res.data.data?.id) {
           localStorage.setItem('user', JSON.stringify(res.data.data));
+          // Persist tenant_slug so subsequent /api/v2/:tenant_slug/* calls
+          // route correctly without an extra round trip. Backend resolves
+          // user.TenantId → slug; defaults to "default" if unresolvable.
+          if (res.data.data.tenant_slug) {
+            setTenantSlug(res.data.data.tenant_slug);
+          }
           window.location.replace(
             window.location.origin + '/console/v2/dashboard',
           );
