@@ -252,3 +252,64 @@ func TestV2Models_PaginationClamp(t *testing.T) {
 		}
 	})
 }
+
+// TestV2Models_CrossTenantIsolation verifies two security properties:
+//  1. A request using an unknown tenant slug is rejected with 404 (tenant
+//     validation is the first guard — no model data is served without a valid tenant).
+//  2. A request for a valid tenant slug does NOT leak internal-only fields
+//     (BoundChannels, MatchedModels, MatchedCount, VendorID) through the
+//     modelV2View whitelist.
+func TestV2Models_CrossTenantIsolation(t *testing.T) {
+	ctx := setupModelsRouter(t)
+
+	// Seed a model so the happy-path assertion has a row to check.
+	m := &repo.Model{ModelName: "gpt-4o-cross-test", Status: 1}
+	if err := ctx.db.Create(m).Error; err != nil {
+		t.Fatalf("seed model: %v", err)
+	}
+
+	t.Run("unknown_tenant_returns_404", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v2/no-such-tenant/models", nil)
+		w := httptest.NewRecorder()
+		ctx.router.ServeHTTP(w, req)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 for unknown tenant slug, got %d — body: %s", w.Code, w.Body.String())
+		}
+		var out map[string]interface{}
+		_ = json.Unmarshal(w.Body.Bytes(), &out)
+		if out["error_code"] != "TENANT_NOT_FOUND" {
+			t.Errorf("expected error_code TENANT_NOT_FOUND, got %v", out["error_code"])
+		}
+	})
+
+	t.Run("modelV2View_forbids_internal_fields", func(t *testing.T) {
+		w := getModels(ctx, "")
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d — body: %s", w.Code, w.Body.String())
+		}
+		out := parseModelsResp(t, w)
+		data := out["data"].(map[string]interface{})
+		items := data["items"].([]interface{})
+		if len(items) == 0 {
+			t.Fatal("expected at least 1 item in model list")
+		}
+		first := items[0].(map[string]interface{})
+		// Internal enrichment fields must not appear in the serialised response.
+		for _, forbidden := range []string{
+			"BoundChannels", "bound_channels",
+			"MatchedModels", "matched_models",
+			"MatchedCount", "matched_count",
+			"vendor_id",
+		} {
+			if _, ok := first[forbidden]; ok {
+				t.Errorf("forbidden field %q leaked through modelV2View", forbidden)
+			}
+		}
+		// Whitelisted fields must be present.
+		for _, required := range []string{"id", "model_name", "status", "created_time"} {
+			if _, ok := first[required]; !ok {
+				t.Errorf("expected field %q in modelV2View, not found", required)
+			}
+		}
+	})
+}
