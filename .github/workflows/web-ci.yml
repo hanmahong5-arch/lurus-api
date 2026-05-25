@@ -35,6 +35,8 @@ jobs:
       - run: bun run lint
       - run: bun run eslint
       - run: bun run test
+      - name: snake_case casing gate
+        run: bun run check:casing
 
   build:
     name: Vite build
