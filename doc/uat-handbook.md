@@ -80,6 +80,7 @@ curl -sf https://test-newhub.lurus.cn/v1/models \
 | α9: coverage gate thresholds (18/58/19) | Baseline thresholds, not aspirational. Ratchet upward as coverage grows. |
 | Sγ: Playwright e2e suite | Deferred — depends on `STAGING_KUBECONFIG` secret being configured and STAGE pod green. |
 | bun audit 404 on local host | npm audit registry unreachable from dev Windows host. Will resolve in CI (ubuntu-latest has network access to npm). |
+| bun audit: 87 transitive-dep CVEs (1 crit / 26 high / 55 mod / 5 low) | Need dep-bump PR (picomatch via vitest/vite/tailwind, mermaid via @lobehub/ui, immutable, react-router, protocol-buffers-schema). CI step is informational (`continue-on-error: true`) until cleanup PR ratchets the level back up. |
 
 ---
 
