@@ -143,7 +143,7 @@ func fetchJSON[T any](ctx context.Context, url string, out *upstreamEnvelope[T])
 			lastErr = err
 			// backoff with jitter
 			sleep := baseDelay * time.Duration(1<<attempt)
-			jitter := time.Duration(rand.Intn(150)) * time.Millisecond
+			jitter := time.Duration(rand.Intn(150)) * time.Millisecond // #nosec G404 — backoff jitter; math/rand is sufficient.
 			time.Sleep(sleep + jitter)
 			continue
 		}
@@ -215,7 +215,7 @@ func fetchJSON[T any](ctx context.Context, url string, out *upstreamEnvelope[T])
 			return nil
 		}
 		sleep := baseDelay * time.Duration(1<<attempt)
-		jitter := time.Duration(rand.Intn(150)) * time.Millisecond
+		jitter := time.Duration(rand.Intn(150)) * time.Millisecond // #nosec G404 — backoff jitter; math/rand is sufficient.
 		time.Sleep(sleep + jitter)
 	}
 	return lastErr

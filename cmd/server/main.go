@@ -39,7 +39,7 @@ import (
 	"github.com/joho/godotenv"
 	"golang.org/x/sync/errgroup"
 
-	_ "net/http/pprof"
+	_ "net/http/pprof" // #nosec G108 — pprof is exposed only when ENABLE_PPROF=true (gated in router); disabled in production.
 )
 
 var buildFS = web.BuildFS

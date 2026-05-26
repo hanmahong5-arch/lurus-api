@@ -204,7 +204,7 @@ func (s *ReleaseService) GenerateDownloadURL(ctx context.Context, artifact *enti
 
 // HandleDownload handles download logic: logging and count increment
 func (s *ReleaseService) HandleDownload(ctx context.Context, artifactId int64, ipAddress, userAgent, referer string) error {
-	go func() {
+	go func() { // #nosec G118 — intentional fire-and-forget: download log is best-effort; request context must not propagate.
 		logCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 

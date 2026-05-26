@@ -255,7 +255,7 @@ func GenerateKey() (string, error) {
 
 func GetRandomInt(max int) int {
 	//rand.Seed(time.Now().UnixNano())
-	return rand.Intn(max)
+	return rand.Intn(max) // #nosec G404 — non-security use: load-balancing index selection; math/rand is sufficient.
 }
 
 func GetTimestamp() int64 {
@@ -281,7 +281,7 @@ func MessageWithRequestId(message string, id string) string {
 
 func RandomSleep() {
 	// Sleep for 0-3000 ms
-	time.Sleep(time.Duration(rand.Intn(3000)) * time.Millisecond)
+	time.Sleep(time.Duration(rand.Intn(3000)) * time.Millisecond) // #nosec G404 — jitter sleep; no security implication.
 }
 
 func GetPointer[T any](v T) *T {

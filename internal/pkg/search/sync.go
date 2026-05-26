@@ -35,7 +35,7 @@ func InitSyncWithContext(ctx context.Context) error {
 
 	// Initialize worker pool for async operations
 	// 初始化工作池用于异步操作
-	asyncPool = gopool.NewPool("meilisearch-sync", int32(WorkerCount), gopool.NewConfig())
+	asyncPool = gopool.NewPool("meilisearch-sync", int32(WorkerCount), gopool.NewConfig()) // #nosec G115 — WorkerCount is config-bounded to ≤256; fits in int32.
 
 	common.SysLog(fmt.Sprintf("Meilisearch sync initialized with %d workers", WorkerCount))
 

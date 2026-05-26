@@ -226,7 +226,7 @@ func GetRandomSatisfiedChannel(group string, model string, retry int) (*Channel,
 	totalWeight := sumWeight * smoothingFactor
 
 	// Generate a random value in the range [0, totalWeight)
-	randomWeight := rand.Intn(totalWeight)
+	randomWeight := rand.Intn(totalWeight) // #nosec G404 — weighted channel selection; math/rand is sufficient for load-balancing.
 
 	// Find a channel based on its weight (use Hub-adjusted weights if available)
 	for i, channel := range targetChannels {

@@ -231,7 +231,7 @@ func PreAuthorizeGRPC(ctx context.Context, accountID int64, amount float64, prod
 		ProductId:   productID,
 		ReferenceId: referenceID,
 		Description: description,
-		TtlSeconds:  int32(ttlSeconds),
+		TtlSeconds: int32(ttlSeconds), // #nosec G115 — TTL max is 30 days; fits in int32.
 	})
 	if err != nil {
 		slog.Debug("identity grpc WalletPreAuthorize failed, falling back to HTTP", "err", err)
@@ -328,7 +328,7 @@ func protoToIdentityMapping(a *identityv1.Account) *IdentityMapping {
 		Email:       a.Email,
 		DisplayName: a.DisplayName,
 		AvatarURL:   a.AvatarUrl,
-		Status:      int16(a.Status),
+		Status: int16(a.Status), // #nosec G115 — account status is an enum (0-3); fits in int16.
 	}
 	if a.CreatedAt != nil {
 		m.CreatedAt = a.CreatedAt.AsTime()
@@ -354,7 +354,7 @@ func protoToAccountOverview(ov *identityv1.AccountOverview) *AccountOverview {
 	}
 
 	if ov.Vip != nil {
-		result.VIP.Level = int16(ov.Vip.Level)
+		result.VIP.Level = int16(ov.Vip.Level) // #nosec G115 — VIP level is an enum (<100); fits in int16.
 		result.VIP.LevelName = ov.Vip.LevelName
 		result.VIP.LevelEN = ov.Vip.LevelEn
 		result.VIP.Points = ov.Vip.Points

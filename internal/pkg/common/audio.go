@@ -226,6 +226,7 @@ func getOpusDuration(r io.ReadSeeker) (float64, error) {
 		}
 
 		// 读取 granule position (字节 6-13, 小端序)
+		// #nosec G115 — Ogg granule position is bounded by sample count; overflow not exploitable.
 		granulePos := int64(binary.LittleEndian.Uint64(buf[6:14]))
 		if granulePos > totalGranulePos {
 			totalGranulePos = granulePos
