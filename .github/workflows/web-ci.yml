@@ -63,20 +63,22 @@ jobs:
         with:
           bun-version: '1.3.10'
       - run: bun install --frozen-lockfile
-      - name: bun audit (INFORMATIONAL — see doc/uat-handbook.md)
-        # 2026-05-26 baseline audit surfaced 87 vulnerabilities (1 critical,
-        # 26 high, 55 moderate, 5 low) — all in transitive deps that require
-        # a focused dep-bump PR to triage (picomatch via vitest/vite/tailwind,
-        # mermaid via @lobehub/ui, immutable, react-router, protocol-buffers-schema).
-        # That cleanup is out of Wave-UAT scope.
+      - name: bun audit (blocking — high+ acceptable, critical blocks)
+        # 2026-05-26 Wave-Phase H1 cleanup landed: bun audit went from
+        # 87 vuln (1 crit, 26 high, 55 mod, 5 low) to 0 crit / 0 high / 7 mod / 0 low
+        # via `overrides` block in web/package.json (minimist, lodash, js-cookie,
+        # immutable, glob/minimatch/picomatch/brace-expansion, rollup, @remix-run/router,
+        # protocol-buffers-schema, prismjs, yaml, geojson-flatten) + axios direct bump
+        # 1.12.0 -> 1.16.1 (same major, non-breaking). Major bumps (react 19, vite 8,
+        # tailwind 4, eslint 10, typescript 6, react-router 7, lucide-react 1.x,
+        # @douyinfe/semi 2.99, marked 18, i18next 26) were deliberately deferred —
+        # they break the build/eslint config and need their own focused stories.
         #
-        # Step is informational until the cleanup PR lands. The CI step still
-        # runs so the count is visible in PR logs (and trend is observable);
-        # `continue-on-error` keeps it from blocking merges. When the cleanup
-        # PR lands, drop the flag and add `--level critical` (later high) to
-        # ratchet up.
-        continue-on-error: true
-        run: bun audit --level low
+        # `--level critical` blocks merges only on new critical advisories. Remaining
+        # 7 moderate vulns are transitive in @douyinfe/vite-plugin-semi, ajv, esbuild,
+        # js-yaml, mdast-util-to-hast, uuid, vite — all upgrade-pending in upstream.
+        # Ratchet to `--level high` once they clear.
+        run: bun audit --audit-level critical
       - name: gitleaks (secret scanning)
         uses: gitleaks/gitleaks-action@v2
         env:
