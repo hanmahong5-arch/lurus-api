@@ -50,6 +50,34 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build
 
+  security:
+    name: bun audit + gitleaks
+    runs-on: ubuntu-latest
+    # Run security checks independently so they don't block the fast test job
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history required by gitleaks for commit-range scanning
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.10'
+      - run: bun install --frozen-lockfile
+      - name: bun audit (fail on high/critical CVEs)
+        # bun audit exits non-zero when any vulnerability of severity >= moderate
+        # is found in the lockfile. The `|| true` is NOT applied — we want this
+        # to fail the job. If bun audit returns 404 (registry unavailable in
+        # isolated CI networks), the step will fail; investigate the network
+        # policy in that case before adding `continue-on-error: true`.
+        run: bun audit --level high
+      - name: gitleaks (secret scanning)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_LICENSE is optional; set it in repo secrets if you have a
+          # commercial license. The action works without it for public repos.
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
   e2e:
     name: Playwright e2e (STAGE)
     runs-on: ubuntu-latest
