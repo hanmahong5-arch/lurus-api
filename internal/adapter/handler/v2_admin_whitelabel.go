@@ -3,10 +3,12 @@ package handler
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"os"
 
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/app/governance"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 
 	"github.com/gin-gonic/gin"
@@ -87,6 +89,12 @@ func GetWhiteLabelHMACKey(c *gin.Context) {
 	// reasonable master secret.
 	sum := sha256.Sum256([]byte(masterSecret + tenantSlug))
 	hexKey := hex.EncodeToString(sum[:])
+
+	// Audit high-value endpoint access: the derived HMAC key signs Switch
+	// installers. Audit records the slug only — never the derived key.
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, c.GetInt("id"),
+		governance.ActionWhitelabelKeyAccessed, governance.ResourceTenant, 0,
+		fmt.Sprintf(`{"tenant_slug":%q}`, tenantSlug)))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

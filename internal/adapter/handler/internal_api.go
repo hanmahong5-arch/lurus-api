@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/app/governance"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/pkg/currency"
 	"github.com/LurusTech/lurus-hub/internal/pkg/logger"
@@ -292,6 +294,10 @@ func InternalAdjustQuota(c *gin.Context) {
 	keyName := c.GetString("internal_api_key_name")
 	repo.RecordLog(req.UserId, repo.LogTypeSystem,
 		"Internal API adjusted quota by "+logger.LogQuota(req.Amount)+" via key: "+keyName+". Reason: "+req.Reason)
+
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorSystem, 0,
+		governance.ActionUserQuotaAdjusted, governance.ResourceUser, user.Id,
+		fmt.Sprintf(`{"adjustment":%d,"key_name":%q,"reason":%q}`, req.Amount, keyName, req.Reason)))
 
 	// Get updated quota
 	newQuota, _ := repo.GetUserQuota(req.UserId, true)

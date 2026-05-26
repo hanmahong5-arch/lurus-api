@@ -13,4 +13,10 @@ type AuditEvent struct {
 	Details    string `json:"details" gorm:"type:text"` // JSON
 	IP         string `json:"ip" gorm:"type:varchar(45);default:''"`
 	RequestID  string `json:"request_id" gorm:"type:varchar(36);default:''"`
+	// RetentionUntil is the unix-seconds deadline after which the
+	// audit_cleanup lifecycle task will delete this row. Zero means
+	// "no expiry" — legacy rows backfilled without a policy stay forever
+	// until an explicit backfill assigns a value. See migration 016 and
+	// internal/lifecycle/audit_cleanup.go.
+	RetentionUntil int64 `json:"retention_until" gorm:"bigint;default:0;index:idx_audit_events_retention_until,where:retention_until > 0"`
 }

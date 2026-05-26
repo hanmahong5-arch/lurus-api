@@ -1,14 +1,16 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
 
-	"github.com/LurusTech/lurus-hub/internal/app"
-	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
-	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/adapter/middleware"
+	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/app"
+	"github.com/LurusTech/lurus-hub/internal/app/governance"
+	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 
 	"github.com/gin-gonic/gin"
 )
@@ -154,6 +156,11 @@ func UpdateSelfV2(c *gin.Context) {
 		})
 		return
 	}
+
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorUser, user.Id,
+		governance.ActionUserSelfUpdated, governance.ResourceUser, user.Id,
+		fmt.Sprintf(`{"display_name_changed":%t,"email_changed":%t}`,
+			req.DisplayName != "", req.Email != "")))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

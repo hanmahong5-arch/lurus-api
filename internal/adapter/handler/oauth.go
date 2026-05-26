@@ -17,6 +17,7 @@ import (
 
 	"github.com/LurusTech/lurus-hub/internal/adapter/middleware"
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/app/governance"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 
 	"github.com/gin-contrib/sessions"
@@ -384,6 +385,10 @@ func ZitadelCallback(c *gin.Context) {
 
 	common.SysLog(fmt.Sprintf("OAuth login successful: user=%s (id=%d) tenant=%s", user.Username, user.Id, stateData.TenantSlug))
 
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorUser, user.Id,
+		governance.ActionAuthLoginSuccess, governance.ResourceUser, user.Id,
+		fmt.Sprintf(`{"provider":"zitadel","tenant_slug":%q}`, stateData.TenantSlug)))
+
 	// Redirect to frontend OAuth callback page to complete login
 	redirectURL := stateData.RedirectURL
 	if redirectURL == "" || redirectURL == "/dashboard" {
@@ -455,10 +460,15 @@ func ZitadelLogout(c *gin.Context) {
 	// Get ID token from session
 	session := sessions.Default(c)
 	idToken, _ := session.Get("oauth_id_token").(string)
+	userID, _ := session.Get("id").(int)
 
 	// Clear session
 	session.Clear()
 	session.Save()
+
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorUser, userID,
+		governance.ActionAuthLogout, governance.ResourceUser, userID,
+		`{"provider":"zitadel"}`))
 
 	// If ID token exists, redirect to Zitadel logout endpoint
 	if idToken != "" {

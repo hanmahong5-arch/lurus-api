@@ -273,6 +273,8 @@ func SetApiV2Router(router *gin.Engine) {
 				govRoute.GET("/efficiency", handler.GetGovernanceEfficiencyStats)
 			}
 			adminRoute.GET("/audit/events", middleware.CriticalRateLimit(), handler.GetAuditEvents)
+			adminRoute.GET("/audit/actions", handler.ListAuditActionsV2)
+			adminRoute.GET("/audit/export", middleware.CriticalRateLimit(), handler.ExportAuditEventsV2)
 		}
 
 		// ================================================================

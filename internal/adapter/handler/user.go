@@ -10,6 +10,7 @@ import (
 
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
 	"github.com/LurusTech/lurus-hub/internal/app"
+	"github.com/LurusTech/lurus-hub/internal/app/governance"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/pkg/dto"
 	"github.com/LurusTech/lurus-hub/internal/pkg/logger"
@@ -167,6 +168,10 @@ func GenerateAccessToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorUser, id,
+		governance.ActionAuthTokenRotated, governance.ResourceUser, id,
+		`{"kind":"access_token"}`))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -362,7 +367,18 @@ func UpdateUser(c *gin.Context) {
 	}
 	if originUser.Quota != updatedUser.Quota {
 		repo.RecordLog(originUser.Id, repo.LogTypeManage, fmt.Sprintf("管理员将用户额度从 %s修改为 %s", logger.LogQuota(originUser.Quota), logger.LogQuota(updatedUser.Quota)))
+		governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, c.GetInt("id"),
+			governance.ActionUserQuotaAdjusted, governance.ResourceUser, originUser.Id,
+			fmt.Sprintf(`{"old_quota":%d,"new_quota":%d}`, originUser.Quota, updatedUser.Quota)))
 	}
+	action := governance.ActionUserUpdated
+	auditDetail := fmt.Sprintf(`{"username":%q}`, updatedUser.Username)
+	if originUser.Role != updatedUser.Role {
+		action = governance.ActionUserRoleChanged
+		auditDetail = fmt.Sprintf(`{"old_role":%d,"new_role":%d}`, originUser.Role, updatedUser.Role)
+	}
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, c.GetInt("id"),
+		action, governance.ResourceUser, originUser.Id, auditDetail))
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -446,6 +462,10 @@ func UpdateSelf(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorUser, cleanUser.Id,
+		governance.ActionUserSelfUpdated, governance.ResourceUser, cleanUser.Id,
+		fmt.Sprintf(`{"username":%q}`, cleanUser.Username)))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -624,6 +644,10 @@ func UpdateUserSetting(c *gin.Context) {
 		return
 	}
 
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorUser, userId,
+		governance.ActionUserSelfUpdated, governance.ResourceUser, userId,
+		fmt.Sprintf(`{"notify_type":%q}`, req.QuotaWarningType)))
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "设置已更新",
@@ -632,6 +656,8 @@ func UpdateUserSetting(c *gin.Context) {
 
 // Logout clears the v1 session cookie.
 func Logout(c *gin.Context) {
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorUser, c.GetInt("id"),
+		governance.ActionAuthLogout, governance.ResourceUser, c.GetInt("id"), ""))
 	c.JSON(http.StatusOK, gin.H{
 		"message": "",
 		"success": true,

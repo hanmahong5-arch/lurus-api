@@ -10,43 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Audit action constants.
-const (
-	ActionTokenCreated      = "token.created"
-	ActionTokenUpdated      = "token.updated"
-	ActionTokenDeleted      = "token.deleted"
-	ActionTokenBatchDeleted = "token.batch_deleted"
-
-	ActionChannelUpdated      = "channel.updated"
-	ActionChannelDeleted      = "channel.deleted"
-	ActionChannelBatchDeleted = "channel.batch_deleted"
-	ActionChannelDisabled     = "channel.disabled"
-	ActionChannelEnabled      = "channel.enabled"
-	ActionChannelTagDisabled  = "channel.tag_disabled"
-
-	ActionAuthFailed        = "auth.failed"
-	ActionAuthIPRejected    = "auth.ip_rejected"
-	ActionAuthScopeRejected = "auth.scope_rejected" // Phase E2: token lacks scope required for the relay path
-	ActionAuthBootstrapped  = "auth.bootstrapped"
-
-	ActionSensitiveBlocked = "security.sensitive_blocked"
-)
-
-// Actor type constants.
-const (
-	ActorUser   = "user"
-	ActorAdmin  = "admin"
-	ActorSystem = "system"
-	ActorToken  = "token"
-)
-
-// Resource type constants.
-const (
-	ResourceToken   = "token"
-	ResourceChannel = "channel"
-	ResourceUser    = "user"
-)
-
 // AuditWriter is the interface for persisting audit events.
 // Set via SetAuditWriter during initialization to avoid circular imports.
 type AuditWriter interface {
@@ -76,19 +39,30 @@ func RecordAuditEvent(event *entity.AuditEvent) {
 	})
 }
 
+// DefaultAuditRetentionSeconds is the default per-event retention window
+// applied by NewAuditEvent — seven years, matching the SOC 2 / industry-norm
+// retention for security-relevant access logs. Override per-event by setting
+// the RetentionUntil field directly after construction (e.g. shorter for
+// high-volume relay events, indefinite by setting 0).
+const DefaultAuditRetentionSeconds int64 = 7 * 365 * 24 * 60 * 60
+
 // NewAuditEvent creates an AuditEvent from gin context with common fields pre-filled.
+// The default RetentionUntil is Timestamp + 7 years; callers may override after
+// construction for shorter or indefinite retention.
 func NewAuditEvent(c *gin.Context, actorType string, actorID int, action, resource string, resourceID int, details string) *entity.AuditEvent {
+	ts := common.GetTimestamp()
 	event := &entity.AuditEvent{
-		TenantID:  c.GetString("tenant_id"),
-		Timestamp: common.GetTimestamp(),
-		ActorType: actorType,
-		ActorID:   actorID,
-		Action:    action,
-		Resource:  resource,
-		ResourceID: resourceID,
-		Details:   details,
-		IP:        c.ClientIP(),
-		RequestID: c.GetString(common.RequestIdKey),
+		TenantID:       c.GetString("tenant_id"),
+		Timestamp:      ts,
+		ActorType:      actorType,
+		ActorID:        actorID,
+		Action:         action,
+		Resource:       resource,
+		ResourceID:     resourceID,
+		Details:        details,
+		IP:             c.ClientIP(),
+		RequestID:      c.GetString(common.RequestIdKey),
+		RetentionUntil: ts + DefaultAuditRetentionSeconds,
 	}
 	if event.TenantID == "" {
 		event.TenantID = "default"

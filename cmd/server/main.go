@@ -22,6 +22,7 @@ import (
 	"github.com/LurusTech/lurus-hub/internal/app/hub"
 	"github.com/LurusTech/lurus-hub/internal/app/openrouter_pool"
 	openrouter_sync "github.com/LurusTech/lurus-hub/internal/app/openrouter_sync"
+	"github.com/LurusTech/lurus-hub/internal/lifecycle"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/pkg/config"
 	"github.com/LurusTech/lurus-hub/internal/pkg/constant"
@@ -237,6 +238,13 @@ func run(ctx context.Context, startTime time.Time) error {
 	// Start daily quota reset cron job with context for graceful shutdown
 	if os.Getenv("DAILY_QUOTA_ENABLED") != "false" {
 		repo.StartDailyQuotaResetCronWithContext(ctx)
+	}
+
+	// Phase E3: audit retention cleanup. Master-only to avoid duplicate
+	// deletes when scaled out; the operation is idempotent but firing it
+	// once per node would inflate DB write amplification.
+	if common.IsMasterNode {
+		lifecycle.StartAuditCleanupWithContext(ctx)
 	}
 
 	// pprof server

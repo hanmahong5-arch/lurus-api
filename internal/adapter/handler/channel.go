@@ -786,6 +786,10 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 	app.ResetProxyClientCache()
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, c.GetInt("id"),
+		governance.ActionChannelCreated, governance.ResourceChannel, 0,
+		fmt.Sprintf(`{"mode":%q,"count":%d,"type":%d}`,
+			addChannelRequest.Mode, len(channels), addChannelRequest.Channel.Type)))
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

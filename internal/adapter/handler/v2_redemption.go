@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
-	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
-	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/adapter/middleware"
+	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/app/governance"
+	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 
 	"github.com/gin-gonic/gin"
 )
@@ -91,6 +93,10 @@ func RedeemCodeV2(c *gin.Context) {
 		})
 		return
 	}
+
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorUser, tenantCtx.UserID,
+		governance.ActionRedemptionRedeemed, governance.ResourceRedemption, 0,
+		fmt.Sprintf(`{"quota_added":%d}`, quota)))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -291,6 +297,11 @@ func CreateRedemptionV2(c *gin.Context) {
 		return
 	}
 
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, tenantCtx.UserID,
+		governance.ActionRedemptionCreated, governance.ResourceRedemption, 0,
+		fmt.Sprintf(`{"name":%q,"count":%d,"quota":%d,"created":%d}`,
+			req.Name, req.Count, req.Quota, len(createdCodes))))
+
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"message": "Redemption codes created successfully",
@@ -362,6 +373,10 @@ func DeleteRedemptionV2(c *gin.Context) {
 		})
 		return
 	}
+
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, tenantCtx.UserID,
+		governance.ActionRedemptionDeleted, governance.ResourceRedemption, redemptionID,
+		fmt.Sprintf(`{"name":%q}`, redemption.Name)))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

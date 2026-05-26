@@ -2,12 +2,14 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"unicode/utf8"
 
-	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/app/governance"
+	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 
 	"github.com/gin-gonic/gin"
 )
@@ -119,6 +121,9 @@ func AddRedemption(c *gin.Context) {
 		}
 		keys = append(keys, key)
 	}
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, c.GetInt("id"),
+		governance.ActionRedemptionCreated, governance.ResourceRedemption, 0,
+		fmt.Sprintf(`{"name":%q,"count":%d,"quota":%d}`, redemption.Name, redemption.Count, redemption.Quota)))
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -134,6 +139,8 @@ func DeleteRedemption(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, c.GetInt("id"),
+		governance.ActionRedemptionDeleted, governance.ResourceRedemption, id, ""))
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -172,6 +179,9 @@ func UpdateRedemption(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, c.GetInt("id"),
+		governance.ActionRedemptionUpdated, governance.ResourceRedemption, cleanRedemption.Id,
+		fmt.Sprintf(`{"status_only":%q,"name":%q,"status":%d}`, statusOnly, cleanRedemption.Name, cleanRedemption.Status)))
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -186,6 +196,9 @@ func DeleteInvalidRedemption(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, c.GetInt("id"),
+		governance.ActionRedemptionInvalidDeleted, governance.ResourceRedemption, 0,
+		fmt.Sprintf(`{"rows":%d}`, rows)))
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/app/governance"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 
 	"github.com/gin-gonic/gin"
@@ -232,6 +234,10 @@ func DeleteUserMappingV2(c *gin.Context) {
 		})
 		return
 	}
+
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, c.GetInt("id"),
+		governance.ActionTenantMappingDeleted, governance.ResourceTenant, mappingID,
+		fmt.Sprintf(`{"hard_delete":%t,"lurus_user_id":%d}`, hardDelete, mapping.LurusUserID)))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

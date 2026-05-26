@@ -13,8 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/app/governance"
+	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -435,6 +436,11 @@ func SyncUpstreamModels(c *gin.Context) {
 			})
 		}
 	}
+
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, c.GetInt("id"),
+		governance.ActionModelSyncTriggered, governance.ResourceModel, 0,
+		fmt.Sprintf(`{"locale":%q,"created_models":%d,"created_vendors":%d,"updated_models":%d}`,
+			req.Locale, createdModels, createdVendors, updatedModels)))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

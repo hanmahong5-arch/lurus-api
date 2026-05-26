@@ -6,8 +6,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/app/governance"
+	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/pkg/setting"
 	"github.com/LurusTech/lurus-hub/internal/pkg/setting/console_setting"
 	"github.com/LurusTech/lurus-hub/internal/pkg/setting/ratio_setting"
@@ -219,6 +220,11 @@ func UpdateOption(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// Audit log records the key only — option values may carry secrets
+	// (OAuth client_secret, API keys) that must never reach audit_events.
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, c.GetInt("id"),
+		governance.ActionOptionUpdated, governance.ResourceOption, 0,
+		fmt.Sprintf(`{"key":%q}`, option.Key)))
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

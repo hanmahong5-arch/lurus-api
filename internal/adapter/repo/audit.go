@@ -69,3 +69,64 @@ func DeleteOldAuditEvents(ctx context.Context, targetTimestamp int64, limit int)
 	}
 	return total, nil
 }
+
+// DeleteExpiredAuditEvents deletes audit events whose retention_until has
+// passed. Rows with retention_until = 0 are treated as "no expiry" and
+// preserved indefinitely. Phase E3 audit-retention enforcement.
+func DeleteExpiredAuditEvents(ctx context.Context, now int64, limit int) (int64, error) {
+	var total int64
+	for {
+		if ctx.Err() != nil {
+			return total, ctx.Err()
+		}
+		result := DB.Where("retention_until > 0 AND retention_until <= ?", now).
+			Limit(limit).
+			Delete(&entity.AuditEvent{})
+		if result.Error != nil {
+			return total, result.Error
+		}
+		total += result.RowsAffected
+		if result.RowsAffected < int64(limit) {
+			break
+		}
+	}
+	return total, nil
+}
+
+// ExportAuditEvents returns audit events ordered by id ASC for cursor-based
+// export. Pass cursor=0 to start. Returns up to limit rows plus the next
+// cursor (last id + 1, or 0 if fully drained). Filters are AND-combined
+// alongside the cursor predicate; pass empty/zero values to skip a filter.
+func ExportAuditEvents(cursorID int64, action, resource string, actorID int, startTime, endTime int64, limit int) (events []*entity.AuditEvent, nextCursor int64, err error) {
+	tx := DB.Model(&entity.AuditEvent{}).Where("id >= ?", cursorID)
+	if action != "" {
+		tx = tx.Where("action = ?", action)
+	}
+	if resource != "" {
+		tx = tx.Where("resource = ?", resource)
+	}
+	if actorID > 0 {
+		tx = tx.Where("actor_id = ?", actorID)
+	}
+	if startTime > 0 {
+		tx = tx.Where("timestamp >= ?", startTime)
+	}
+	if endTime > 0 {
+		tx = tx.Where("timestamp <= ?", endTime)
+	}
+	if limit <= 0 {
+		limit = 1000
+	}
+	if limit > 10000 {
+		limit = 10000
+	}
+	// Fetch one extra row to detect whether more pages remain.
+	if err = tx.Order("id ASC").Limit(limit + 1).Find(&events).Error; err != nil {
+		return nil, 0, err
+	}
+	if len(events) > limit {
+		nextCursor = events[limit].ID
+		events = events[:limit]
+	}
+	return events, nextCursor, nil
+}

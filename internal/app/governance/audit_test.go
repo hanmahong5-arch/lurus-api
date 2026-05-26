@@ -112,6 +112,26 @@ func TestNewAuditEvent_DefaultTenant(t *testing.T) {
 	}
 }
 
+func TestNewAuditEvent_DefaultRetention(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest("POST", "/test", nil)
+
+	event := NewAuditEvent(c, ActorUser, 1, ActionTokenCreated, ResourceToken, 1, "")
+
+	// retention_until should equal timestamp + 7y. We don't pin the exact
+	// timestamp because NewAuditEvent reads the clock; assert the delta.
+	delta := event.RetentionUntil - event.Timestamp
+	if delta != DefaultAuditRetentionSeconds {
+		t.Errorf("expected retention_until - timestamp = %d (7y), got %d",
+			DefaultAuditRetentionSeconds, delta)
+	}
+	if event.RetentionUntil == 0 {
+		t.Error("RetentionUntil should not be zero — 0 means 'no expiry' which would skip cleanup")
+	}
+}
+
 func TestSetAuditWriter_AtomicSafety(t *testing.T) {
 	defer auditWriterRef.Store(nil)
 

@@ -3,6 +3,8 @@ package handler
 import (
 	"net/http"
 
+	"github.com/LurusTech/lurus-hub/internal/app/governance"
+
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	zita "github.com/hanmahong5-arch/zita-sdk-go"
@@ -24,9 +26,14 @@ import (
 // (e.g. "切换账号" on the disabled-account page); POST suits in-app calls.
 func ZitaLogout(c *gin.Context) {
 	session := sessions.Default(c)
+	userID, _ := session.Get("id").(int)
 	session.Clear()
 	session.Options(sessions.Options{Path: "/", MaxAge: -1})
 	_ = session.Save()
+
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorUser, userID,
+		governance.ActionAuthLogout, governance.ResourceUser, userID,
+		`{"provider":"zita-bridge"}`))
 
 	// Production: platform writes the cookie with Domain=.lurus.cn so
 	// every subdomain shares it; clearing requires the same Domain attr.

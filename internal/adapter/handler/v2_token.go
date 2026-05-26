@@ -521,7 +521,7 @@ func RotateTokenV2(c *gin.Context) {
 	}
 
 	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorUser, tenantCtx.UserID,
-		governance.ActionTokenUpdated, governance.ResourceToken, tokenID, `{"action":"rotate"}`))
+		governance.ActionAuthTokenRotated, governance.ResourceToken, tokenID, ""))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
