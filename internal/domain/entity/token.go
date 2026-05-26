@@ -24,6 +24,10 @@ type Token struct {
 	UsedQuota          int            `json:"used_quota" gorm:"default:0"`
 	Group              string         `json:"group" gorm:"default:''"`
 	CrossGroupRetry    bool           `json:"cross_group_retry"`
+	// Scopes is a comma-separated allowlist of relay scopes (see
+	// pkg/types/token_scope.go). Empty = no restriction (backward compat).
+	// Migration 015 introduced the column. ADR Phase E2.
+	Scopes             string         `json:"scopes" gorm:"type:varchar(255);default:''"`
 	IdentityAccountID  int64          `json:"identity_account_id" gorm:"default:0;index:idx_identity_account,where:identity_account_id > 0"` // lurus-platform account ID
 	// CreatorUserID is the users.id of the Reseller who issued this key via the
 	// Provisioning API (POST /internal/v1/provisioning/tenants/:slug/keys).
@@ -77,4 +81,37 @@ func (token *Token) GetModelLimitsMap() map[string]bool {
 		limitsMap[limit] = true
 	}
 	return limitsMap
+}
+
+// GetScopes returns the token's scope allowlist as a slice with whitespace
+// trimmed and empty entries dropped. nil/empty result means no restriction.
+func (token *Token) GetScopes() []string {
+	if token.Scopes == "" {
+		return nil
+	}
+	parts := strings.Split(token.Scopes, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// HasScope reports whether the token is authorized for the given scope.
+// An empty Scopes field is treated as "no restriction" (backward compat
+// with every token issued before migration 015) — HasScope returns true.
+func (token *Token) HasScope(scope string) bool {
+	scopes := token.GetScopes()
+	if len(scopes) == 0 {
+		return true
+	}
+	for _, s := range scopes {
+		if s == scope {
+			return true
+		}
+	}
+	return false
 }

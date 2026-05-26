@@ -1,0 +1,24 @@
+-- Migration 015: add scopes column to tokens for relay-scope authorization.
+--
+-- Phase E2 (Enterprise Foundation): relay tokens gain a comma-separated
+-- scope allowlist. The middleware (TokenAuth) maps each incoming relay
+-- path to a required scope (chat / embedding / image / audio / realtime /
+-- mj / task) and rejects with 403 forbidden_scope if the token does not
+-- carry that scope.
+--
+-- Empty scopes (default for all legacy rows and any token created without
+-- an explicit scopes list) means "no restriction" — preserves backward
+-- compatibility for the existing 32 commits of Wave-UAT work and every
+-- token issued before this migration.
+--
+-- The column is sized at varchar(255). Eight known scopes joined with
+-- commas fit in well under 100 chars, leaving headroom for future scopes
+-- without another migration.
+--
+-- PostgreSQL 11+ ADD COLUMN without rewriting the table when DEFAULT is
+-- a constant — this migration is online-safe even on large token tables.
+-- GORM auto-migrate will independently create the column for fresh
+-- installs; this SQL serves as the auditable record for staging/prod
+-- and gives ops a single artifact to roll back if needed.
+
+ALTER TABLE tokens ADD COLUMN IF NOT EXISTS scopes VARCHAR(255) DEFAULT '' NOT NULL;

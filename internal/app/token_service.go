@@ -3,9 +3,11 @@ package app
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/pkg/types"
 )
 
 const (
@@ -35,6 +37,36 @@ func ValidateTokenQuota(remainQuota int, unlimitedQuota bool) error {
 		return fmt.Errorf("额度值超出有效范围，最大值为 %d", maxQuotaValue)
 	}
 	return nil
+}
+
+// NormalizeTokenScopes validates and canonicalizes a scope list. Each entry
+// must be one of types.ValidTokenScopes. Whitespace is trimmed; duplicates
+// are dropped; the result is sorted by the canonical order of
+// types.ValidTokenScopes so equal inputs produce equal stored strings (which
+// keeps audit diffs deterministic). nil/empty input returns "" — i.e. "no
+// restriction", consistent with HasScope semantics.
+func NormalizeTokenScopes(scopes []string) (string, error) {
+	if len(scopes) == 0 {
+		return "", nil
+	}
+	seen := make(map[string]struct{}, len(scopes))
+	for _, s := range scopes {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if !types.IsValidTokenScope(s) {
+			return "", fmt.Errorf("令牌权限范围无效: %q", s)
+		}
+		seen[s] = struct{}{}
+	}
+	ordered := make([]string, 0, len(seen))
+	for _, v := range types.ValidTokenScopes {
+		if _, ok := seen[v]; ok {
+			ordered = append(ordered, v)
+		}
+	}
+	return strings.Join(ordered, ","), nil
 }
 
 // CanEnableToken checks whether a token can be enabled based on its current state.
@@ -80,6 +112,7 @@ func BuildCleanToken(userId int, tenantId string, token *repo.Token, key string)
 		AllowIps:           token.AllowIps,
 		Group:              token.Group,
 		CrossGroupRetry:    token.CrossGroupRetry,
+		Scopes:             token.Scopes,
 	}
 }
 
@@ -95,4 +128,5 @@ func ApplyTokenUpdate(target *repo.Token, source *repo.Token) {
 	target.AllowIps = source.AllowIps
 	target.Group = source.Group
 	target.CrossGroupRetry = source.CrossGroupRetry
+	target.Scopes = source.Scopes
 }

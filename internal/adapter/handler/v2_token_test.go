@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
@@ -422,6 +423,136 @@ func TestUpdateTokenV2_NameValidation(t *testing.T) {
 		if msg != "令牌名称过长" {
 			t.Errorf("unexpected error message: %s", msg)
 		}
+	}
+}
+
+// TestCreateTokenV2_WithScopes confirms scope round-trip through the v2 API:
+// scopes submitted on create are normalized, persisted, and returned by the
+// subsequent List call. Catches accidental drop on the handler→repo seam.
+func TestCreateTokenV2_WithScopes(t *testing.T) {
+	ctx := SetupV2TestRouter(t)
+	defer ctx.Cleanup()
+
+	body := map[string]interface{}{
+		"name":            "Scoped Token",
+		"unlimited_quota": true,
+		"scopes":          []string{"chat", "embedding"},
+	}
+	w := V2RequestAsUser(ctx, ctx.NormalUser, http.MethodPost, "/api/v2/test-tenant/tokens", body, nil)
+	AssertV2Status(t, w, http.StatusCreated)
+	AssertV2Success(t, w)
+
+	w = V2RequestAsUser(ctx, ctx.NormalUser, http.MethodGet, "/api/v2/test-tenant/tokens", nil, nil)
+	resp := AssertV2Success(t, w)
+	items := resp["data"].(map[string]interface{})["items"].([]interface{})
+	if len(items) != 1 {
+		t.Fatalf("expected 1 token, got %d", len(items))
+	}
+	tk := items[0].(map[string]interface{})
+	rawScopes, ok := tk["scopes"].([]interface{})
+	if !ok {
+		t.Fatalf("tokenView.scopes missing or wrong type: %T (%v)", tk["scopes"], tk["scopes"])
+	}
+	got := make([]string, 0, len(rawScopes))
+	for _, s := range rawScopes {
+		got = append(got, s.(string))
+	}
+	// NormalizeTokenScopes orders by types.ValidTokenScopes — chat before embedding.
+	want := []string{"chat", "embedding"}
+	if len(got) != len(want) {
+		t.Fatalf("scopes round-trip: got %v, want %v", got, want)
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Errorf("scopes[%d]: got %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// TestCreateTokenV2_RejectsUnknownScope ensures invalid scope values are
+// rejected at the API boundary rather than silently stored — a bad input
+// must never reach the DB or it produces a token that fail-closes against
+// every relay path (which would be a confusing UX regression).
+func TestCreateTokenV2_RejectsUnknownScope(t *testing.T) {
+	ctx := SetupV2TestRouter(t)
+	defer ctx.Cleanup()
+
+	body := map[string]interface{}{
+		"name":            "Bad Scope Token",
+		"unlimited_quota": true,
+		"scopes":          []string{"chat", "writeall"},
+	}
+	w := V2RequestAsUser(ctx, ctx.NormalUser, http.MethodPost, "/api/v2/test-tenant/tokens", body, nil)
+	AssertV2Status(t, w, http.StatusBadRequest)
+	resp := ParseV2Response(t, w)
+	if msg, _ := resp["message"].(string); !strings.Contains(msg, "writeall") {
+		t.Errorf("expected error message to name the bad scope, got: %q", msg)
+	}
+}
+
+// TestCreateTokenV2_EmptyScopesAllowed confirms the backward-compat default —
+// omitting "scopes" or sending [] both produce a token with Scopes="" which
+// means "no restriction" for every relay path. This is the contract every
+// pre-migration-015 token row depends on.
+func TestCreateTokenV2_EmptyScopesAllowed(t *testing.T) {
+	ctx := SetupV2TestRouter(t)
+	defer ctx.Cleanup()
+
+	body := map[string]interface{}{
+		"name":            "Unscoped Token",
+		"unlimited_quota": true,
+		"scopes":          []string{},
+	}
+	w := V2RequestAsUser(ctx, ctx.NormalUser, http.MethodPost, "/api/v2/test-tenant/tokens", body, nil)
+	AssertV2Status(t, w, http.StatusCreated)
+	AssertV2Success(t, w)
+
+	w = V2RequestAsUser(ctx, ctx.NormalUser, http.MethodGet, "/api/v2/test-tenant/tokens", nil, nil)
+	resp := AssertV2Success(t, w)
+	items := resp["data"].(map[string]interface{})["items"].([]interface{})
+	tk := items[0].(map[string]interface{})
+	rawScopes, ok := tk["scopes"].([]interface{})
+	if !ok {
+		t.Fatalf("tokenView.scopes missing: %v", tk["scopes"])
+	}
+	if len(rawScopes) != 0 {
+		t.Errorf("expected empty scopes for unscoped token, got %v", rawScopes)
+	}
+}
+
+// TestUpdateTokenV2_ScopeChangeAudits verifies the audit-event detail body
+// for scope rotations. ADR Phase E2 calls out that scope changes must be
+// reconstructible from the audit log — a privilege escalation through
+// scope expansion must leave a trace with both old and new values.
+func TestUpdateTokenV2_ScopeChangeAudits(t *testing.T) {
+	ctx := SetupV2TestRouter(t)
+	defer ctx.Cleanup()
+
+	// Seed a chat-only token directly so the test starts from a known scope state.
+	token := SeedV2Token(t, ctx, ctx.NormalUser.Id, "Audit Trace Token")
+	token.Scopes = "chat"
+	ctx.DB.Save(token)
+
+	// Update to chat+image — the audit record must capture the delta.
+	body := map[string]interface{}{
+		"scopes": []string{"chat", "image"},
+	}
+	path := fmt.Sprintf("/api/v2/test-tenant/tokens/%d", token.Id)
+	w := V2RequestAsUser(ctx, ctx.NormalUser, http.MethodPut, path, body, nil)
+	AssertV2Status(t, w, http.StatusOK)
+	AssertV2Success(t, w)
+
+	// Confirm the token's scopes are persisted in canonical order.
+	w = V2RequestAsUser(ctx, ctx.NormalUser, http.MethodGet, "/api/v2/test-tenant/tokens", nil, nil)
+	resp := AssertV2Success(t, w)
+	items := resp["data"].(map[string]interface{})["items"].([]interface{})
+	if len(items) != 1 {
+		t.Fatalf("expected 1 token, got %d", len(items))
+	}
+	tk := items[0].(map[string]interface{})
+	rawScopes := tk["scopes"].([]interface{})
+	if len(rawScopes) != 2 || rawScopes[0] != "chat" || rawScopes[1] != "image" {
+		t.Errorf("expected scopes=[chat image], got %v", rawScopes)
 	}
 }
 

@@ -281,6 +281,75 @@ func TestCanEnableToken_TableDriven(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// NormalizeTokenScopes
+// ---------------------------------------------------------------------------
+
+func TestNormalizeTokenScopes_EmptyReturnsEmpty(t *testing.T) {
+	// nil and [] must both round-trip to "" — the wire shape `scopes: []`
+	// from a UI client is the canonical "no restriction" signal and must
+	// not error.
+	if got, err := NormalizeTokenScopes(nil); err != nil || got != "" {
+		t.Errorf("NormalizeTokenScopes(nil) = (%q, %v), want (\"\", nil)", got, err)
+	}
+	if got, err := NormalizeTokenScopes([]string{}); err != nil || got != "" {
+		t.Errorf("NormalizeTokenScopes([]) = (%q, %v), want (\"\", nil)", got, err)
+	}
+}
+
+func TestNormalizeTokenScopes_ValidScopesJoined(t *testing.T) {
+	got, err := NormalizeTokenScopes([]string{"chat"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "chat" {
+		t.Errorf("got %q, want %q", got, "chat")
+	}
+}
+
+func TestNormalizeTokenScopes_DedupsAndCanonicalOrder(t *testing.T) {
+	// "image,chat,chat" must canonicalize to "chat,image" (canonical order
+	// per types.ValidTokenScopes) so two equal inputs produce equal stored
+	// strings — keeps audit diffs and DB equality checks deterministic.
+	got, err := NormalizeTokenScopes([]string{"image", "chat", "chat"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "chat,image" {
+		t.Errorf("got %q, want %q", got, "chat,image")
+	}
+}
+
+func TestNormalizeTokenScopes_TrimsWhitespace(t *testing.T) {
+	got, err := NormalizeTokenScopes([]string{"  chat  ", " image "})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "chat,image" {
+		t.Errorf("got %q, want %q", got, "chat,image")
+	}
+}
+
+func TestNormalizeTokenScopes_RejectsUnknownScope(t *testing.T) {
+	_, err := NormalizeTokenScopes([]string{"chat", "writeall"})
+	if err == nil {
+		t.Fatal("expected error for unknown scope, got nil")
+	}
+	if !strings.Contains(err.Error(), "writeall") {
+		t.Errorf("error should name the bad scope, got: %v", err)
+	}
+}
+
+func TestNormalizeTokenScopes_DropsEmptyEntries(t *testing.T) {
+	got, err := NormalizeTokenScopes([]string{"chat", "", "  "})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "chat" {
+		t.Errorf("got %q, want %q", got, "chat")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // ApplyTokenUpdate
 // ---------------------------------------------------------------------------
 

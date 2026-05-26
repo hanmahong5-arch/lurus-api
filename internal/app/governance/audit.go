@@ -24,9 +24,10 @@ const (
 	ActionChannelEnabled      = "channel.enabled"
 	ActionChannelTagDisabled  = "channel.tag_disabled"
 
-	ActionAuthFailed       = "auth.failed"
-	ActionAuthIPRejected   = "auth.ip_rejected"
-	ActionAuthBootstrapped = "auth.bootstrapped"
+	ActionAuthFailed        = "auth.failed"
+	ActionAuthIPRejected    = "auth.ip_rejected"
+	ActionAuthScopeRejected = "auth.scope_rejected" // Phase E2: token lacks scope required for the relay path
+	ActionAuthBootstrapped  = "auth.bootstrapped"
 
 	ActionSensitiveBlocked = "security.sensitive_blocked"
 )

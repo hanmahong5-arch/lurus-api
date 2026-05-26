@@ -14,6 +14,7 @@ import (
 	"github.com/LurusTech/lurus-hub/internal/pkg/constant"
 	"github.com/LurusTech/lurus-hub/internal/pkg/logger"
 	"github.com/LurusTech/lurus-hub/internal/pkg/setting/ratio_setting"
+	"github.com/LurusTech/lurus-hub/internal/pkg/types"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -339,6 +340,21 @@ func TokenAuth() func(c *gin.Context) {
 				return
 			}
 			logger.LogDebug(c, "Client IP %s passed the token IP restrictions check", clientIp)
+		}
+
+		// Phase E2 scope enforcement: map the relay path to a required scope.
+		// Tokens with an empty Scopes field bypass the check (backward compat —
+		// every pre-migration-015 token must keep working). Tokens with a non-
+		// empty allowlist must contain the required scope, else 403.
+		if requiredScope := types.PathToRequiredScope(c.Request.Method, c.Request.URL.Path); requiredScope != "" {
+			if !token.HasScope(requiredScope) {
+				governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorToken, token.UserId,
+					governance.ActionAuthScopeRejected, governance.ResourceToken, token.Id,
+					fmt.Sprintf(`{"required_scope":%q,"path":%q}`, requiredScope, c.Request.URL.Path)))
+				abortWithOpenAiMessage(c, http.StatusForbidden,
+					fmt.Sprintf("令牌未授权 %s 范围的请求", requiredScope))
+				return
+			}
 		}
 
 		userCache, err := repo.GetUserCache(token.UserId)

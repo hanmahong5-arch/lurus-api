@@ -20,25 +20,30 @@ import (
 // once on create), tenant_id (implicit from route) and the platform/provisioning
 // linkage IDs (identity_account_id, creator_user_id). Mirrors redemptionView.
 type tokenView struct {
-	Id                 int     `json:"id"`
-	Name               string  `json:"name"`
-	Key                string  `json:"key"` // masked (first4****last4); full key returned only on create/rotate
-	Status             int     `json:"status"`
-	CreatedTime        int64   `json:"created_time"`
-	AccessedTime       int64   `json:"accessed_time"`
-	ExpiredTime        int64   `json:"expired_time"`
-	RemainQuota        int     `json:"remain_quota"`
-	UsedQuota          int     `json:"used_quota"`
-	UnlimitedQuota     bool    `json:"unlimited_quota"`
-	ModelLimitsEnabled bool    `json:"model_limits_enabled"`
-	ModelLimits        string  `json:"model_limits"`
-	AllowIps           *string `json:"allow_ips"`
-	Group              string  `json:"group"`
+	Id                 int      `json:"id"`
+	Name               string   `json:"name"`
+	Key                string   `json:"key"` // masked (first4****last4); full key returned only on create/rotate
+	Status             int      `json:"status"`
+	CreatedTime        int64    `json:"created_time"`
+	AccessedTime       int64    `json:"accessed_time"`
+	ExpiredTime        int64    `json:"expired_time"`
+	RemainQuota        int      `json:"remain_quota"`
+	UsedQuota          int      `json:"used_quota"`
+	UnlimitedQuota     bool     `json:"unlimited_quota"`
+	ModelLimitsEnabled bool     `json:"model_limits_enabled"`
+	ModelLimits        string   `json:"model_limits"`
+	AllowIps           *string  `json:"allow_ips"`
+	Group              string   `json:"group"`
+	Scopes             []string `json:"scopes"` // empty array = no scope restriction (backward compat)
 }
 
 func toTokenViews(tokens []*repo.Token) []tokenView {
 	items := make([]tokenView, 0, len(tokens))
 	for _, t := range tokens {
+		scopes := t.GetScopes()
+		if scopes == nil {
+			scopes = []string{}
+		}
 		items = append(items, tokenView{
 			Id:                 t.Id,
 			Name:               t.Name,
@@ -54,6 +59,7 @@ func toTokenViews(tokens []*repo.Token) []tokenView {
 			ModelLimits:        t.ModelLimits,
 			AllowIps:           t.AllowIps,
 			Group:              t.Group,
+			Scopes:             scopes,
 		})
 	}
 	return items
@@ -127,14 +133,15 @@ func CreateTokenV2(c *gin.Context) {
 
 	// Parse request body
 	var req struct {
-		Name               string `json:"name" binding:"required"`
-		ExpiredTime        int64  `json:"expired_time"`        // -1 for never expires
-		RemainQuota        int    `json:"remain_quota"`        // Initial quota
-		UnlimitedQuota     bool   `json:"unlimited_quota"`     // Unlimited quota flag
-		ModelLimitsEnabled bool   `json:"model_limits_enabled"` // Enable model limits
-		ModelLimits        string `json:"model_limits"`         // JSON string of model limits
-		AllowIps           string `json:"allow_ips"`            // Comma-separated allowed IPs
-		Group              string `json:"group"`                // Token group
+		Name               string   `json:"name" binding:"required"`
+		ExpiredTime        int64    `json:"expired_time"`         // -1 for never expires
+		RemainQuota        int      `json:"remain_quota"`         // Initial quota
+		UnlimitedQuota     bool     `json:"unlimited_quota"`      // Unlimited quota flag
+		ModelLimitsEnabled bool     `json:"model_limits_enabled"` // Enable model limits
+		ModelLimits        string   `json:"model_limits"`         // JSON string of model limits
+		AllowIps           string   `json:"allow_ips"`            // Comma-separated allowed IPs
+		Group              string   `json:"group"`                // Token group
+		Scopes             []string `json:"scopes"`               // Relay scope allowlist (empty = unrestricted)
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -157,6 +164,16 @@ func CreateTokenV2(c *gin.Context) {
 
 	// Validate quota
 	if err := app.ValidateTokenQuota(req.RemainQuota, req.UnlimitedQuota); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Normalize and validate scopes — invalid values reject with 400.
+	scopesNormalized, err := app.NormalizeTokenScopes(req.Scopes)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": err.Error(),
@@ -203,6 +220,7 @@ func CreateTokenV2(c *gin.Context) {
 		ModelLimits:        req.ModelLimits,
 		AllowIps:           allowIps,
 		Group:              req.Group,
+		Scopes:             scopesNormalized,
 	}
 
 	err = token.Insert()
@@ -273,15 +291,16 @@ func UpdateTokenV2(c *gin.Context) {
 
 	// Parse request body
 	var req struct {
-		Name               string `json:"name"`
-		ExpiredTime        int64  `json:"expired_time"`
-		RemainQuota        int    `json:"remain_quota"`
-		UnlimitedQuota     *bool  `json:"unlimited_quota"`
-		ModelLimitsEnabled *bool  `json:"model_limits_enabled"`
-		ModelLimits        string `json:"model_limits"`
-		AllowIps           string `json:"allow_ips"`
-		Group              string `json:"group"`
-		Status             *int   `json:"status"`
+		Name               string    `json:"name"`
+		ExpiredTime        int64     `json:"expired_time"`
+		RemainQuota        int       `json:"remain_quota"`
+		UnlimitedQuota     *bool     `json:"unlimited_quota"`
+		ModelLimitsEnabled *bool     `json:"model_limits_enabled"`
+		ModelLimits        string    `json:"model_limits"`
+		AllowIps           string    `json:"allow_ips"`
+		Group              string    `json:"group"`
+		Status             *int      `json:"status"`
+		Scopes             *[]string `json:"scopes"` // nil = no change; non-nil (incl. []) = replace allowlist
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -353,6 +372,26 @@ func UpdateTokenV2(c *gin.Context) {
 		token.Status = *req.Status
 	}
 
+	// Scopes replacement is opt-in: nil = unchanged, non-nil = full replace.
+	// Sending [] clears the allowlist (= no restriction). Record both before/
+	// after in the audit event so admins can reconstruct privilege changes.
+	scopeAuditPrev := token.Scopes
+	scopeAuditChanged := false
+	if req.Scopes != nil {
+		scopesNormalized, err := app.NormalizeTokenScopes(*req.Scopes)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
+		if scopesNormalized != token.Scopes {
+			scopeAuditChanged = true
+		}
+		token.Scopes = scopesNormalized
+	}
+
 	// Save changes
 	err = token.Update()
 	if err != nil {
@@ -364,8 +403,17 @@ func UpdateTokenV2(c *gin.Context) {
 		return
 	}
 
+	auditDetails := ""
+	if scopeAuditChanged {
+		detailBytes, _ := json.Marshal(map[string]string{
+			"action":     "scope_update",
+			"old_scopes": scopeAuditPrev,
+			"new_scopes": token.Scopes,
+		})
+		auditDetails = string(detailBytes)
+	}
 	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorUser, tenantCtx.UserID,
-		governance.ActionTokenUpdated, governance.ResourceToken, tokenID, ""))
+		governance.ActionTokenUpdated, governance.ResourceToken, tokenID, auditDetails))
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Token updated successfully",
