@@ -102,6 +102,90 @@ jobs:
             ./internal/adapter/handler/ \
             -run 'TestGetAuditEvents|TestGetGovernance|TestListTokensV2_Pagination'
 
+  coverage-gate:
+    name: coverage gate (app/repo/handler baselines)
+    runs-on: ubuntu-latest
+    # Thresholds are CURRENT BASELINE (2026-05-26) — not aspirational. They
+    # prevent regression. Raise them in the same PR that lifts the underlying
+    # coverage (ratchet upward, never downward). See Wave-UAT ADR for why
+    # the plan's 80/60/50 targets aren't reachable in hermetic tests today.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: LurusTech/lurus-proto-go
+          path: _sibling/lurus-proto-go
+          fetch-depth: 1
+      - uses: actions/checkout@v4
+        with:
+          repository: hanmahong5-arch/zita-sdk-go
+          ref: e2611da1e01ef77b8227571204d6780a6364fea3
+          path: _sibling/zita-sdk-go
+          fetch-depth: 1
+      - name: Relocate sibling repos to ../shared (matches go.mod replace paths)
+        run: |
+          mkdir -p ../shared
+          mv _sibling/lurus-proto-go ../shared/lurus-proto-go
+          mv _sibling/zita-sdk-go ../shared/zita-sdk-go
+          rmdir _sibling
+      - name: Stub web/dist for //go:embed in web/embed.go
+        run: |
+          mkdir -p web/dist
+          echo '<!doctype html><title>stub</title>' > web/dist/index.html
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+      - name: Check per-package coverage (statement-weighted)
+        run: |
+          set -e
+          FAIL=0
+
+          # check_pkg <pkg-path> <threshold> <label>
+          # Runs `go test -coverprofile` for ONE package path, parses the
+          # statement-weighted "total" from `go tool cover -func | tail -1`,
+          # and fails if below threshold. Per-package isolation keeps each
+          # number directly comparable to the manual `go test ... -cover`
+          # output developers see locally.
+          check_pkg() {
+            local pkg_path="$1"
+            local threshold="$2"
+            local label="$3"
+            local profile=/tmp/cov-${label//\//-}.out
+
+            go test -short -timeout=120s -coverprofile="$profile" -covermode=atomic "./${pkg_path}/..." > /tmp/test-out.log 2>&1 || {
+              echo "  TEST FAILED for ${label} — see log below"
+              cat /tmp/test-out.log
+              FAIL=1
+              return
+            }
+
+            local pct
+            pct=$(go tool cover -func="$profile" | tail -1 | awk '{ sub(/%$/, "", $NF); print $NF }')
+
+            echo "${label}: ${pct}% (threshold: ${threshold}%)"
+            if awk "BEGIN { exit (${pct}+0 >= ${threshold}+0) ? 0 : 1 }"; then
+              echo "  PASS"
+            else
+              echo "  FAIL: ${label} ${pct}% < ${threshold}%  — increase test coverage or update baseline (with measurement)"
+              FAIL=1
+            fi
+          }
+
+          check_pkg "internal/app"             18 "internal/app"
+          check_pkg "internal/adapter/repo"    58 "internal/adapter/repo"
+          check_pkg "internal/adapter/handler" 19 "internal/adapter/handler"
+
+          if [ "$FAIL" -eq 1 ]; then
+            echo ""
+            echo "Coverage gate FAILED. Either add tests OR adjust baseline in"
+            echo "this file with a measured before/after in the commit message."
+            exit 1
+          fi
+
+          echo ""
+          echo "Coverage gate PASSED."
+
   vet:
     name: go vet
     runs-on: ubuntu-latest
