@@ -49,19 +49,19 @@ import { API } from '../../../helpers';
 const makeMe = (overrides = {}) => ({
   username: 'testuser',
   display_name: 'Test User',
-  used_quota: 250000,      // snake_case — NOT usedQuota
+  used_quota: 250000, // snake_case — NOT usedQuota
   remaining_quota: 750000, // snake_case — NOT remainingQuota
-  token_count: 3,          // snake_case — NOT tokenCount
-  request_count: 42,       // snake_case — NOT requestCount
+  token_count: 3, // snake_case — NOT tokenCount
+  request_count: 42, // snake_case — NOT requestCount
   ...overrides,
 });
 
 // Backend /api/v2/:slug/logs response — items use snake_case keys
 const makeLog = (overrides = {}) => ({
   type: 2,
-  model_name: 'gpt-4o',    // snake_case — NOT modelName
+  model_name: 'gpt-4o', // snake_case — NOT modelName
   quota: 1000,
-  total_latency_ms: 150,   // snake_case — NOT totalLatencyMs
+  total_latency_ms: 150, // snake_case — NOT totalLatencyMs
   created_at: Math.floor(Date.now() / 1000) - 60, // snake_case — NOT createdAt
   ...overrides,
 });

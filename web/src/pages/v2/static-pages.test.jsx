@@ -57,7 +57,8 @@ vi.mock('@douyinfe/semi-ui', () => {
 
 // AccountDisabled uses Semi illustrations — stub with empty divs.
 vi.mock('@douyinfe/semi-illustrations', () => ({
-  IllustrationNoAccess: () => React.createElement('div', { 'data-testid': 'illus' }),
+  IllustrationNoAccess: () =>
+    React.createElement('div', { 'data-testid': 'illus' }),
   IllustrationNoAccessDark: () =>
     React.createElement('div', { 'data-testid': 'illus-dark' }),
 }));

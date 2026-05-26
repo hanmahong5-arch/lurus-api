@@ -141,12 +141,10 @@ describe('Tenants page — list renders rows', () => {
 
     render(React.createElement(HFTenants));
 
-    await waitFor(() =>
-      screen.getByTestId(`tenant-status-${tenant.id}`),
+    await waitFor(() => screen.getByTestId(`tenant-status-${tenant.id}`));
+    expect(screen.getByTestId(`tenant-status-${tenant.id}`).textContent).toBe(
+      'active',
     );
-    expect(
-      screen.getByTestId(`tenant-status-${tenant.id}`).textContent,
-    ).toBe('active');
   });
 
   it('renders disabled tenant with enable button', async () => {
@@ -155,9 +153,7 @@ describe('Tenants page — list renders rows', () => {
 
     render(React.createElement(HFTenants));
 
-    await waitFor(() =>
-      screen.getByTestId(`tenant-enable-btn-${tenant.id}`),
-    );
+    await waitFor(() => screen.getByTestId(`tenant-enable-btn-${tenant.id}`));
   });
 
   it('renders suspended tenant with enable button', async () => {
@@ -166,9 +162,7 @@ describe('Tenants page — list renders rows', () => {
 
     render(React.createElement(HFTenants));
 
-    await waitFor(() =>
-      screen.getByTestId(`tenant-enable-btn-${tenant.id}`),
-    );
+    await waitFor(() => screen.getByTestId(`tenant-enable-btn-${tenant.id}`));
   });
 
   it('reads response from tenants key not items key', async () => {
@@ -249,9 +243,7 @@ describe('Tenants page — action buttons', () => {
 
     render(React.createElement(HFTenants));
 
-    await waitFor(() =>
-      screen.getByTestId(`tenant-disable-btn-${tenant.id}`),
-    );
+    await waitFor(() => screen.getByTestId(`tenant-disable-btn-${tenant.id}`));
 
     fireEvent.click(screen.getByTestId(`tenant-disable-btn-${tenant.id}`));
 
@@ -274,9 +266,7 @@ describe('Tenants page — action buttons', () => {
 
     render(React.createElement(HFTenants));
 
-    await waitFor(() =>
-      screen.getByTestId(`tenant-enable-btn-${tenant.id}`),
-    );
+    await waitFor(() => screen.getByTestId(`tenant-enable-btn-${tenant.id}`));
 
     fireEvent.click(screen.getByTestId(`tenant-enable-btn-${tenant.id}`));
 
@@ -298,9 +288,7 @@ describe('Tenants page — action buttons', () => {
 
     render(React.createElement(HFTenants));
 
-    await waitFor(() =>
-      screen.getByTestId(`tenant-suspend-btn-${tenant.id}`),
-    );
+    await waitFor(() => screen.getByTestId(`tenant-suspend-btn-${tenant.id}`));
 
     fireEvent.click(screen.getByTestId(`tenant-suspend-btn-${tenant.id}`));
 
@@ -335,9 +323,7 @@ describe('Tenants page — stats drawer', () => {
 
     render(React.createElement(HFTenants));
 
-    await waitFor(() =>
-      screen.getByTestId(`tenant-stats-btn-${tenant.id}`),
-    );
+    await waitFor(() => screen.getByTestId(`tenant-stats-btn-${tenant.id}`));
 
     fireEvent.click(screen.getByTestId(`tenant-stats-btn-${tenant.id}`));
 
@@ -362,7 +348,9 @@ describe('Tenants page — 403 guard', () => {
     render(React.createElement(HFTenants));
 
     await waitFor(() => {
-      expect(screen.getAllByText('Admin access required').length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText('Admin access required').length,
+      ).toBeGreaterThan(0);
     });
   });
 });

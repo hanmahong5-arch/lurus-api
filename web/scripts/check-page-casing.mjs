@@ -57,7 +57,7 @@ const VIOLATIONS = [
   '\\.tokenCount\\b',
   '\\.remainingQuota\\b',
   '\\.usedQuota\\b',
-  '\\.displayName\\b',  // only when reading from API response; component state OK
+  '\\.displayName\\b', // only when reading from API response; component state OK
 ];
 
 // Allowlist: file-level patterns that are exempt from the check.
