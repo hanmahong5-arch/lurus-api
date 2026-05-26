@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/LurusTech/lurus-hub/internal/adapter/middleware"
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
@@ -116,6 +117,52 @@ func GetWalletInfo(c *gin.Context) {
 			"active_preauths": bs.ActivePreAuths,
 			"pending_orders":  bs.PendingOrders,
 			"topup_url":       common.IdentityPublicURL + "/wallet/topup",
+		},
+	})
+}
+
+// GetWalletTransactions returns paginated wallet transaction history for the
+// current session's platform account. Reseller-mode Switch uses this to render
+// the Wallet page transactions table.
+//
+// GET /api/wallet/transactions?p=1&page_size=20
+//
+// 503 when the caller has no platform-linked session — Switch surfaces this
+// as "钱包功能仅对绑定 lurus-platform 的账号可用".
+func GetWalletTransactions(c *gin.Context) {
+	accountID := getSessionAccountID(c)
+	if accountID == 0 {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"message": "platform wallet not linked",
+		})
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("p", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+
+	resp, err := common.ListWalletTransactionsHTTP(c.Request.Context(), accountID, page, pageSize)
+	if err != nil || resp == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"message": "platform wallet service unavailable",
+		})
+		return
+	}
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 || pageSize > 200 {
+		pageSize = 20
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"items":     resp.Data,
+			"total":     resp.Total,
+			"page":      page,
+			"page_size": pageSize,
 		},
 	})
 }

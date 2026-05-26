@@ -55,6 +55,7 @@ func SetApiRouter(router *gin.Engine) {
 
 		// -- Platform wallet integration --
 		apiRouter.GET("/wallet/info", middleware.UserAuth(), handler.GetWalletInfo)
+		apiRouter.GET("/wallet/transactions", middleware.UserAuth(), handler.GetWalletTransactions)
 
 		// -- Token management (users manage their own tokens) --
 		tokenRoute := apiRouter.Group("/token")
