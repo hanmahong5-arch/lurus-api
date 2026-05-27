@@ -69,3 +69,26 @@ func NewAuditEvent(c *gin.Context, actorType string, actorID int, action, resour
 	}
 	return event
 }
+
+// NewDetachedAuditEvent builds an AuditEvent for background tasks that lack a
+// gin.Context — lifecycle jobs, async post-debit hooks, and similar paths.
+// Tenant must be supplied by the caller (empty defaults to "default"); IP and
+// RequestID are unset because there is no inbound request to attribute them to.
+// RetentionUntil defaults to ts + 7y, same as NewAuditEvent.
+func NewDetachedAuditEvent(tenantID, actorType string, actorID int, action, resource string, resourceID int, details string) *entity.AuditEvent {
+	ts := common.GetTimestamp()
+	if tenantID == "" {
+		tenantID = "default"
+	}
+	return &entity.AuditEvent{
+		TenantID:       tenantID,
+		Timestamp:      ts,
+		ActorType:      actorType,
+		ActorID:        actorID,
+		Action:         action,
+		Resource:       resource,
+		ResourceID:     resourceID,
+		Details:        details,
+		RetentionUntil: ts + DefaultAuditRetentionSeconds,
+	}
+}

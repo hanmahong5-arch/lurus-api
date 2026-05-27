@@ -132,6 +132,58 @@ func TestNewAuditEvent_DefaultRetention(t *testing.T) {
 	}
 }
 
+// TestNewDetachedAuditEvent_FieldPopulation covers the gin-less constructor
+// used by background paths (E4 quota threshold hook, lifecycle jobs).
+// Asserts the explicit tenant_id is honoured and IP/RequestID are zero —
+// callers without a request can't fake those without lying about origin.
+func TestNewDetachedAuditEvent_FieldPopulation(t *testing.T) {
+	event := NewDetachedAuditEvent(
+		"tenant-xyz",
+		ActorSystem,
+		99,
+		ActionBillingQuotaThreshold,
+		ResourceUser,
+		99,
+		`{"threshold_pct":80}`,
+	)
+	if event.TenantID != "tenant-xyz" {
+		t.Errorf("tenant_id = %q, want %q", event.TenantID, "tenant-xyz")
+	}
+	if event.ActorType != ActorSystem {
+		t.Errorf("actor_type = %q, want %q", event.ActorType, ActorSystem)
+	}
+	if event.Action != ActionBillingQuotaThreshold {
+		t.Errorf("action = %q, want %q", event.Action, ActionBillingQuotaThreshold)
+	}
+	if event.IP != "" {
+		t.Errorf("ip = %q, want empty (no request context)", event.IP)
+	}
+	if event.RequestID != "" {
+		t.Errorf("request_id = %q, want empty (no request context)", event.RequestID)
+	}
+	if event.RetentionUntil-event.Timestamp != DefaultAuditRetentionSeconds {
+		t.Errorf("retention delta = %d, want %d", event.RetentionUntil-event.Timestamp, DefaultAuditRetentionSeconds)
+	}
+}
+
+// TestNewDetachedAuditEvent_BlankTenantDefaults mirrors NewAuditEvent's blank
+// tenant defaulting. Background paths shouldn't be punished with empty tenant
+// columns just because they had no context to read from.
+func TestNewDetachedAuditEvent_BlankTenantDefaults(t *testing.T) {
+	event := NewDetachedAuditEvent(
+		"",
+		ActorSystem,
+		1,
+		ActionSystemStartup,
+		ResourceSystem,
+		0,
+		"",
+	)
+	if event.TenantID != "default" {
+		t.Errorf("tenant_id = %q, want %q", event.TenantID, "default")
+	}
+}
+
 func TestSetAuditWriter_AtomicSafety(t *testing.T) {
 	defer auditWriterRef.Store(nil)
 

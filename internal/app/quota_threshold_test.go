@@ -2,11 +2,16 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/LurusTech/lurus-hub/internal/app/governance"
+	"github.com/LurusTech/lurus-hub/internal/domain/entity"
 )
 
 // --- minimal mocks ---
@@ -196,5 +201,299 @@ func TestCheckAndPublishQuotaThresholds_Disabled_Skips(t *testing.T) {
 
 	if pub.count() != 0 {
 		t.Errorf("expected 0 publishes when disabled, got %d", pub.count())
+	}
+}
+
+// --- Phase E4 additions: audit + configurable thresholds + boundary cases ---
+
+// capturingAuditWriter records audit events in-memory for assertions.
+// gopool.Go inside RecordAuditEvent dispatches asynchronously, so tests must
+// poll snapshot() with a deadline rather than reading the slice immediately.
+type capturingAuditWriter struct {
+	mu     sync.Mutex
+	events []*entity.AuditEvent
+}
+
+func (m *capturingAuditWriter) CreateAuditEvent(ev *entity.AuditEvent) error {
+	m.mu.Lock()
+	m.events = append(m.events, ev)
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *capturingAuditWriter) snapshot() []*entity.AuditEvent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]*entity.AuditEvent, len(m.events))
+	copy(out, m.events)
+	return out
+}
+
+// waitForCount polls until len(events) >= want or timeout fires. Returns the
+// final snapshot; fails the test if the timeout is reached. Calibrated to the
+// gopool dispatch latency observed locally (single-digit ms); 2s ceiling keeps
+// CI flake risk low without blocking obvious failures for too long.
+func (m *capturingAuditWriter) waitForCount(t *testing.T, want int, timeout time.Duration) []*entity.AuditEvent {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		snap := m.snapshot()
+		if len(snap) >= want {
+			return snap
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	snap := m.snapshot()
+	if len(snap) < want {
+		t.Fatalf("expected ≥%d audit events, got %d after %v", want, len(snap), timeout)
+	}
+	return snap
+}
+
+// noopAuditWriter restores a benign global writer after a test installs its
+// own capturing mock. Cannot use nil because governance.SetAuditWriter stores
+// the AuditWriter interface value via atomic.Pointer.
+type noopAuditWriter struct{}
+
+func (noopAuditWriter) CreateAuditEvent(*entity.AuditEvent) error { return nil }
+
+func installCapturingAuditWriter(t *testing.T) *capturingAuditWriter {
+	t.Helper()
+	mock := &capturingAuditWriter{}
+	governance.SetAuditWriter(mock)
+	t.Cleanup(func() { governance.SetAuditWriter(noopAuditWriter{}) })
+	return mock
+}
+
+// resetQuotaThresholdsCache forces parsedQuotaThresholds to re-read the env on
+// the next call. Required because the sync.Once cache pins the first observed
+// value for the process lifetime; tests that flip LLM_QUOTA_THRESHOLDS need to
+// invalidate it between cases.
+func resetQuotaThresholdsCache(t *testing.T) {
+	t.Helper()
+	quotaThresholdsCache = nil
+	quotaThresholdsCacheOnce = sync.Once{}
+	t.Cleanup(func() {
+		quotaThresholdsCache = nil
+		quotaThresholdsCacheOnce = sync.Once{}
+	})
+}
+
+// TestLoadQuotaThresholds_Defaults asserts the canonical ladder ships when the
+// env is unset or blank. Production behaviour must not change just because
+// loadQuotaThresholds is now reachable.
+func TestLoadQuotaThresholds_Defaults(t *testing.T) {
+	if got := loadQuotaThresholds(""); !reflect.DeepEqual(got, []int{50, 80, 95, 100}) {
+		t.Errorf("loadQuotaThresholds(\"\") = %v, want default ladder", got)
+	}
+	if got := loadQuotaThresholds("   "); !reflect.DeepEqual(got, []int{50, 80, 95, 100}) {
+		t.Errorf("loadQuotaThresholds(whitespace) = %v, want default ladder", got)
+	}
+}
+
+// TestLoadQuotaThresholds_Override covers the Phase E4 use case: operator sets
+// LLM_QUOTA_THRESHOLDS=80,90,100 to mirror the Anthropic Console cadence.
+// Also verifies ordering normalisation (out-of-order input → ascending output)
+// and dedup (repeated values folded once).
+func TestLoadQuotaThresholds_Override(t *testing.T) {
+	cases := []struct {
+		env  string
+		want []int
+	}{
+		{"80,90,100", []int{80, 90, 100}},
+		{"50, 80, 100", []int{50, 80, 100}},
+		{"100,50,80", []int{50, 80, 100}}, // sort ascending
+		{"50,50,80", []int{50, 80}},       // dedup
+		{"75", []int{75}},                  // single value
+	}
+	for _, tc := range cases {
+		if got := loadQuotaThresholds(tc.env); !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("loadQuotaThresholds(%q) = %v, want %v", tc.env, got, tc.want)
+		}
+	}
+}
+
+// TestLoadQuotaThresholds_InvalidFallsBack asserts that malformed input
+// (negative, zero, >100, non-numeric) does NOT silently drop values — the
+// override is voided entirely and the default ladder ships. This protects
+// against operator typos that would otherwise silently disable alerting.
+func TestLoadQuotaThresholds_InvalidFallsBack(t *testing.T) {
+	defaults := []int{50, 80, 95, 100}
+	cases := []string{
+		"80,-10,100", // negative
+		"0,80,100",    // zero
+		"80,150,100",  // >100
+		"abc",         // non-numeric
+		"80,foo,100", // partial garbage
+	}
+	for _, env := range cases {
+		if got := loadQuotaThresholds(env); !reflect.DeepEqual(got, defaults) {
+			t.Errorf("loadQuotaThresholds(%q) = %v, want default fallback", env, got)
+		}
+	}
+}
+
+// TestCheckAndPublishQuotaThresholds_AuditRecorded asserts that crossing a
+// threshold writes one audit_events row per crossing. Phase E4 hard
+// requirement — the plan's verification step "audit_events 有记录" depends on
+// this hook firing on every Redis-acquired dedup slot.
+func TestCheckAndPublishQuotaThresholds_AuditRecorded(t *testing.T) {
+	withQuotaNATSEnabled(t)
+	resetQuotaThresholdsCache(t)
+	audit := installCapturingAuditWriter(t)
+	pub := &mockPublisher{}
+
+	params := quotaThresholdParams{
+		UserId:            42,
+		IdentityAccountID: 4200,
+		TenantID:          "acme",
+		QuotaConsumed:     150,
+		UsedTokensAfter:   550,
+		LimitTokens:       1100,
+	}
+
+	checkAndPublishQuotaThresholds(context.Background(), params, newMockRedis(), pub)
+
+	events := audit.waitForCount(t, 1, 2*time.Second)
+	if len(events) != 1 {
+		t.Fatalf("audit count = %d, want 1", len(events))
+	}
+	ev := events[0]
+	if ev.Action != governance.ActionBillingQuotaThreshold {
+		t.Errorf("action = %q, want %q", ev.Action, governance.ActionBillingQuotaThreshold)
+	}
+	if ev.TenantID != "acme" {
+		t.Errorf("tenant_id = %q, want %q", ev.TenantID, "acme")
+	}
+	if ev.ActorType != governance.ActorSystem {
+		t.Errorf("actor_type = %q, want %q", ev.ActorType, governance.ActorSystem)
+	}
+	if ev.ActorID != 42 {
+		t.Errorf("actor_id = %d, want 42", ev.ActorID)
+	}
+
+	// Details payload must include the threshold value so audit consumers can
+	// filter "show me every 80% crossing this month" without joining other tables.
+	var details map[string]any
+	if err := json.Unmarshal([]byte(ev.Details), &details); err != nil {
+		t.Fatalf("details unmarshal: %v", err)
+	}
+	if got, ok := details["threshold_pct"].(float64); !ok || got != 50 {
+		t.Errorf("details.threshold_pct = %v, want 50", details["threshold_pct"])
+	}
+}
+
+// TestCheckAndPublishQuotaThresholds_AuditPersistsOnPublishFail covers
+// CLAUDE.md §4.1 partial-failure self-check: if NATS goes down mid-fire, the
+// audit row must still land. Reversing audit/publish order would lose the
+// crossing on publish failure — this test pins the current order.
+func TestCheckAndPublishQuotaThresholds_AuditPersistsOnPublishFail(t *testing.T) {
+	withQuotaNATSEnabled(t)
+	resetQuotaThresholdsCache(t)
+	audit := installCapturingAuditWriter(t)
+	pub := &mockPublisher{failErr: errors.New("nats down")}
+
+	params := quotaThresholdParams{
+		UserId:            7,
+		IdentityAccountID: 700,
+		TenantID:          "default",
+		QuotaConsumed:     150,
+		UsedTokensAfter:   550,
+		LimitTokens:       1100,
+	}
+
+	checkAndPublishQuotaThresholds(context.Background(), params, newMockRedis(), pub)
+
+	events := audit.waitForCount(t, 1, 2*time.Second)
+	if len(events) != 1 {
+		t.Errorf("audit count = %d, want 1 (audit must record even when NATS fails)", len(events))
+	}
+}
+
+// TestCheckAndPublishQuotaThresholds_MultipleCrossings exercises the case
+// where one large consumption straddles two thresholds at once (e.g. jump
+// from 30% to 90% spans both 50% and 80%). Each crossing must produce its
+// own audit row + NATS event — silently coalescing them would lose information.
+func TestCheckAndPublishQuotaThresholds_MultipleCrossings(t *testing.T) {
+	withQuotaNATSEnabled(t)
+	resetQuotaThresholdsCache(t)
+	audit := installCapturingAuditWriter(t)
+	pub := &mockPublisher{}
+
+	// usedBefore = 1000-600 = 400; percentBefore = 400/1000 = 40% (< 50, < 80)
+	// usedAfter  = 1000;             percentAfter  = 100% (>= 50, 80, 95, 100)
+	// → crosses 50, 80, 95, 100 in one shot (4 events).
+	params := quotaThresholdParams{
+		UserId:            8,
+		IdentityAccountID: 800,
+		TenantID:          "default",
+		QuotaConsumed:     600,
+		UsedTokensAfter:   1000,
+		LimitTokens:       1000,
+	}
+
+	checkAndPublishQuotaThresholds(context.Background(), params, newMockRedis(), pub)
+
+	if pub.count() != 4 {
+		t.Errorf("publish count = %d, want 4 (50, 80, 95, 100 all crossed)", pub.count())
+	}
+	events := audit.waitForCount(t, 4, 2*time.Second)
+	if len(events) != 4 {
+		t.Errorf("audit count = %d, want 4", len(events))
+	}
+}
+
+// TestCheckAndPublishQuotaThresholds_TenantIDDefaultsBlank verifies that an
+// empty TenantID in params still produces an audit row — NewDetachedAuditEvent
+// rewrites blank to "default" so legacy code paths that don't set the field
+// continue to produce searchable audit_events rows under the default tenant.
+func TestCheckAndPublishQuotaThresholds_TenantIDDefaultsBlank(t *testing.T) {
+	withQuotaNATSEnabled(t)
+	resetQuotaThresholdsCache(t)
+	audit := installCapturingAuditWriter(t)
+	pub := &mockPublisher{}
+
+	params := quotaThresholdParams{
+		UserId:            9,
+		IdentityAccountID: 900,
+		// TenantID intentionally omitted
+		QuotaConsumed:   150,
+		UsedTokensAfter: 550,
+		LimitTokens:     1100,
+	}
+
+	checkAndPublishQuotaThresholds(context.Background(), params, newMockRedis(), pub)
+
+	events := audit.waitForCount(t, 1, 2*time.Second)
+	if events[0].TenantID != "default" {
+		t.Errorf("tenant_id = %q, want %q", events[0].TenantID, "default")
+	}
+}
+
+// TestCheckAndPublishQuotaThresholds_NoCrossingNoAudit asserts the corollary
+// of the recording rule: a transaction that doesn't cross any threshold
+// produces zero audit_events rows. Without this guard, every relay call would
+// add an audit row even at low usage — alert-storm by daily volume.
+func TestCheckAndPublishQuotaThresholds_NoCrossingNoAudit(t *testing.T) {
+	withQuotaNATSEnabled(t)
+	resetQuotaThresholdsCache(t)
+	audit := installCapturingAuditWriter(t)
+	pub := &mockPublisher{}
+
+	params := quotaThresholdParams{
+		UserId:            10,
+		IdentityAccountID: 1000,
+		TenantID:          "default",
+		QuotaConsumed:     50,
+		UsedTokensAfter:   450, // 42.8% — below 50
+		LimitTokens:       1050,
+	}
+
+	checkAndPublishQuotaThresholds(context.Background(), params, newMockRedis(), pub)
+
+	// Wait briefly for any async dispatch then snapshot. Expect exactly 0.
+	time.Sleep(100 * time.Millisecond)
+	if got := audit.snapshot(); len(got) != 0 {
+		t.Errorf("audit count = %d, want 0 (no threshold crossed)", len(got))
 	}
 }

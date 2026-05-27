@@ -2,12 +2,18 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/LurusTech/lurus-hub/internal/app/governance"
 	"github.com/LurusTech/lurus-hub/internal/pkg/nats"
 	hubnats "github.com/LurusTech/lurus-hub/internal/pkg/nats"
 )
@@ -27,8 +33,70 @@ func wrapRedis(c *redis.Client) redisDeduper {
 	return &redisClientDeduper{c: c}
 }
 
-// quotaThresholds are the crossing points (percent) that trigger a NATS event.
-var quotaThresholds = []int{50, 80, 95, 100}
+// quotaThresholdsDefault is the canonical crossing ladder shipped today.
+// Overridable via env LLM_QUOTA_THRESHOLDS — operators wanting the Anthropic
+// Console-style 80/90/100 cadence (Phase E4 plan) or the LiteLLM-style
+// 50/80/100 cadence set the env once at startup. Invalid values fall back to
+// the default rather than firing on every consumption.
+var quotaThresholdsDefault = []int{50, 80, 95, 100}
+
+var (
+	quotaThresholdsCache     []int
+	quotaThresholdsCacheOnce sync.Once
+)
+
+// parsedQuotaThresholds reads LLM_QUOTA_THRESHOLDS once and returns the
+// sorted, deduplicated set in (0,100]. Returns the default ladder if the env
+// is empty or malformed. Single parse — values are cached for process lifetime
+// so threshold lookups in the hot path stay branch-cheap.
+func parsedQuotaThresholds() []int {
+	quotaThresholdsCacheOnce.Do(func() {
+		quotaThresholdsCache = loadQuotaThresholds(os.Getenv("LLM_QUOTA_THRESHOLDS"))
+	})
+	return quotaThresholdsCache
+}
+
+// loadQuotaThresholds is the pure parser, exposed for tests so they can probe
+// edge cases without the sync.Once lock-in.
+func loadQuotaThresholds(env string) []int {
+	env = strings.TrimSpace(env)
+	if env == "" {
+		return append([]int(nil), quotaThresholdsDefault...)
+	}
+	parts := strings.Split(env, ",")
+	out := make([]int, 0, len(parts))
+	seen := make(map[int]struct{}, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		v, err := strconv.Atoi(p)
+		if err != nil || v <= 0 || v > 100 {
+			// One malformed entry voids the override — fall back to default
+			// rather than silently dropping it, which would surprise operators.
+			return append([]int(nil), quotaThresholdsDefault...)
+		}
+		if _, dup := seen[v]; dup {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	if len(out) == 0 {
+		return append([]int(nil), quotaThresholdsDefault...)
+	}
+	// Ascending order so the crossing loop emits low → high deterministically
+	// when a single transaction crosses multiple rungs.
+	for i := 0; i < len(out); i++ {
+		for j := i + 1; j < len(out); j++ {
+			if out[j] < out[i] {
+				out[i], out[j] = out[j], out[i]
+			}
+		}
+	}
+	return out
+}
 
 // QuotaThresholdPayload matches the QuotaThresholdPayload consumed by
 // lurus-platform's notification module (modules/notification/internal/pkg/event/types.go).
@@ -68,6 +136,10 @@ type quotaThresholdParams struct {
 	UserId int
 	// IdentityAccountID is the lurus-platform account ID sent as account_id.
 	IdentityAccountID int64
+	// TenantID propagates to the audit trail. Phase E4: lets cross-tenant
+	// audit queries filter quota threshold events. Empty defaults to "default"
+	// inside NewDetachedAuditEvent.
+	TenantID string
 	// QuotaConsumed is how much was consumed in this transaction (positive).
 	QuotaConsumed int64
 	// UsedTokensAfter is the user's cumulative used_quota after this transaction.
@@ -109,7 +181,7 @@ func checkAndPublishQuotaThresholds(
 
 	now := time.Now()
 
-	for _, threshold := range quotaThresholds {
+	for _, threshold := range parsedQuotaThresholds() {
 		ft := float64(threshold)
 		// Crossing: before < threshold AND after >= threshold.
 		if percentBefore >= ft || percentAfter < ft {
@@ -132,6 +204,13 @@ func checkAndPublishQuotaThresholds(
 			}
 		}
 
+		// Audit FIRST, publish second. The dedup key has been claimed
+		// (set=true above) so this crossing is committed; if NATS publish
+		// later fails the audit trail still records that the user crossed
+		// the threshold — operators can replay from audit_events. Reversing
+		// the order would lose the crossing on publish failure.
+		recordQuotaThresholdAudit(params, threshold, percentAfter)
+
 		payload := QuotaThresholdPayload{
 			AccountID:    params.IdentityAccountID,
 			UsedTokens:   usedAfter,
@@ -151,4 +230,33 @@ func checkAndPublishQuotaThresholds(
 				"usage_percent", percentAfter)
 		}
 	}
+}
+
+// recordQuotaThresholdAudit writes one audit_events row per threshold
+// crossing. Details payload mirrors the NATS event so an operator triaging
+// from either side sees the same numbers. Failure to record never blocks
+// the publish path — RecordAuditEvent itself is async and fire-and-forget.
+func recordQuotaThresholdAudit(params quotaThresholdParams, threshold int, percentAfter float64) {
+	details, err := json.Marshal(map[string]any{
+		"threshold_pct": threshold,
+		"used_tokens":   params.UsedTokensAfter,
+		"limit_tokens":  params.LimitTokens,
+		"usage_percent": percentAfter,
+		"account_id":    params.IdentityAccountID,
+	})
+	if err != nil {
+		// Marshal failure on a fixed-shape map shouldn't happen — log and
+		// emit an empty-details event rather than dropping the audit row.
+		slog.Warn("quota threshold audit marshal failed", "err", err)
+		details = []byte("{}")
+	}
+	governance.RecordAuditEvent(governance.NewDetachedAuditEvent(
+		params.TenantID,
+		governance.ActorSystem,
+		params.UserId,
+		governance.ActionBillingQuotaThreshold,
+		governance.ResourceUser,
+		params.UserId,
+		string(details),
+	))
 }

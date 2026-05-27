@@ -82,6 +82,11 @@ const (
 	ActionBillingDebit          = "billing.debit"
 	ActionBillingCredit         = "billing.credit"
 	ActionBillingQuotaConsumed  = "billing.quota_consumed"
+	// ActionBillingQuotaThreshold fires when a user's used_quota crosses one of
+	// the configured percentage rungs (default 50/80/95/100). Phase E4: emitted
+	// alongside the llm.quota.threshold NATS publish so the audit trail records
+	// the crossing even when NATS dispatch fails.
+	ActionBillingQuotaThreshold = "billing.quota_threshold"
 
 	// System lifecycle.
 	ActionSystemStartup       = "system.startup"
@@ -161,6 +166,7 @@ var validAuditActions = map[string]struct{}{
 	ActionBillingDebit:             {},
 	ActionBillingCredit:            {},
 	ActionBillingQuotaConsumed:     {},
+	ActionBillingQuotaThreshold:    {},
 	ActionSystemStartup:            {},
 	ActionSystemShutdown:           {},
 }

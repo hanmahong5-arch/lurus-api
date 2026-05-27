@@ -685,6 +685,7 @@ func reportQuotaThreshold(ctx context.Context, relayInfo *relaycommon.RelayInfo,
 	checkAndPublishQuotaThresholds(ctx, quotaThresholdParams{
 		UserId:            relayInfo.UserId,
 		IdentityAccountID: relayInfo.IdentityAccountID,
+		TenantID:          user.TenantId,
 		QuotaConsumed:     int64(consumed),
 		UsedTokensAfter:   usedAfter,
 		LimitTokens:       limitTokens,
