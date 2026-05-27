@@ -301,10 +301,19 @@ phase2_self_audit_2026_05_19:
 # OPEN STRATEGIC DECISIONS (need Anita confirmation)
 # ============================================================
 open_decisions:
-  D1_fork_strategy:    accepted  # Option B — newhub 吃掉 newapi (Anita 确认 2026-05-20)
-                                 # ADR: doc/decisions/2026-05-20-d1-newapi-newhub-fork-final.md
-                                 # 迁移路径: R6 STAGE 演练 → 5% 镜像 → DNS 切 → 14d 观察 → 归档
-                                 # 回滚: ≤15min(DNS) / ≤30min(image+DB restore,7d 内有效)
+  D1_fork_strategy:    accepted  # Option A — newapi 退役,整合到 newhub (Anita 重确认 2026-05-27)
+                                 # ADR: doc/decisions/2026-05-27-d1-newapi-retire.md  ← 正式记录
+                                 # 修正: 2026-05-20 此条原标签"Option B"错误;描述"newhub 吃掉 newapi"
+                                 #       实际即 Option A 语义 (per 2026-05-05 ADR 原始定义)。
+                                 #       占位 ADR `2026-05-20-d1-newapi-newhub-fork-final.md` 文件从未存在
+                                 #       (grep + ls 双重验证),本日由 2026-05-27 ADR 补齐。
+                                 # 迁移路径 (R-1 → R-5 五阶段,详见 2026-05-27 ADR):
+                                 #   R-1 移植 newapi 90d Lurus 原创 (Plan W3-4)
+                                 #   R-2 Provider parity 审计 (Plan W3-4)
+                                 #   R-3 切流方案 + STAGE 1w 镜像 (Plan W7-8)
+                                 #   R-4 PROD 5% → 25% → 50% → 100% 灰度 (Plan W9-10 = H1.5)
+                                 #   R-5 newapi 归档 + lurus.yaml 修订 (Plan W11+)
+                                 # 回滚: ≤15min(DNS TTL 60s) / ≤30min(image+DB restore,7d 内有效)
                                  # 历史 audit (2026-05-05): doc/decisions/2026-05-05-newapi-newhub-fork-audit.md
                                  # Q2 切流时间: 待 STAGE 演练后定(原推荐 2026-07 月初)
                                  # Q3 newapi repo: 归档+90d 只读
