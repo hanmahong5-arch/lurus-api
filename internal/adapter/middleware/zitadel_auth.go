@@ -410,12 +410,17 @@ func handleSessionFallback(c *gin.Context) bool {
 			return false
 		}
 
-		// Get tenant slug from the URL parameter for tenant context
-		tenantSlug := c.Param("tenant_slug")
-		tenant, err := repo.GetTenantBySlug(tenantSlug)
-		tenantID := "default"
-		if err == nil && tenant != nil {
-			tenantID = tenant.Id
+		// SECURITY (cross-tenant isolation): scope the tenant to the
+		// authenticated user's OWN record — never the URL :tenant_slug.
+		// Deriving it from the slug let any session-authenticated user
+		// assume another tenant's context just by changing the path; worse,
+		// downstream guards compare tenantCtx.TenantID against that same
+		// slug (e.g. GetCreditPoolForEndUser's TENANT_MISMATCH check), so
+		// the slug was being compared to itself and always passed. Mirrors
+		// authHelper (auth.go), which scopes tenant via the user's TenantId.
+		tenantID := user.TenantId
+		if tenantID == "" {
+			tenantID = "default"
 		}
 
 		// Construct tenant context from session
@@ -445,11 +450,12 @@ func handleSessionFallback(c *gin.Context) bool {
 			return false
 		}
 
-		tenantSlug := c.Param("tenant_slug")
-		tenant, err := repo.GetTenantBySlug(tenantSlug)
-		tenantID := "default"
-		if err == nil && tenant != nil {
-			tenantID = tenant.Id
+		// SECURITY (cross-tenant isolation): see the non-expired branch
+		// above — tenant comes from the user's own record, not the URL
+		// :tenant_slug, so a session user cannot read another tenant.
+		tenantID := user.TenantId
+		if tenantID == "" {
+			tenantID = "default"
 		}
 
 		tenantCtx := &TenantContext{

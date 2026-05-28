@@ -472,3 +472,20 @@ horizon_plan_2026_05_27:
     status: "specs scaffolded (e2/e3/e4 + 11-2), blocked on STAGING_KUBECONFIG secret (user)"
     specs: ["story-e2-token-scope-rejection", "story-e3-audit-export",
             "story-e4-quota-threshold-audit", "story-11-2-token-persistence"]
+  h1_tail_tenant_isolation_audit:   # Plan 留尾 "WithoutTenantIsolation 审计" — done 2026-05-28
+    plan_claim_corrected: "Plan said '102 处 WithoutTenantIsolation'; grep found 14 occurrences /
+                           7 files (incl. 1 func def + 1 comment + several in test files). Real
+                           prod call sites ~10. §4.1① — the 102 number was wrong."
+    finding: "HIGH cross-tenant isolation bypass FIXED — handleSessionFallback derived tenant from
+              URL :tenant_slug, not the authenticated user. A session user could read another
+              tenant's credit-pool balance via the slug; the TENANT_MISMATCH guard was defeated by
+              same-source comparison. Doc: security-2026-05-28-session-fallback-cross-tenant.md"
+    fix: "zitadel_auth.go handleSessionFallback (both branches) → tenant = user.TenantId"
+    regression_test: "TestZitadelAuth_SessionFallback_TenantFromUserNotSlug — PROVEN to FAIL on
+                      unpatched code, PASS on fix (§4.1③ independence verified)"
+    audit_scope: "all tenant-context setters reviewed (UserAuth/JWT/fallback/playground/oauth/
+                  internal-api); only session-fallback was vulnerable"
+    deferred_defense_in_depth: "GORM plugin hard-coded allowlist + fail-open update/delete noted as
+                               latent (no active leak), deferred to a dedicated integration-tested
+                               PR — broad blast radius, not bundled into the surgical auth fix"
+    tests_green: "go build ./... ✓ ; middleware ZitadelAuth* + new regression ✓ ; repo isolation ✓"
