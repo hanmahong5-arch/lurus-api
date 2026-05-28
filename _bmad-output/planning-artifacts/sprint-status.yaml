@@ -430,3 +430,45 @@ wave_uat:
     gitleaks: "no secrets found in HEAD (history cleaned in story 6-8)"
     uat_handbook_sections: 6
     adr_path: doc/decisions/2026-05-26-bridge-endpoint-tenant-resolution.md
+
+# ============================================================
+# HORIZON PLAN 2026-05-27 (三 Horizon 战略图) — tracking
+# plan file: ~/.claude/plans/wobbly-churning-mango.md
+# ⚠ 决策编号是 *独立* 体系，与上方 open_decisions D1-D4 不重叠:
+#   Horizon D1 (fork)  == open_decisions.D1_fork_strategy (Option A) ✔ 同一事
+#   Horizon D2 (H2 押注 = Bet A MCP) ≠ open_decisions.D2_external_saas
+#   Horizon D3/D4/D5 也与 open_decisions D3/D4 无关。不要混读。
+# ============================================================
+horizon_plan_2026_05_27:
+  decisions_user_approved_prior_session:
+    H_D1_fork: "Option A — retire newapi (= open_decisions.D1_fork_strategy)"
+    H_D2_bet: "Bet A — MCP Gateway 启动"
+    H_D3_seed_timing: "H1 期内顺便埋"
+    H_D5_e2e: "现在配 KUBECONFIG (待 user 配 STAGING_KUBECONFIG secret)"
+    H_D4_vertical_sku: "deferred — not blocking H1 (plan 推荐 法律, 选择留待 Seed 2)"
+  h1_status:
+    H1_0_newapi_retire: "ADR done (doc/decisions/2026-05-27-d1-newapi-retire.md); impl R-1..R-5 未启"
+    H1_1_scim_saml: "design done (story-h1-1-scim-saml.md); blocked on Okta trial (user)"
+    H1_2_whitelabel: not-started
+    H1_3_ha_multimaster: not-started
+    H1_4_secret_rotation: not-started
+    H1_5_prod_cutover: "gated on H1.0..H1.4"
+  h2_bet_a_mcp:
+    spike_doc: _bmad-output/planning-artifacts/story-h2-a-mcp-gateway-spike.md   # done 2026-05-28
+    spike_status: design-complete   # execution + real-client validation NOT done (§4.1③)
+    key_finding: >
+      6 first-party MCP servers already exist (zitadel/k8s/platform/tally/kova/zita-mcp),
+      ALL stdio-only. Gateway value = stdio↔HTTP bridge + multi-tenant front door
+      (auth/scope/audit/billing), NOT building more servers.
+    grep_verified_absent: ["internal/mcp/", "mcp.lurus.cn", "MCP_TOOLS_REGISTRY",
+                           "mcp.tool_invoked", "mcp_servers table", "mcp_tool_invocations table"]
+    audit_taxonomy_delta: "51 → 53 (add ActionMCPToolInvoked + ActionMCPServerRegistered)"
+    open_decisions_for_user:
+      D2_1: "build gateway core now vs hold for explicit internal customer?"
+      D2_2: "first fronted server: lurus-platform-mcp (rec) vs lurus-tally-mcp?"
+      D2_3: "internal/friendly customer exists for ≥10-tool-call validation gate?"
+    blast_radius: "internal/mcp/ + 2 migrations + 1 route file — bounded rollback if no-go"
+  e2e_sgamma:
+    status: "specs scaffolded (e2/e3/e4 + 11-2), blocked on STAGING_KUBECONFIG secret (user)"
+    specs: ["story-e2-token-scope-rejection", "story-e3-audit-export",
+            "story-e4-quota-threshold-audit", "story-11-2-token-persistence"]
