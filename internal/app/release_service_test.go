@@ -111,6 +111,12 @@ func TestCompareVersions_NonSemver(t *testing.T) {
 			v2:       "alpha",
 			expected: 1, // String comparison fallback
 		},
+		{
+			name:     "different_non_semver_less",
+			v1:       "alpha",
+			v2:       "beta",
+			expected: -1, // String comparison fallback (v1 < v2)
+		},
 	}
 
 	for _, tt := range tests {
