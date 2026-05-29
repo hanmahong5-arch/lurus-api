@@ -6,11 +6,18 @@ package entity
 // leadership flag.
 const LeaderElectionName = "master"
 
-// LeaderLeaseTTLSeconds is how long a lease stays valid without renewal. A
-// dead leader is replaced within roughly this window. Shared by the boot-time
-// migration gate (repo) and the renewal loop (lifecycle) so a node that wins
-// the boot lease keeps leadership seamlessly into its renewal loop.
+// LeaderLeaseTTLSeconds is how long a runtime lease stays valid without
+// renewal. A dead leader is replaced within roughly this window. Shared by the
+// boot-time migration gate (repo) and the renewal loop (lifecycle) so a node
+// that wins the boot lease keeps leadership seamlessly into its renewal loop.
 const LeaderLeaseTTLSeconds int64 = 30
+
+// LeaderBootLeaseTTLSeconds is the TTL for the boot-time migration lease. It is
+// deliberately much longer than the runtime TTL so a slow cold-start
+// AutoMigrate cannot lapse mid-migration and let another replica begin a
+// concurrent (racing) migration. The LeaderManager renews with the shorter
+// runtime TTL once it starts, shortening the lease back.
+const LeaderBootLeaseTTLSeconds int64 = 300
 
 // LeaderElection is the DB-backed lease that implements HA leader election.
 // A process is the leader while it owns the row named LeaderElectionName and

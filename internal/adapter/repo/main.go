@@ -199,10 +199,17 @@ func InitDB() (err error) {
 		// slave-skips-migration behavior); on a first-ever cold start of a
 		// fresh multi-replica DB, non-winners briefly serve before the winner
 		// finishes — see ADR 2026-05-29 leader-election.
-		if e := DB.AutoMigrate(&entity.LeaderElection{}); e != nil && !strings.Contains(e.Error(), "already exists") {
-			return fmt.Errorf("bootstrap leader_elections table: %w", e)
+		if e := DB.AutoMigrate(&entity.LeaderElection{}); e != nil {
+			// A concurrent cold-start replica may be creating the same table.
+			// Tolerate the race only if the table actually exists afterward —
+			// robust across SQLite/PostgreSQL vs matching driver error strings.
+			if !DB.Migrator().HasTable(&entity.LeaderElection{}) {
+				return fmt.Errorf("bootstrap leader_elections table: %w", e)
+			}
 		}
-		gotLease, lerr := TryAcquireOrRenew(entity.LeaderElectionName, common.NodeHolderID(), entity.LeaderLeaseTTLSeconds, common.GetTimestamp())
+		// Use the longer boot TTL so a slow cold-start migration cannot lapse
+		// the lease mid-flight and let another replica start a racing migration.
+		gotLease, lerr := TryAcquireOrRenew(entity.LeaderElectionName, common.NodeHolderID(), entity.LeaderBootLeaseTTLSeconds, common.GetTimestamp())
 		if lerr != nil {
 			return fmt.Errorf("acquire boot migration lease: %w", lerr)
 		}
@@ -210,6 +217,11 @@ func InitDB() (err error) {
 			common.SysLog("database migration skipped: another replica holds the boot lease")
 			return nil
 		}
+		// We hold leadership from boot. Reflect it immediately so leader-gated
+		// startup catch-up runs (reaper / aggregator / audit cleanup) fire on
+		// this node now, instead of being skipped until the LeaderManager's
+		// first asynchronous renew flips the flag.
+		common.SetLeader(true)
 		common.SysLog("database migration started")
 		err = migrateDB()
 		return err

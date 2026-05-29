@@ -27,11 +27,17 @@ type LeaderManager struct {
 // NewLeaderManager builds a manager for the well-known master lease using this
 // process's stable holder identity.
 func NewLeaderManager() *LeaderManager {
+	renewEvery := time.Duration(entity.LeaderLeaseTTLSeconds/renewDivisor) * time.Second
+	if renewEvery < time.Second {
+		// Guard against a future TTL < renewDivisor yielding a 0 interval,
+		// which would panic time.NewTicker.
+		renewEvery = time.Second
+	}
 	return &LeaderManager{
 		name:       entity.LeaderElectionName,
 		holderId:   common.NodeHolderID(),
 		ttlSeconds: entity.LeaderLeaseTTLSeconds,
-		renewEvery: time.Duration(entity.LeaderLeaseTTLSeconds/renewDivisor) * time.Second,
+		renewEvery: renewEvery,
 	}
 }
 
@@ -131,9 +137,9 @@ func (t *LeaderTask) Run(ctx context.Context) error {
 			if !t.isLeader() {
 				continue
 			}
-			if err := t.fn(ctx); err != nil {
-				continue
-			}
+			// fn errors are swallowed so a single failure does not stop the
+			// ticker; fn itself is responsible for logging.
+			_ = t.fn(ctx)
 		}
 	}
 }

@@ -68,6 +68,12 @@ func RotateDueTokens(ctx context.Context, now int64, send EmailSender) (int, err
 		if baseline == 0 {
 			baseline = token.CreatedTime
 		}
+		if baseline == 0 {
+			// Unknown age (neither rotated_at nor created_time set, e.g. a
+			// malformed or imported row): skip rather than force-rotate a key
+			// of unknown age out from under its owner on the first scan.
+			continue
+		}
 		if !NeedsRotationAt(token.AutoRotateDays, baseline, now) {
 			continue
 		}

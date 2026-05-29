@@ -289,32 +289,26 @@ func (token *Token) SelectUpdate() (err error) {
 	return DB.Model(token).Select("accessed_time", "status").Updates(token).Error
 }
 
-// RotateKey replaces the token's key atomically, updating the cache entry.
-func (token *Token) RotateKey(newKey string) (err error) {
-	oldKey := token.Key
-	token.Key = newKey
-	defer func() {
-		if shouldUpdateRedis(true, err) {
-			gopool.Go(func() {
-				_ = cacheDeleteToken(oldKey)
-				if e := cacheSetToken(*token); e != nil {
-					common.SysLog("failed to update token cache after rotation: " + e.Error())
-				}
-			})
-		}
-	}()
-	err = DB.Model(token).Update("key", newKey).Error
-	return err
+// RotateKey replaces the token's key atomically, updating the cache entry. The
+// manual rotation path deliberately leaves rotated_at untouched.
+func (token *Token) RotateKey(newKey string) error {
+	return token.rotateKey(newKey, map[string]interface{}{"key": newKey})
 }
 
 // RotateKeyWithTimestamp rotates the key and stamps rotated_at in a single
 // update. Used by the automatic rotation task so the next rotation is measured
-// from this moment; the manual RotateKey path deliberately leaves rotated_at
-// untouched.
-func (token *Token) RotateKeyWithTimestamp(newKey string, rotatedAt int64) (err error) {
+// from this moment.
+func (token *Token) RotateKeyWithTimestamp(newKey string, rotatedAt int64) error {
+	token.RotatedAt = rotatedAt
+	return token.rotateKey(newKey, map[string]interface{}{"key": newKey, "rotated_at": rotatedAt})
+}
+
+// rotateKey applies the given column updates while swapping token.Key in place,
+// then invalidates the token cache for the old and new key. Shared by RotateKey
+// and RotateKeyWithTimestamp so the cache-invalidation logic lives in one place.
+func (token *Token) rotateKey(newKey string, updates map[string]interface{}) (err error) {
 	oldKey := token.Key
 	token.Key = newKey
-	token.RotatedAt = rotatedAt
 	defer func() {
 		if shouldUpdateRedis(true, err) {
 			gopool.Go(func() {
@@ -325,10 +319,7 @@ func (token *Token) RotateKeyWithTimestamp(newKey string, rotatedAt int64) (err 
 			})
 		}
 	}()
-	err = DB.Model(token).Updates(map[string]interface{}{
-		"key":        newKey,
-		"rotated_at": rotatedAt,
-	}).Error
+	err = DB.Model(token).Updates(updates).Error
 	return err
 }
 
