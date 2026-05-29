@@ -669,9 +669,13 @@ func GeminiToOpenAIRequest(geminiRequest *dto.GeminiChatRequest, info *relaycomm
 	if geminiRequest.GenerationConfig.MaxOutputTokens > 0 {
 		openaiRequest.MaxTokens = geminiRequest.GenerationConfig.MaxOutputTokens
 	}
-	// gemini stop sequences 最多 5 个，openai stop 最多 4 个
-	if len(geminiRequest.GenerationConfig.StopSequences) > 0 {
-		openaiRequest.Stop = geminiRequest.GenerationConfig.StopSequences[:4]
+	// gemini stop sequences 最多 5 个，openai stop 最多 4 个。只有超过 4 个时才截断 —
+	// 直接 [:4] 会在只有 1~3 个 stop 序列时切片越界 panic（crash relay handler）。
+	if stops := geminiRequest.GenerationConfig.StopSequences; len(stops) > 0 {
+		if len(stops) > 4 {
+			stops = stops[:4]
+		}
+		openaiRequest.Stop = stops
 	}
 	if geminiRequest.GenerationConfig.CandidateCount > 0 {
 		openaiRequest.N = geminiRequest.GenerationConfig.CandidateCount
