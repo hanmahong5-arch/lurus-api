@@ -450,8 +450,17 @@ horizon_plan_2026_05_27:
     H1_0_newapi_retire: "ADR done (doc/decisions/2026-05-27-d1-newapi-retire.md); impl R-1..R-5 未启"
     H1_1_scim_saml: "design done (story-h1-1-scim-saml.md); blocked on Okta trial (user)"
     H1_2_whitelabel: not-started
-    H1_3_ha_multimaster: not-started
-    H1_4_secret_rotation: not-started
+    H1_3_ha_multimaster: >
+      code-complete 2026-05-29 (commit a4dd2006) — DB-lease leader election
+      (leader_elections / migration 018), common.IsLeader() gating all
+      master-only loops + boot migration, HPA min=3 + R6-stage replicas=3.
+      Clock-injected unit tests green. STAGE-gated: real kill-leader-pod
+      failover drill pending. ADR adr-2026-05-29-leader-election.md.
+    H1_4_secret_rotation: >
+      code-complete 2026-05-29 (commit fb583b13) — leader-gated token
+      auto-rotation (tokens.auto_rotate_days/rotated_at, migration 017),
+      app.RotateDueTokens + audit + owner email. Clock-injected unit tests
+      green. STAGE-gated: real SMTP delivery pending. ADR adr-2026-05-29.
     H1_5_prod_cutover: "gated on H1.0..H1.4"
   h2_bet_a_mcp:
     spike_doc: _bmad-output/planning-artifacts/story-h2-a-mcp-gateway-spike.md   # done 2026-05-28
