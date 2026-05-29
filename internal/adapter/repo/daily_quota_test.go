@@ -5,8 +5,15 @@ import (
 	"time"
 )
 
-// TestNeedsDailyReset tests the daily reset detection logic
+// TestNeedsDailyReset tests the daily reset detection logic deterministically.
+// Day boundaries are UTC midnight, so a real-clock now-relative test (e.g.
+// now-1h) flakes when the suite runs within an hour of UTC midnight. We inject
+// a fixed "now" via NeedsDailyResetAt to make every case deterministic.
 func TestNeedsDailyReset(t *testing.T) {
+	// Fixed reference: 2026-05-28 12:00:00 UTC (noon — far from any day boundary).
+	refNow := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	now := refNow.Unix()
+
 	tests := []struct {
 		name           string
 		lastReset      int64
@@ -14,17 +21,17 @@ func TestNeedsDailyReset(t *testing.T) {
 	}{
 		{
 			name:           "needs reset - last reset was yesterday",
-			lastReset:      time.Now().AddDate(0, 0, -1).Unix(),
+			lastReset:      refNow.AddDate(0, 0, -1).Unix(),
 			expectedResult: true,
 		},
 		{
 			name:           "needs reset - last reset was a week ago",
-			lastReset:      time.Now().AddDate(0, 0, -7).Unix(),
+			lastReset:      refNow.AddDate(0, 0, -7).Unix(),
 			expectedResult: true,
 		},
 		{
 			name:           "no reset needed - reset today (1 hour ago)",
-			lastReset:      time.Now().Add(-1 * time.Hour).Unix(),
+			lastReset:      refNow.Add(-1 * time.Hour).Unix(),
 			expectedResult: false,
 		},
 		{
@@ -34,16 +41,16 @@ func TestNeedsDailyReset(t *testing.T) {
 		},
 		{
 			name:           "no reset needed - reset just now",
-			lastReset:      time.Now().Unix(),
+			lastReset:      now,
 			expectedResult: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := NeedsDailyReset(tt.lastReset)
+			result := NeedsDailyResetAt(tt.lastReset, now)
 			if result != tt.expectedResult {
-				t.Errorf("NeedsDailyReset(%d) = %v, want %v", tt.lastReset, result, tt.expectedResult)
+				t.Errorf("NeedsDailyResetAt(%d, %d) = %v, want %v", tt.lastReset, now, result, tt.expectedResult)
 			}
 		})
 	}
@@ -170,18 +177,23 @@ func TestFallbackGroupLogic(t *testing.T) {
 }
 
 
-// TestDailyResetTimeCalculation tests the reset time calculation
+// TestDailyResetTimeCalculation tests the reset boundary deterministically with
+// a fixed UTC "now" injected via NeedsDailyResetAt. Daily reset fires at UTC
+// midnight; building todayMidnight from local time.Now() against a UTC-day
+// function (the previous version) flaked whenever the local date and the UTC
+// date differed (i.e. for any machine not on UTC, near midnight).
 func TestDailyResetTimeCalculation(t *testing.T) {
-	now := time.Now()
-	
-	// Test: reset should happen at midnight UTC
-	todayMidnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	// Fixed reference now: 2026-05-28 12:00:00 UTC.
+	refNow := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	now := refNow.Unix()
+
+	todayMidnight := time.Date(2026, 5, 28, 0, 0, 0, 0, time.UTC)
 	yesterdayMidnight := todayMidnight.AddDate(0, 0, -1)
-	
+
 	tests := []struct {
-		name        string
-		lastReset   time.Time
-		needsReset  bool
+		name       string
+		lastReset  time.Time
+		needsReset bool
 	}{
 		{
 			name:       "last reset at yesterday midnight - needs reset",
@@ -202,9 +214,9 @@ func TestDailyResetTimeCalculation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := NeedsDailyReset(tt.lastReset.Unix())
+			result := NeedsDailyResetAt(tt.lastReset.Unix(), now)
 			if result != tt.needsReset {
-				t.Errorf("NeedsDailyReset for %v = %v, want %v", tt.lastReset, result, tt.needsReset)
+				t.Errorf("NeedsDailyResetAt for %v = %v, want %v", tt.lastReset, result, tt.needsReset)
 			}
 		})
 	}

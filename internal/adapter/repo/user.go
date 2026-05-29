@@ -689,6 +689,10 @@ func GetUserDailyQuotaInfo(userId int) (*DailyQuotaInfo, error) {
 // NeedsDailyReset delegates to entity.NeedsDailyReset
 var NeedsDailyReset = entity.NeedsDailyReset
 
+// NeedsDailyResetAt delegates to entity.NeedsDailyResetAt — the clock-injectable
+// variant, used for deterministic tests of the daily-reset boundary.
+var NeedsDailyResetAt = entity.NeedsDailyResetAt
+
 // IncreaseDailyUsed increases the daily used quota for a user
 func IncreaseDailyUsed(userId int, amount int) error {
 	if amount < 0 {

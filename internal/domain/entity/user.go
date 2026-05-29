@@ -134,13 +134,20 @@ type DailyQuotaInfo struct {
 	NeedsReset      bool   `json:"needs_reset"`
 }
 
-// NeedsDailyReset checks if daily quota needs to be reset based on last reset timestamp
+// NeedsDailyReset reports whether the daily quota should be reset, using the
+// current wall-clock time. Day boundaries are UTC midnight (unix-day = ts/86400).
 func NeedsDailyReset(lastResetTimestamp int64) bool {
+	return NeedsDailyResetAt(lastResetTimestamp, common.GetTimestamp())
+}
+
+// NeedsDailyResetAt is the pure, clock-injectable core of NeedsDailyReset: it
+// reports whether a reset is due as of nowTimestamp. Both args are unix seconds
+// and the day boundary is UTC midnight (ts/86400). Exposed so the reset decision
+// can be tested deterministically — callers that build "now-relative" timestamps
+// against the real clock (e.g. now-1h) otherwise flake near a UTC day boundary.
+func NeedsDailyResetAt(lastResetTimestamp, nowTimestamp int64) bool {
 	if lastResetTimestamp == 0 {
 		return true
 	}
-	now := common.GetTimestamp()
-	nowDay := now / 86400
-	lastResetDay := lastResetTimestamp / 86400
-	return nowDay > lastResetDay
+	return nowTimestamp/86400 > lastResetTimestamp/86400
 }
