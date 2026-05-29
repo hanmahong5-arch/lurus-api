@@ -12,35 +12,43 @@ import (
 
 // Canonical definition: domain/entity/token.go
 type Token struct {
-	Id                 int            `json:"id"`
-	UserId             int            `json:"user_id" gorm:"index;index:idx_tenant_user,priority:2"`
-	TenantId           string         `json:"tenant_id" gorm:"type:varchar(36);index;index:idx_tenant_user,priority:1;default:'default'"` // Tenant isolation
-	Key                string         `json:"key" gorm:"type:char(48);uniqueIndex"`
-	Status             int            `json:"status" gorm:"default:1"`
-	Name               string         `json:"name" gorm:"index" `
-	CreatedTime        int64          `json:"created_time" gorm:"bigint"`
-	AccessedTime       int64          `json:"accessed_time" gorm:"bigint"`
-	ExpiredTime        int64          `json:"expired_time" gorm:"bigint;default:-1"` // -1 means never expired
-	RemainQuota        int            `json:"remain_quota" gorm:"default:0"`
-	UnlimitedQuota     bool           `json:"unlimited_quota"`
-	ModelLimitsEnabled bool           `json:"model_limits_enabled"`
-	ModelLimits        string         `json:"model_limits" gorm:"type:varchar(1024);default:''"`
-	AllowIps           *string        `json:"allow_ips" gorm:"default:''"`
-	UsedQuota          int            `json:"used_quota" gorm:"default:0"` // used quota
-	Group              string         `json:"group" gorm:"default:''"`
-	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
+	Id                 int     `json:"id"`
+	UserId             int     `json:"user_id" gorm:"index;index:idx_tenant_user,priority:2"`
+	TenantId           string  `json:"tenant_id" gorm:"type:varchar(36);index;index:idx_tenant_user,priority:1;default:'default'"` // Tenant isolation
+	Key                string  `json:"key" gorm:"type:char(48);uniqueIndex"`
+	Status             int     `json:"status" gorm:"default:1"`
+	Name               string  `json:"name" gorm:"index" `
+	CreatedTime        int64   `json:"created_time" gorm:"bigint"`
+	AccessedTime       int64   `json:"accessed_time" gorm:"bigint"`
+	ExpiredTime        int64   `json:"expired_time" gorm:"bigint;default:-1"` // -1 means never expired
+	RemainQuota        int     `json:"remain_quota" gorm:"default:0"`
+	UnlimitedQuota     bool    `json:"unlimited_quota"`
+	ModelLimitsEnabled bool    `json:"model_limits_enabled"`
+	ModelLimits        string  `json:"model_limits" gorm:"type:varchar(1024);default:''"`
+	AllowIps           *string `json:"allow_ips" gorm:"default:''"`
+	UsedQuota          int     `json:"used_quota" gorm:"default:0"` // used quota
+	Group              string  `json:"group" gorm:"default:''"`
+	CrossGroupRetry    bool    `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
 	// Scopes is a comma-separated allowlist of relay scopes (see
 	// pkg/types/token_scope.go). Empty = no restriction (backward compat).
 	// Migration 015 introduced the column. ADR Phase E2.
-	Scopes             string         `json:"scopes" gorm:"type:varchar(255);default:''"`
-	IdentityAccountID  int64          `json:"identity_account_id" gorm:"default:0;index:idx_identity_account,where:identity_account_id > 0"` // lurus-platform account ID
+	Scopes            string `json:"scopes" gorm:"type:varchar(255);default:''"`
+	IdentityAccountID int64  `json:"identity_account_id" gorm:"default:0;index:idx_identity_account,where:identity_account_id > 0"` // lurus-platform account ID
 	// CreatorUserId is users.id of the Reseller who issued this key via the
 	// Provisioning API. 0 = legacy / non-provisioned. ADR 2026-05-18 §3.3.
-	CreatorUserId      int            `json:"creator_user_id" gorm:"default:0;index:idx_tokens_creator_user_id,where:creator_user_id > 0"`
+	CreatorUserId int `json:"creator_user_id" gorm:"default:0;index:idx_tokens_creator_user_id,where:creator_user_id > 0"`
 	// LastUsedAt is updated on relay hit for Provisioning-issued keys.
 	// Unix seconds. 0 = never used.
-	LastUsedAt         int64          `json:"last_used_at" gorm:"default:0"`
-	DeletedAt          gorm.DeletedAt `gorm:"index"`
+	LastUsedAt int64 `json:"last_used_at" gorm:"default:0"`
+	// AutoRotateDays enables scheduled key rotation: when > 0 the key is
+	// automatically rotated every AutoRotateDays days by the secret-rotation
+	// lifecycle task. 0 disables it. Migration 017, ADR Phase H1.4.
+	AutoRotateDays int `json:"auto_rotate_days" gorm:"default:0"`
+	// RotatedAt is the unix-second time of the last automatic rotation; 0 means
+	// never auto-rotated (the rotation interval is then measured from
+	// CreatedTime).
+	RotatedAt int64          `json:"rotated_at" gorm:"default:0"`
+	DeletedAt gorm.DeletedAt `gorm:"index"`
 }
 
 func (token *Token) Clean() {
@@ -297,6 +305,42 @@ func (token *Token) RotateKey(newKey string) (err error) {
 	}()
 	err = DB.Model(token).Update("key", newKey).Error
 	return err
+}
+
+// RotateKeyWithTimestamp rotates the key and stamps rotated_at in a single
+// update. Used by the automatic rotation task so the next rotation is measured
+// from this moment; the manual RotateKey path deliberately leaves rotated_at
+// untouched.
+func (token *Token) RotateKeyWithTimestamp(newKey string, rotatedAt int64) (err error) {
+	oldKey := token.Key
+	token.Key = newKey
+	token.RotatedAt = rotatedAt
+	defer func() {
+		if shouldUpdateRedis(true, err) {
+			gopool.Go(func() {
+				_ = cacheDeleteToken(oldKey)
+				if e := cacheSetToken(*token); e != nil {
+					common.SysLog("failed to update token cache after rotation: " + e.Error())
+				}
+			})
+		}
+	}()
+	err = DB.Model(token).Updates(map[string]interface{}{
+		"key":        newKey,
+		"rotated_at": rotatedAt,
+	}).Error
+	return err
+}
+
+// ListAutoRotateTokens returns enabled tokens that have auto-rotation enabled
+// (auto_rotate_days > 0). The secret-rotation lifecycle task scans these to
+// find the ones due for rotation. Bounded by the number of opted-in tokens.
+func ListAutoRotateTokens() ([]*Token, error) {
+	var tokens []*Token
+	err := DB.Where("auto_rotate_days > 0").
+		Where("status = ?", common.TokenStatusEnabled).
+		Find(&tokens).Error
+	return tokens, err
 }
 
 func (token *Token) Delete() (err error) {

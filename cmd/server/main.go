@@ -258,6 +258,9 @@ func run(ctx context.Context, startTime time.Time) error {
 	// once per node would inflate DB write amplification.
 	if common.IsMasterNode {
 		lifecycle.StartAuditCleanupWithContext(ctx)
+		// Phase H1.4: automatic token rotation. Leader-gated internally so only
+		// one replica rotates each due token; started on master-capable nodes.
+		lifecycle.StartSecretRotationWithContext(ctx)
 	}
 
 	// pprof server
