@@ -1,0 +1,139 @@
+package lifecycle
+
+import (
+	"context"
+	"time"
+
+	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/domain/entity"
+	"github.com/LurusTech/lurus-hub/internal/pkg/common"
+)
+
+// renewDivisor renews at ttl/renewDivisor so a couple of transient renewal
+// failures can be absorbed before the lease lapses. ttl=30s → renew ~10s.
+const renewDivisor = 3
+
+// LeaderManager runs the renewal loop that maintains this node's HA leadership
+// lease and reconciles common.IsLeader(). It implements lifecycle.Task so it
+// can be registered like any other background task.
+type LeaderManager struct {
+	name        string
+	holderId    string
+	ttlSeconds  int64
+	renewEvery  time.Duration
+	localExpiry int64 // unix sec; best local estimate of when our lease lapses
+}
+
+// NewLeaderManager builds a manager for the well-known master lease using this
+// process's stable holder identity.
+func NewLeaderManager() *LeaderManager {
+	return &LeaderManager{
+		name:       entity.LeaderElectionName,
+		holderId:   common.NodeHolderID(),
+		ttlSeconds: entity.LeaderLeaseTTLSeconds,
+		renewEvery: time.Duration(entity.LeaderLeaseTTLSeconds/renewDivisor) * time.Second,
+	}
+}
+
+// Name implements lifecycle.Task.
+func (m *LeaderManager) Name() string { return "leader-election" }
+
+// IsLeader reports whether this node currently holds leadership.
+func (m *LeaderManager) IsLeader() bool { return common.IsLeader() }
+
+// step performs one acquire-or-renew attempt at the given unix-second time and
+// reconciles the cached leadership flag. It is exposed for deterministic
+// testing with an injected clock; production drives it from Run on a ticker.
+// Returns whether this node is leader after the step.
+func (m *LeaderManager) step(now int64) bool {
+	ok, err := repo.TryAcquireOrRenew(m.name, m.holderId, m.ttlSeconds, now)
+	if err != nil {
+		// Transient DB error: keep leadership until our local lease estimate
+		// lapses, then step down. Dropping on every blip would cause needless
+		// failover churn and let master-only work stall.
+		if common.IsLeader() && now >= m.localExpiry {
+			common.SetLeader(false)
+		}
+		common.SysError("leader election step: " + err.Error())
+		return common.IsLeader()
+	}
+	if ok {
+		m.localExpiry = now + m.ttlSeconds
+		common.SetLeader(true)
+	} else {
+		common.SetLeader(false)
+	}
+	return ok
+}
+
+// Run drives the renewal loop until ctx is cancelled, at which point a leader
+// releases its lease so the successor takes over immediately. Implements
+// lifecycle.Task.
+func (m *LeaderManager) Run(ctx context.Context) error {
+	// Attempt immediately so a single-node deploy becomes leader without
+	// waiting a full renewal interval.
+	m.step(common.GetTimestamp())
+
+	ticker := time.NewTicker(m.renewEvery)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			if common.IsLeader() {
+				if err := repo.ReleaseLease(m.name, m.holderId); err != nil {
+					common.SysError("leader election release on shutdown: " + err.Error())
+				}
+				common.SetLeader(false)
+			}
+			return ctx.Err()
+		case <-ticker.C:
+			m.step(common.GetTimestamp())
+		}
+	}
+}
+
+// LeaderTask runs fn on an interval but only while this node holds leadership.
+// It is the building block for HA-safe periodic work (e.g. secret rotation):
+// every replica registers the task, yet only the leader's ticks do work, and
+// leadership loss pauses it without restarting the task.
+type LeaderTask struct {
+	name     string
+	interval time.Duration
+	fn       func(ctx context.Context) error
+	isLeader func() bool
+}
+
+// NewLeaderTask creates a leader-gated ticker task. fn runs at most once per
+// interval, and only on the current leader.
+func NewLeaderTask(name string, interval time.Duration, fn func(ctx context.Context) error) *LeaderTask {
+	return &LeaderTask{
+		name:     name,
+		interval: interval,
+		fn:       fn,
+		isLeader: common.IsLeader,
+	}
+}
+
+// Name implements lifecycle.Task.
+func (t *LeaderTask) Name() string { return t.name }
+
+// Run implements lifecycle.Task: ticks on the interval, skipping work whenever
+// this node is not the leader. fn errors are swallowed so a single failure
+// does not stop the ticker.
+func (t *LeaderTask) Run(ctx context.Context) error {
+	ticker := time.NewTicker(t.interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if !t.isLeader() {
+				continue
+			}
+			if err := t.fn(ctx); err != nil {
+				continue
+			}
+		}
+	}
+}

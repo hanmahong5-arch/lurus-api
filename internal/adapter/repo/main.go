@@ -190,6 +190,26 @@ func InitDB() (err error) {
 		if !common.IsMasterNode {
 			return nil
 		}
+		// HA boot gate: with multiple master-capable replicas, only the lease
+		// holder runs migrations so concurrent AutoMigrate cannot race on
+		// PostgreSQL. Bootstrap the lease table itself first (idempotent), then
+		// contend for the boot lease using this node's stable holder id — the
+		// same id the lifecycle LeaderManager later renews, so the migrating
+		// node keeps leadership seamlessly. Losers skip (mirroring the prior
+		// slave-skips-migration behavior); on a first-ever cold start of a
+		// fresh multi-replica DB, non-winners briefly serve before the winner
+		// finishes — see ADR 2026-05-29 leader-election.
+		if e := DB.AutoMigrate(&entity.LeaderElection{}); e != nil && !strings.Contains(e.Error(), "already exists") {
+			return fmt.Errorf("bootstrap leader_elections table: %w", e)
+		}
+		gotLease, lerr := TryAcquireOrRenew(entity.LeaderElectionName, common.NodeHolderID(), entity.LeaderLeaseTTLSeconds, common.GetTimestamp())
+		if lerr != nil {
+			return fmt.Errorf("acquire boot migration lease: %w", lerr)
+		}
+		if !gotLease {
+			common.SysLog("database migration skipped: another replica holds the boot lease")
+			return nil
+		}
 		common.SysLog("database migration started")
 		err = migrateDB()
 		return err
@@ -275,6 +295,8 @@ func migrateDB() error {
 		&entity.TenantCreditPoolDraw{},
 		// Playground named presets (Wave 3 Phase 1)
 		&PlaygroundPreset{},
+		// HA leader-election lease (H1.3)
+		&entity.LeaderElection{},
 	)
 	if err != nil {
 		return err

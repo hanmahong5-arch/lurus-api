@@ -24,9 +24,12 @@ func AutoReapWithContext(ctx context.Context) {
 	common.SysLog("openrouter pool reaper: started, interval=" + reaperInterval.String())
 
 	// Run once on startup so a freshly booted master doesn't wait the full
-	// interval before recovering keys whose cooldowns expired during downtime.
-	if err := ReapOnce(ctx, time.Now); err != nil {
-		common.SysLog("openrouter pool reaper initial run failed: " + err.Error())
+	// interval before recovering keys whose cooldowns expired during downtime —
+	// but only if this node already holds leadership at boot.
+	if common.IsLeader() {
+		if err := ReapOnce(ctx, time.Now); err != nil {
+			common.SysLog("openrouter pool reaper initial run failed: " + err.Error())
+		}
 	}
 
 	ticker := time.NewTicker(reaperInterval)
@@ -37,6 +40,10 @@ func AutoReapWithContext(ctx context.Context) {
 			common.SysLog("openrouter pool reaper: stopped")
 			return
 		case <-ticker.C:
+			// HA: only the leader reaps; non-leaders idle until they win the lease.
+			if !common.IsLeader() {
+				continue
+			}
 			if err := ReapOnce(ctx, time.Now); err != nil {
 				common.SysLog("openrouter pool reaper failed: " + err.Error())
 			}

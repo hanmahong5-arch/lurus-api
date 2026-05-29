@@ -7,7 +7,10 @@ metadata:
     app: lurus-newhub
     environment: stage
 spec:
-  replicas: 1
+  # 3 replicas (was 1) so the H1.3 DB-lease leader election can be drilled on
+  # STAGE: kill the leader pod and confirm a standby takes over within the
+  # lease TTL. Only the leader runs master-only background tasks.
+  replicas: 3
   selector:
     matchLabels:
       app: lurus-newhub

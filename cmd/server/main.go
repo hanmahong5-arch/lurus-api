@@ -93,6 +93,19 @@ func run(ctx context.Context, startTime time.Time) error {
 	// Use errgroup for managing background goroutines with context cancellation
 	g, ctx := errgroup.WithContext(ctx)
 
+	// HA leader election: master-capable nodes contend for a single DB lease.
+	// The winner's common.IsLeader() flips true, and every master-only
+	// background task below gates its per-tick work on it — so exactly one
+	// replica runs them and a dead leader is replaced within the lease TTL.
+	// Slaves (NODE_TYPE=slave) do not participate and are never leader.
+	if common.IsMasterNode {
+		leaderManager := lifecycle.NewLeaderManager()
+		g.Go(func() error {
+			_ = leaderManager.Run(ctx)
+			return nil
+		})
+	}
+
 	if common.RedisEnabled {
 		common.MemoryCacheEnabled = true
 	}

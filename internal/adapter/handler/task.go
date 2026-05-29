@@ -11,12 +11,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/app/relay"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/pkg/constant"
 	"github.com/LurusTech/lurus-hub/internal/pkg/dto"
 	"github.com/LurusTech/lurus-hub/internal/pkg/logger"
-	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
-	"github.com/LurusTech/lurus-hub/internal/app/relay"
 
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -82,6 +82,10 @@ func UpdateTaskBulkWithContext(ctx context.Context) {
 			common.SysLog("task bulk update stopped")
 			return
 		case <-ticker.C:
+			// HA: only the leader polls task updates; non-leaders idle.
+			if !common.IsLeader() {
+				continue
+			}
 			common.SysLog("任务进度轮询开始")
 			allTasks := repo.GetAllUnFinishSyncTasks(constant.TaskQueryLimit)
 			platformTask := make(map[constant.TaskPlatform][]*repo.Task)

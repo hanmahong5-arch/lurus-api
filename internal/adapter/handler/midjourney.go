@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/app"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/pkg/dto"
 	"github.com/LurusTech/lurus-hub/internal/pkg/logger"
-	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
-	"github.com/LurusTech/lurus-hub/internal/app"
 	"github.com/LurusTech/lurus-hub/internal/pkg/setting"
 	"github.com/LurusTech/lurus-hub/internal/pkg/setting/system_setting"
 
@@ -201,6 +201,10 @@ func UpdateMidjourneyTaskBulkWithContext(ctx context.Context) {
 			common.SysLog("midjourney task update stopped")
 			return
 		case <-ticker.C:
+			// HA: only the leader polls task updates; non-leaders idle.
+			if !common.IsLeader() {
+				continue
+			}
 			updateMidjourneyTasks(ctx)
 		}
 	}

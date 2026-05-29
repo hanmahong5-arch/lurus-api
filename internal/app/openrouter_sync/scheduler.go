@@ -35,6 +35,11 @@ func AutoSyncWithContext(ctx context.Context, frequencyMinutes int) {
 			common.SysLog("openrouter sync: stopped")
 			return
 		case <-ticker.C:
+			// HA: only the leader drives the sync engine. All master-capable
+			// replicas run this loop; non-leaders idle until they win the lease.
+			if !common.IsLeader() {
+				continue
+			}
 			result, err := engine.Run(ctx, nil, false)
 			if err != nil {
 				common.SysLog("openrouter sync tick failed: " + err.Error())
@@ -63,9 +68,12 @@ func AutoAggregateWithContext(ctx context.Context) {
 
 	common.SysLog("openrouter aggregator: started, interval=1h")
 
-	// Run once on startup so a fresh deploy doesn't wait an hour for first stats.
-	if err := AggregateOpenRouterUsage(ctx); err != nil {
-		common.SysLog("openrouter aggregator initial run failed: " + err.Error())
+	// Run once on startup so a fresh deploy doesn't wait an hour for first
+	// stats — but only if this node already holds leadership at boot.
+	if common.IsLeader() {
+		if err := AggregateOpenRouterUsage(ctx); err != nil {
+			common.SysLog("openrouter aggregator initial run failed: " + err.Error())
+		}
 	}
 
 	for {
@@ -74,6 +82,10 @@ func AutoAggregateWithContext(ctx context.Context) {
 			common.SysLog("openrouter aggregator: stopped")
 			return
 		case <-ticker.C:
+			// HA: only the leader aggregates; non-leaders idle.
+			if !common.IsLeader() {
+				continue
+			}
 			if err := AggregateOpenRouterUsage(ctx); err != nil {
 				common.SysLog("openrouter aggregator failed: " + err.Error())
 			}

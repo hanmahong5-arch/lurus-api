@@ -36,14 +36,21 @@ func StartAuditCleanupWithContext(ctx context.Context) {
 	common.SafeGoWithContext(ctx, func(c context.Context) {
 		defer ticker.Stop()
 		// Run once on startup so a fresh deploy reclaims any backlog
-		// without waiting a full day.
-		runAuditCleanup(c)
+		// without waiting a full day — but only if this node already holds
+		// leadership at boot.
+		if common.IsLeader() {
+			runAuditCleanup(c)
+		}
 		for {
 			select {
 			case <-c.Done():
 				common.SysLog("audit retention cleanup stopped")
 				return
 			case <-ticker.C:
+				// HA: only the leader runs retention deletes; non-leaders idle.
+				if !common.IsLeader() {
+					continue
+				}
 				runAuditCleanup(c)
 			}
 		}
