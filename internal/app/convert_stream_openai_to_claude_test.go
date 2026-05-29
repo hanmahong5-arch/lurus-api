@@ -144,3 +144,201 @@ func eventTypes(rs []*dto.ClaudeResponse) []string {
 	}
 	return out
 }
+
+func assertEventTypes(t *testing.T, out []*dto.ClaudeResponse, want []string) {
+	t.Helper()
+	got := eventTypes(out)
+	if len(got) != len(want) {
+		t.Fatalf("got %d events %v, want %d %v", len(got), got, len(want), want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("event[%d] = %q, want %q (full got %v / want %v)", i, got[i], want[i], got, want)
+		}
+	}
+}
+
+// feedClaudeStream drives a full OpenAI->Claude stream conversion across several
+// chunks, mimicking the handler's per-chunk dispatch. The first chunk is the
+// "first response" (SendResponseCount==1, triggers message_start); the rest go
+// through the subsequent-chunk state machine.
+func feedClaudeStream(info *relaycommon.RelayInfo, chunks ...*dto.ChatCompletionsStreamResponse) []*dto.ClaudeResponse {
+	var all []*dto.ClaudeResponse
+	for i, ch := range chunks {
+		info.SendResponseCount = i + 1
+		all = append(all, StreamResponseOpenAI2Claude(ch, info)...)
+	}
+	return all
+}
+
+func chunk(choices ...dto.ChatCompletionsStreamResponseChoice) *dto.ChatCompletionsStreamResponse {
+	return &dto.ChatCompletionsStreamResponse{Id: "msg", Model: "claude-sonnet", Choices: choices}
+}
+
+// Text streamed over two delta chunks then a terminal chunk: the second text
+// delta must NOT re-open a content block (LastMessagesType already text).
+func TestStreamResponseOpenAI2Claude_TextContinuationNoReopen(t *testing.T) {
+	stop := "stop"
+	info := claudeStreamInfo(5)
+	done := chunk(streamChoice("", &stop))
+	done.Usage = &dto.Usage{PromptTokens: 5, CompletionTokens: 4}
+	out := feedClaudeStream(info,
+		chunk(streamChoice("Hello", nil)),
+		chunk(streamChoice(" world", nil)),
+		done,
+	)
+	assertEventTypes(t, out, []string{
+		"message_start", "content_block_start", "content_block_delta", // chunk 1
+		"content_block_delta", // chunk 2 — continuation, no new content_block_start
+		"content_block_stop", "message_delta", "message_stop", // chunk 3 — terminal
+	})
+	if out[3].Delta == nil || out[3].Delta.GetText() != " world" {
+		t.Errorf("continuation delta = %+v, want text_delta ' world'", out[3].Delta)
+	}
+	md := out[5]
+	if md.Delta == nil || md.Delta.StopReason == nil || *md.Delta.StopReason != "end_turn" {
+		t.Errorf("message_delta stop_reason = %+v, want end_turn", md.Delta)
+	}
+	if md.Usage == nil || md.Usage.InputTokens != 5 || md.Usage.OutputTokens != 4 {
+		t.Errorf("message_delta usage = %+v, want input=5 output=4", md.Usage)
+	}
+	if !info.ClaudeConvertInfo.Done {
+		t.Error("Done = false after terminal chunk, want true")
+	}
+	// A further chunk after Done short-circuits to nil.
+	if extra := StreamResponseOpenAI2Claude(chunk(streamChoice("late", nil)), info); extra != nil {
+		t.Errorf("post-Done chunk -> %+v, want nil", extra)
+	}
+}
+
+// Switching from a text block to a tool_use block must close the text block
+// (content_block_stop) and bump the index before opening the tool block.
+func TestStreamResponseOpenAI2Claude_TextThenToolClosesTextBlock(t *testing.T) {
+	info := claudeStreamInfo(0)
+	out := feedClaudeStream(info,
+		chunk(streamChoice("Let me check", nil)),
+		chunk(streamToolChoice("get_weather", `{"city":"NYC"}`)),
+	)
+	assertEventTypes(t, out, []string{
+		"message_start", "content_block_start", "content_block_delta", // text
+		"content_block_stop",  // close the text block
+		"content_block_start", // open tool_use
+		"content_block_delta", // input_json_delta
+	})
+	if out[4].ContentBlock == nil || out[4].ContentBlock.Type != "tool_use" || out[4].ContentBlock.Name != "get_weather" {
+		t.Errorf("tool block = %+v, want tool_use get_weather", out[4].ContentBlock)
+	}
+	// Text block is index 0; the tool block is opened at the bumped index 1.
+	if out[3].Index == nil || *out[3].Index != 0 {
+		t.Errorf("content_block_stop index = %v, want 0", out[3].Index)
+	}
+	if out[4].Index == nil || *out[4].Index != 1 {
+		t.Errorf("tool content_block_start index = %v, want 1 (bumped)", out[4].Index)
+	}
+}
+
+// Switching from a thinking block to a text block also closes the prior block
+// and bumps the index.
+func TestStreamResponseOpenAI2Claude_ThinkingThenTextClosesThinkingBlock(t *testing.T) {
+	rc := "pondering"
+	info := claudeStreamInfo(0)
+	out := feedClaudeStream(info,
+		chunk(dto.ChatCompletionsStreamResponseChoice{Delta: dto.ChatCompletionsStreamResponseChoiceDelta{ReasoningContent: &rc}}),
+		chunk(streamChoice("Answer", nil)),
+	)
+	assertEventTypes(t, out, []string{
+		"message_start", "content_block_start", "content_block_delta", // thinking
+		"content_block_stop",  // close thinking
+		"content_block_start", // open text
+		"content_block_delta", // text_delta
+	})
+	if out[4].ContentBlock == nil || out[4].ContentBlock.Type != "text" {
+		t.Errorf("event[4] block = %+v, want text", out[4].ContentBlock)
+	}
+	if out[5].Delta == nil || out[5].Delta.Type != "text_delta" || out[5].Delta.GetText() != "Answer" {
+		t.Errorf("event[5] delta = %+v, want text_delta 'Answer'", out[5].Delta)
+	}
+}
+
+// An empty mid-stream delta (no content, no reasoning, no finish) yields no
+// events — it must not emit an empty content_block_delta.
+func TestStreamResponseOpenAI2Claude_EmptyMidStreamDeltaIsDropped(t *testing.T) {
+	info := claudeStreamInfo(0)
+	out := feedClaudeStream(info,
+		chunk(streamChoice("Hi", nil)),
+		chunk(streamChoice("", nil)), // empty, not terminal
+	)
+	assertEventTypes(t, out, []string{
+		"message_start", "content_block_start", "content_block_delta", // chunk 1 only
+	})
+	if info.ClaudeConvertInfo.Done {
+		t.Error("Done = true after a non-terminal empty chunk, want false")
+	}
+}
+
+// Tool arguments stream as fragments: a first chunk with the tool name (no args
+// yet), then chunks carrying only argument fragments (no name) which must emit
+// input_json_delta without re-opening the block, then a terminal tool_calls
+// chunk mapping to stop_reason tool_use.
+func TestStreamResponseOpenAI2Claude_ToolArgsStreamedInFragments(t *testing.T) {
+	toolCalls := "tool_calls"
+	info := claudeStreamInfo(0)
+	frag := func(name, args string) dto.ChatCompletionsStreamResponseChoice {
+		return dto.ChatCompletionsStreamResponseChoice{
+			Delta: dto.ChatCompletionsStreamResponseChoiceDelta{
+				ToolCalls: []dto.ToolCallResponse{
+					{ID: "c1", Index: intPtr(0), Function: dto.FunctionResponse{Name: name, Arguments: args}},
+				},
+			},
+		}
+	}
+	terminal := chunk(streamChoice("", &toolCalls))
+	terminal.Usage = &dto.Usage{PromptTokens: 6, CompletionTokens: 9}
+	out := feedClaudeStream(info,
+		chunk(streamToolChoice("search", "")), // first chunk: name only, no args
+		chunk(frag("", `{"q":`)),              // arg fragment, no name -> no new block
+		chunk(frag("", `"cats"}`)),            // arg fragment continuation
+		terminal,                              // finish
+	)
+	assertEventTypes(t, out, []string{
+		"message_start", "content_block_start", // chunk 1: tool_use opened, no args delta
+		"content_block_delta", // chunk 2: input_json_delta
+		"content_block_delta", // chunk 3: input_json_delta
+		"content_block_stop", "message_delta", "message_stop", // terminal
+	})
+	if out[2].Delta == nil || out[2].Delta.Type != "input_json_delta" || out[2].Delta.PartialJson == nil || *out[2].Delta.PartialJson != `{"q":` {
+		t.Errorf("event[2] = %+v, want input_json_delta '{\"q\":'", out[2].Delta)
+	}
+	md := out[5]
+	if md.Delta == nil || md.Delta.StopReason == nil || *md.Delta.StopReason != "tool_use" {
+		t.Errorf("terminal stop_reason = %+v, want tool_use", md.Delta)
+	}
+}
+
+// Multiple tool calls in a single subsequent chunk WITHOUT explicit indices:
+// the block index is derived as base+i so each tool gets its own block.
+func TestStreamResponseOpenAI2Claude_MultipleToolCallsNoIndex(t *testing.T) {
+	info := claudeStreamInfo(0)
+	multi := dto.ChatCompletionsStreamResponseChoice{
+		Delta: dto.ChatCompletionsStreamResponseChoiceDelta{
+			ToolCalls: []dto.ToolCallResponse{
+				{ID: "a", Function: dto.FunctionResponse{Name: "f0", Arguments: `{}`}},
+				{ID: "b", Function: dto.FunctionResponse{Name: "f1", Arguments: `{}`}},
+			},
+		},
+	}
+	out := feedClaudeStream(info,
+		chunk(streamToolChoice("f_first", `{}`)), // first-chunk tool -> LastMessagesType=Tools
+		chunk(multi),
+	)
+	assertEventTypes(t, out, []string{
+		"message_start", "content_block_start", "content_block_delta", // chunk 1
+		"content_block_start", "content_block_delta", // chunk 2 tool 0
+		"content_block_start", "content_block_delta", // chunk 2 tool 1
+	})
+	if out[3].Index == nil || out[5].Index == nil || *out[3].Index == *out[5].Index {
+		t.Errorf("two tool blocks share index (%v, %v), want distinct base+i", out[3].Index, out[5].Index)
+	}
+}
+
+func intPtr(i int) *int { return &i }
