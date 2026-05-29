@@ -179,6 +179,14 @@ func ClaudeToOpenAIRequest(claudeRequest dto.ClaudeRequest, info *relaycommon.Re
 				openAIMessage.SetToolCalls(toolCalls)
 			}
 
+			// NOTE (fidelity limitation): when a message carries BOTH text and
+			// tool_use blocks, the text is intentionally dropped here — media
+			// content is only attached when there are no tool calls. OpenAI's
+			// format does allow content + tool_calls together, so this loses the
+			// assistant's stated intent across a tool round-trip. Kept as-is
+			// because some upstreams reject content alongside tool_calls; flip
+			// only after validating against the target providers. Characterized
+			// by TestClaudeToOpenAIRequest_TextWithToolUse_DropsText.
 			if len(mediaMessages) > 0 && len(toolCalls) == 0 {
 				openAIMessage.SetMediaContent(mediaMessages)
 			}
