@@ -21,6 +21,13 @@ var (
 	proxyClients    = make(map[string]*http.Client)
 )
 
+// maxProxyClients caps the proxy-client cache. Keys are configured proxy URLs
+// (from channel config, not attacker-controlled), so this is a safety ceiling
+// against unbounded growth — not a hot eviction path. When the cache is full it
+// is dropped wholesale (idle connections closed first) and rebuilt on demand;
+// entries are cheap to reconstruct, so a coarse reset beats per-key LRU here.
+const maxProxyClients = 256
+
 func checkRedirect(req *http.Request, via []*http.Request) error {
 	fetchSetting := system_setting.GetFetchSetting()
 	urlStr := req.URL.String()
@@ -71,12 +78,31 @@ func GetHttpClientWithProxy(proxyURL string) (*http.Client, error) {
 func ResetProxyClientCache() {
 	proxyClientLock.Lock()
 	defer proxyClientLock.Unlock()
+	resetProxyClientsLocked()
+}
+
+// resetProxyClientsLocked closes idle connections on every cached client and
+// replaces the cache with a fresh empty map. Callers must hold proxyClientLock.
+func resetProxyClientsLocked() {
 	for _, client := range proxyClients {
 		if transport, ok := client.Transport.(*http.Transport); ok && transport != nil {
 			transport.CloseIdleConnections()
 		}
 	}
 	proxyClients = make(map[string]*http.Client)
+}
+
+// storeProxyClient caches client under proxyURL, enforcing maxProxyClients.
+// When the cache is already at the bound it is dropped wholesale (idle
+// connections closed) before the new entry is inserted, so len(proxyClients)
+// never exceeds maxProxyClients.
+func storeProxyClient(proxyURL string, client *http.Client) {
+	proxyClientLock.Lock()
+	defer proxyClientLock.Unlock()
+	if len(proxyClients) >= maxProxyClients {
+		resetProxyClientsLocked()
+	}
+	proxyClients[proxyURL] = client
 }
 
 // NewProxyHttpClient 创建支持代理的 HTTP 客户端
@@ -109,9 +135,7 @@ func NewProxyHttpClient(proxyURL string) (*http.Client, error) {
 			CheckRedirect: checkRedirect,
 		}
 		client.Timeout = time.Duration(common.RelayTimeout) * time.Second
-		proxyClientLock.Lock()
-		proxyClients[proxyURL] = client
-		proxyClientLock.Unlock()
+		storeProxyClient(proxyURL, client)
 		return client, nil
 
 	case "socks5", "socks5h":
@@ -146,9 +170,7 @@ func NewProxyHttpClient(proxyURL string) (*http.Client, error) {
 			CheckRedirect: checkRedirect,
 		}
 		client.Timeout = time.Duration(common.RelayTimeout) * time.Second
-		proxyClientLock.Lock()
-		proxyClients[proxyURL] = client
-		proxyClientLock.Unlock()
+		storeProxyClient(proxyURL, client)
 		return client, nil
 
 	default:
