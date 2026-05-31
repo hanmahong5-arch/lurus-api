@@ -107,10 +107,12 @@ jobs:
   coverage-gate:
     name: coverage gate (app/repo/handler baselines)
     runs-on: ubuntu-latest
-    # Thresholds are CURRENT BASELINE (2026-05-26) — not aspirational. They
-    # prevent regression. Raise them in the same PR that lifts the underlying
-    # coverage (ratchet upward, never downward). See Wave-UAT ADR for why
-    # the plan's 80/60/50 targets aren't reachable in hermetic tests today.
+    # Thresholds are CURRENT BASELINE (ratcheted 2026-05-31) — not aspirational.
+    # They prevent regression. Raise them in the same PR that lifts the underlying
+    # coverage (ratchet upward, never downward), with a measured before/after in
+    # the commit. Each check_pkg line carries the measured actual + its buffer.
+    # See Wave-UAT ADR for why the plan's 80/60/50 targets aren't reachable in
+    # hermetic tests today.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -174,9 +176,9 @@ jobs:
             fi
           }
 
-          check_pkg "internal/app"             18 "internal/app"
-          check_pkg "internal/adapter/repo"    58 "internal/adapter/repo"
-          check_pkg "internal/adapter/handler" 19 "internal/adapter/handler"
+          check_pkg "internal/app"             25 "internal/app"             # actual 27.0% (2026-05-31); +2pt buffer
+          check_pkg "internal/adapter/repo"    59 "internal/adapter/repo"    # actual 60.9%; +1.9pt buffer
+          check_pkg "internal/adapter/handler" 19 "internal/adapter/handler" # actual 20.0%; keep — raising removes margin, lowering forbidden
 
           if [ "$FAIL" -eq 1 ]; then
             echo ""
