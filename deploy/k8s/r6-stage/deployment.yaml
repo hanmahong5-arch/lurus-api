@@ -29,6 +29,12 @@ spec:
         prometheus.io/port: "3000"
         prometheus.io/path: "/metrics"
     spec:
+      # Pod security baseline (parity with base deploy/k8s/deployment.yaml):
+      # non-root, drop fsGroup to the nobody uid.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
       containers:
         - name: lurus-newhub
           # NOTE: STAGE tracks the floating "main" tag with imagePullPolicy=Always.
@@ -37,6 +43,13 @@ spec:
           # the legacy `lurus-api` tag still exists with stale 4-23 image.
           image: ghcr.io/hanmahong5-arch/lurus-newhub:main
           imagePullPolicy: Always
+          # Container hardening (parity with base): no priv-escalation, read-only
+          # root FS (writes go to the /data + /tmp emptyDirs below), drop all caps.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
           ports:
             - containerPort: 3000
               name: http
