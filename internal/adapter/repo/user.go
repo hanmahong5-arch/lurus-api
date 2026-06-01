@@ -514,12 +514,19 @@ func IncreaseUserQuota(id int, quota int, db bool) (err error) {
 	if quota < 0 {
 		return errors.New("quota 不能为负数！")
 	}
-	gopool.Go(func() {
-		err := cacheIncrUserQuota(id, int64(quota))
-		if err != nil {
-			common.SysLog("failed to increase user quota: " + err.Error())
-		}
-	})
+	// Read RedisEnabled on the caller's goroutine and gate the cache-refresh
+	// spawn on it: the detached pool goroutine must not read mutable globals
+	// (tests rewrite RedisEnabled/DB, which the race detector flags), and the
+	// refresh is a no-op when Redis is off. Prod behavior is unchanged —
+	// RedisEnabled is set once at startup.
+	if common.RedisEnabled {
+		gopool.Go(func() {
+			err := cacheIncrUserQuota(id, int64(quota))
+			if err != nil {
+				common.SysLog("failed to increase user quota: " + err.Error())
+			}
+		})
+	}
 	if !db && common.BatchUpdateEnabled {
 		addNewRecord(BatchUpdateTypeUserQuota, id, quota)
 		return nil
@@ -539,12 +546,15 @@ func DecreaseUserQuota(id int, quota int) (err error) {
 	if quota < 0 {
 		return errors.New("quota 不能为负数！")
 	}
-	gopool.Go(func() {
-		err := cacheDecrUserQuota(id, int64(quota))
-		if err != nil {
-			common.SysLog("failed to decrease user quota: " + err.Error())
-		}
-	})
+	// gate cache spawn on RedisEnabled (see IncreaseUserQuota)
+	if common.RedisEnabled {
+		gopool.Go(func() {
+			err := cacheDecrUserQuota(id, int64(quota))
+			if err != nil {
+				common.SysLog("failed to decrease user quota: " + err.Error())
+			}
+		})
+	}
 	if common.BatchUpdateEnabled {
 		addNewRecord(BatchUpdateTypeUserQuota, id, -quota)
 		return nil
@@ -699,11 +709,14 @@ func IncreaseDailyUsed(userId int, amount int) error {
 		return errors.New("amount cannot be negative")
 	}
 
-	gopool.Go(func() {
-		if err := cacheIncrUserDailyUsed(userId, int64(amount)); err != nil {
-			common.SysLog("failed to increase user daily used cache: " + err.Error())
-		}
-	})
+	// gate cache spawn on RedisEnabled (see IncreaseUserQuota)
+	if common.RedisEnabled {
+		gopool.Go(func() {
+			if err := cacheIncrUserDailyUsed(userId, int64(amount)); err != nil {
+				common.SysLog("failed to increase user daily used cache: " + err.Error())
+			}
+		})
+	}
 
 	return DB.Model(&User{}).Where("id = ?", userId).
 		Update("daily_used", gorm.Expr("daily_used + ?", amount)).Error
@@ -729,14 +742,17 @@ func ResetDailyQuota(userId int) error {
 		return nil
 	}
 
-	gopool.Go(func() {
-		if err := updateUserDailyUsedCache(userId, 0); err != nil {
-			common.SysLog("failed to update user daily used cache: " + err.Error())
-		}
-		if err := updateUserLastDailyResetCache(userId, now); err != nil {
-			common.SysLog("failed to update user last daily reset cache: " + err.Error())
-		}
-	})
+	// gate cache spawn on RedisEnabled (see IncreaseUserQuota)
+	if common.RedisEnabled {
+		gopool.Go(func() {
+			if err := updateUserDailyUsedCache(userId, 0); err != nil {
+				common.SysLog("failed to update user daily used cache: " + err.Error())
+			}
+			if err := updateUserLastDailyResetCache(userId, now); err != nil {
+				common.SysLog("failed to update user last daily reset cache: " + err.Error())
+			}
+		})
+	}
 
 	return nil
 }
@@ -758,11 +774,14 @@ func SwitchToFallbackGroup(userId int) error {
 		return err
 	}
 
-	gopool.Go(func() {
-		if err := updateUserGroupCache(userId, user.FallbackGroup); err != nil {
-			common.SysLog("failed to update user group cache: " + err.Error())
-		}
-	})
+	// gate cache spawn on RedisEnabled (see IncreaseUserQuota)
+	if common.RedisEnabled {
+		gopool.Go(func() {
+			if err := updateUserGroupCache(userId, user.FallbackGroup); err != nil {
+				common.SysLog("failed to update user group cache: " + err.Error())
+			}
+		})
+	}
 
 	return nil
 }
@@ -784,11 +803,14 @@ func RestoreToBaseGroup(userId int) error {
 		return err
 	}
 
-	gopool.Go(func() {
-		if err := updateUserGroupCache(userId, user.BaseGroup); err != nil {
-			common.SysLog("failed to update user group cache: " + err.Error())
-		}
-	})
+	// gate cache spawn on RedisEnabled (see IncreaseUserQuota)
+	if common.RedisEnabled {
+		gopool.Go(func() {
+			if err := updateUserGroupCache(userId, user.BaseGroup); err != nil {
+				common.SysLog("failed to update user group cache: " + err.Error())
+			}
+		})
+	}
 
 	return nil
 }

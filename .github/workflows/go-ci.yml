@@ -315,16 +315,13 @@ jobs:
   race:
     name: go test -race (short, hermetic)
     runs-on: ubuntu-latest
-    # REPORT-ONLY (2026-06-01): turning on -race across the full -short suite
-    # surfaced PRE-EXISTING data races in shared test globals (repo + governance
-    # paths: TestUser_*Quota_DirectDB, TestDailyQuota_*, TestUserRepo_*Group,
-    # TestInteg_Topup/AdjustQuota, TestSetAuditWriter_AtomicSafety — 11 DATA RACE
-    # warnings total). The job still runs and shows its TRUE result, but
-    # continue-on-error keeps it from blocking `main` while the races are
-    # root-caused + fixed under a CGO-capable env (the dev host has no gcc, so
-    # -race can only be verified in CI). Flip back to blocking in the PR that
-    # fixes + verifies them. This supersedes the stale "race-clean" note below.
-    continue-on-error: true
+    # BLOCKING gate. The data races surfaced when this gate was first enabled
+    # (detached gopool goroutines reading mutable package globals after the
+    # spawning test ran cleanup; an unsynchronized mock in the audit test) were
+    # fixed 2026-06-01 — see the commit that removed continue-on-error. If this
+    # job goes red, a NEW race was introduced: fix it, do not re-add
+    # continue-on-error. -race needs CGO and cannot run on the gcc-less dev
+    # host, so CI is the enforcer.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -354,8 +351,6 @@ jobs:
           cache: true
       # -race needs CGO; ubuntu-latest ships gcc, so CGO_ENABLED defaults to 1.
       # -short keeps it to the hermetic suite (Postgres/MinIO integration tests
-      # self-skip without their DSNs). NOTE: the module is NOT currently
-      # race-clean — see the report-only note on the job above. The earlier
-      # 2026-05-26 audit did not exercise -race across this whole suite.
+      # self-skip without their DSNs).
       - name: go test -short -race ./...
         run: go test -short -race -count=1 -timeout=15m ./...
