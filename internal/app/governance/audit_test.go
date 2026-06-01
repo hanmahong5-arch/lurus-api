@@ -3,6 +3,7 @@ package governance
 import (
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -12,13 +13,19 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// mockAuditWriter records events for testing.
+// mockAuditWriter records events for testing. The mutex makes concurrent
+// CreateAuditEvent calls (RecordAuditEvent dispatches them on pool goroutines)
+// safe, so the -race detector measures the production atomic.Pointer rather
+// than the mock's own unsynchronized slice append.
 type mockAuditWriter struct {
+	mu     sync.Mutex
 	events []*entity.AuditEvent
 	err    error
 }
 
 func (m *mockAuditWriter) CreateAuditEvent(event *entity.AuditEvent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.err != nil {
 		return m.err
 	}
@@ -189,13 +196,17 @@ func TestSetAuditWriter_AtomicSafety(t *testing.T) {
 
 	// Concurrent read/write should not race.
 	var done atomic.Int32
+	var wg sync.WaitGroup
+	wg.Add(2)
 	go func() {
+		defer wg.Done()
 		for done.Load() == 0 {
 			w := &mockAuditWriter{}
 			SetAuditWriter(w)
 		}
 	}()
 	go func() {
+		defer wg.Done()
 		for done.Load() == 0 {
 			RecordAuditEvent(&entity.AuditEvent{Action: "test"})
 		}
@@ -206,4 +217,7 @@ func TestSetAuditWriter_AtomicSafety(t *testing.T) {
 		RecordAuditEvent(&entity.AuditEvent{Action: "test"})
 	}
 	done.Store(1)
+	// Join both goroutines before the deferred auditWriterRef.Store(nil) runs,
+	// so the reset can't race with a still-running SetAuditWriter/RecordAuditEvent.
+	wg.Wait()
 }
