@@ -1,22 +1,25 @@
 # golangci-lint configuration for 2b-svc-newhub.
 #
 # Curated high-signal linters only: correctness + resource-leak + error-wrapping
-# checks that catch real bugs, not style churn. Schema targets golangci-lint v1.
+# checks that catch real bugs, not style churn. Schema targets golangci-lint v2.
+# v1 binaries (last release v1.64.8) are built with go 1.24 and cannot load this
+# module's `go 1.25.1` directive, so v2 is mandatory here.
 # Run locally with:  golangci-lint run ./internal/... ./cmd/...
+version: "2"
+
 run:
-  timeout: 5m
+  timeout: 10m
   # tests are linted too (default) — the honesty/regression locks must stay clean.
 
 linters:
-  disable-all: true
+  default: none
   enable:
     # --- correctness ---
     - errcheck        # unchecked errors
     - govet           # vet's analyzers (shadow off by default)
     - ineffassign     # ineffectual assignments
-    - staticcheck     # SA* bug-class checks
+    - staticcheck     # SA* bug-class checks (v2 also subsumes the old gosimple set)
     - unused          # dead code
-    - gosimple        # simplifications that also hide bugs
     - errorlint       # %w / errors.Is/As misuse
     - nilerr          # `return nil` after a non-nil err
     - contextcheck    # ctx not propagated through call chains
