@@ -301,14 +301,15 @@ jobs:
           go-version: '1.25.x'
           cache: true
       - name: golangci-lint (curated linters; ratchet — gate only new findings)
-        # 461 pre-existing findings across the module (measured 2026-05-31) are a
-        # known baseline and are NOT gated. only-new-issues ratchets: a PR may not
-        # ADD findings. Action pinned to v6 because it supports golangci-lint v1.x
-        # (v7+ only supports v2). Linter set lives in root .golangci.yml.
-        uses: golangci/golangci-lint-action@v6
+        # Pre-existing findings across the module are a known baseline and are NOT
+        # gated. only-new-issues ratchets: a PR may not ADD findings. Action v7 +
+        # golangci-lint v2 are required here — v1 (last release v1.64.8) is built
+        # with go 1.24 and cannot load this module's go 1.25.1 directive. Linter
+        # set + timeout live in root .golangci.yml.
+        uses: golangci/golangci-lint-action@v7
         with:
-          version: v1.64.8
-          args: --timeout=10m ./internal/... ./cmd/...
+          version: v2.12.2
+          args: ./internal/... ./cmd/...
           only-new-issues: true
 
   race:
