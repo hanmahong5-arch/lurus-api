@@ -28,6 +28,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/grafana/pyroscope-go v1.2.7
+	github.com/hanmahong5-arch/zita-sdk-go v0.1.0
 	github.com/jfreymuth/oggvorbis v1.0.5
 	github.com/jinzhu/copier v0.4.0
 	github.com/joho/godotenv v1.5.1
@@ -64,7 +65,6 @@ require (
 require (
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
-	github.com/hanmahong5-arch/zita-sdk-go v0.0.0-20260508070017-e2611da1e01e // indirect
 	github.com/klauspost/crc32 v1.3.0 // indirect
 	github.com/minio/crc64nvme v1.1.1 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
@@ -179,5 +179,3 @@ require (
 )
 
 replace github.com/LurusTech/lurus-proto-go => ../shared/lurus-proto-go
-
-replace github.com/hanmahong5-arch/zita-sdk-go => ../shared/zita-sdk-go
