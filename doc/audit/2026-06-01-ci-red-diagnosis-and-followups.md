@@ -22,11 +22,19 @@ Honesty notes (per CLAUDE.md §4.1):
 
 ---
 
-## Failure 1 — Go CI `race` job: 11 DATA RACE warnings (report-only)
+## Failure 1 — Go CI `race` job: 11 DATA RACE warnings → **RESOLVED in PR #5**
 
-`go test -short -race -count=1 ./...` (the gate added in PR #1) reports **11
-DATA RACE** warnings and fails. Other Go CI jobs (build, vet, gosec, lint,
-coverage-gate, handler) all pass.
+> **Update (PR #5, merge `1327b018`)**: fixed, and the `race` gate is back to
+> **blocking** (the CI `go test -race` job is green). The fix gated the 6
+> unconditional cache-refresh `gopool.Go` spawns in `repo/user.go` on
+> `common.RedisEnabled`, read on the caller's goroutine — so the detached
+> goroutine never reads a mutable global. It is behavior-preserving because the
+> refresh is already a no-op when Redis is off. The audit test was fixed too (see
+> the cluster-C correction below). Original diagnosis kept below for the record.
+
+`go test -short -race -count=1 ./...` (the gate added in PR #1) reported **11
+DATA RACE** warnings and failed. Other Go CI jobs (build, vet, gosec, lint,
+coverage-gate, handler) all passed.
 
 ### Affected tests
 - `internal/adapter/handler`: `TestInteg_Topup_IdempotencyHit`,
@@ -36,7 +44,11 @@ coverage-gate, handler) all pass.
   `TestDailyQuota_CheckAndHandleDailyQuotaExhaustion_WithinQuota`,
   `TestDailyQuota_PostConsumeDailyQuota_NoDailyQuota`,
   `TestUserRepo_SwitchToFallbackGroup`, `TestUserRepo_RestoreToBaseGroup`
-- `internal/app/governance`: `TestSetAuditWriter_AtomicSafety`
+- `internal/app/governance`: `TestSetAuditWriter_AtomicSafety` — **correction**:
+  production `SetAuditWriter` is already an `atomic.Pointer` (correct). The race
+  was the test's own unsynchronized `mockAuditWriter.events` append plus its
+  background goroutines outliving the deferred `auditWriterRef.Store(nil)`. Fixed
+  in PR #5 (mutex on the mock + `wg.Wait()` to join the goroutines) — test-only.
 
 ### Root cause — test-global mutation racing a detached goroutine
 The races center on **package-level globals**, not heap state (the racy address
