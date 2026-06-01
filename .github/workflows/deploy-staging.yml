@@ -32,6 +32,7 @@ jobs:
       contents: read
     outputs:
       image_tag: ${{ steps.version.outputs.value }}
+      has_kubeconfig: ${{ steps.cfg.outputs.has_kubeconfig }}
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -61,6 +62,18 @@ jobs:
           VERSION="staging-$(date +'%Y%m%d')-$(git rev-parse --short HEAD)"
           echo "value=$VERSION" >> $GITHUB_OUTPUT
           echo "Publishing staging version: $VERSION"
+
+      - name: Detect staging cluster credentials
+        id: cfg
+        env:
+          KC: ${{ secrets.STAGING_KUBECONFIG }}
+        run: |
+          if [ -n "$KC" ]; then
+            echo "has_kubeconfig=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_kubeconfig=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Staging deploy skipped::STAGING_KUBECONFIG secret is empty — the deploy job is skipped (not failed). Tracked infra dependency (doc/uat-handbook.md §2), not a code regression."
+          fi
 
       - name: Normalize GHCR repository
         run: echo "GHCR_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
@@ -93,6 +106,10 @@ jobs:
   deploy:
     name: Deploy to K3s Staging
     needs: build
+    # Skip cleanly when no real staging cluster is wired up yet (empty
+    # STAGING_KUBECONFIG) instead of failing `main` CI on a tracked infra gap.
+    # Runs automatically once the secret is configured.
+    if: ${{ needs.build.outputs.has_kubeconfig == 'true' }}
     runs-on: ubuntu-latest
     environment: staging
     steps:
