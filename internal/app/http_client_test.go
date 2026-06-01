@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -156,5 +157,48 @@ func TestHttpClient_GetHttpClientWithProxy_WithURL(t *testing.T) {
 	}
 	if client == nil {
 		t.Fatal("expected non-nil client for proxy URL")
+	}
+}
+
+// TestProxyClientCacheBounded asserts the proxy-client cache never grows past
+// maxProxyClients (§7 "bound everything"). Inserting more distinct proxy URLs
+// than the bound must keep len(proxyClients) <= maxProxyClients at every step,
+// and — since we insert strictly more than the bound — eviction must fire so
+// the cache stays strictly smaller than the number of inserts.
+func TestProxyClientCacheBounded(t *testing.T) {
+	common.RelayTimeout = 0
+	common.RelayMaxIdleConns = 100
+	common.RelayMaxIdleConnsPerHost = 50
+
+	ResetProxyClientCache()
+	t.Cleanup(ResetProxyClientCache)
+
+	// http scheme builds a client with no network call, so this is hermetic.
+	const inserts = maxProxyClients + 50
+	for i := 0; i < inserts; i++ {
+		url := fmt.Sprintf("http://proxy-%d.invalid:8080", i)
+		client, err := NewProxyHttpClient(url)
+		if err != nil {
+			t.Fatalf("NewProxyHttpClient(%q): %v", url, err)
+		}
+		if client == nil {
+			t.Fatalf("nil client for %q", url)
+		}
+		proxyClientLock.Lock()
+		size := len(proxyClients)
+		proxyClientLock.Unlock()
+		if size > maxProxyClients {
+			t.Fatalf("after %d inserts the cache holds %d entries, exceeds bound %d", i+1, size, maxProxyClients)
+		}
+	}
+
+	proxyClientLock.Lock()
+	final := len(proxyClients)
+	proxyClientLock.Unlock()
+	if final == 0 || final > maxProxyClients {
+		t.Fatalf("final cache size %d not in (0, %d]", final, maxProxyClients)
+	}
+	if final >= inserts {
+		t.Fatalf("cache never evicted: holds %d of %d inserts (unbounded)", final, inserts)
 	}
 }

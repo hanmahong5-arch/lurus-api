@@ -195,6 +195,10 @@ func SetApiV2Router(router *gin.Engine) {
 			switchGroup.POST("/redeem", handler.SwitchRedeemAnonymous)
 			// Phase D Track 2.2: single-tenant fallback heartbeat (inline raw-token auth)
 			switchGroup.POST("/heartbeat", handler.UserHeartbeat)
+			// Wave 1 W1.1: public rate card for the Switch cost dashboard.
+			switchGroup.GET("/pricing", handler.GetSwitchPricing)
+			// Wave 1 W1.2: usage reconciliation (inline raw-token auth).
+			switchGroup.POST("/reconciliation", handler.SwitchReconciliation)
 		}
 
 		// Phase D Track 2.2: tenant-scoped heartbeat — sibling of /:tenant_slug/user/me.

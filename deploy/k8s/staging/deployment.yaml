@@ -33,10 +33,23 @@ spec:
     spec:
       nodeSelector:
         lurus.cn/vpn: "true"
+      # Pod security baseline (parity with base deploy/k8s/deployment.yaml):
+      # non-root, drop fsGroup to the nobody uid.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
       containers:
         - name: lurus-newhub
           image: ghcr.io/hanmahong5-arch/lurus-newhub:staging
           imagePullPolicy: Always
+          # Container hardening (parity with base): no priv-escalation, read-only
+          # root FS (writes go to the /data + /tmp emptyDirs below), drop all caps.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
           ports:
             - containerPort: 3000
               name: http
@@ -126,6 +139,9 @@ spec:
               value: "http://10.42.1.1:10808"
             - name: NO_PROXY
               value: "localhost,127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10,*.svc,*.svc.cluster.local,lurus.cn,*.lurus.cn"
+          # Staging runs a single small replica on purpose (lighter than
+          # r6-stage / PROD). These limits are deliberately lower, not an
+          # oversight — do not bump to match PROD without a sizing reason.
           resources:
             requests:
               memory: "128Mi"
@@ -133,6 +149,17 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "250m"
+          # startupProbe gives a cold start up to 30*5s=150s before liveness
+          # takes over (parity with r6-stage) so a slow first boot does not
+          # CrashLoop.
+          startupProbe:
+            httpGet:
+              path: /api/status
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 30
+            timeoutSeconds: 3
           livenessProbe:
             httpGet:
               path: /api/status
@@ -150,6 +177,11 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+            # readOnlyRootFilesystem above requires a writable /tmp.
+            - name: tmp
+              mountPath: /tmp
       volumes:
         - name: data
+          emptyDir: {}
+        - name: tmp
           emptyDir: {}

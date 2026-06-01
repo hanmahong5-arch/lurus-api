@@ -7,6 +7,7 @@ on:
       - '**/*.go'
       - 'go.mod'
       - 'go.sum'
+      - '.golangci.yml'
       - '.github/workflows/go-ci.yml'
   pull_request:
     branches: [main]
@@ -14,6 +15,7 @@ on:
       - '**/*.go'
       - 'go.mod'
       - 'go.sum'
+      - '.golangci.yml'
       - '.github/workflows/go-ci.yml'
 
 jobs:
@@ -105,10 +107,12 @@ jobs:
   coverage-gate:
     name: coverage gate (app/repo/handler baselines)
     runs-on: ubuntu-latest
-    # Thresholds are CURRENT BASELINE (2026-05-26) — not aspirational. They
-    # prevent regression. Raise them in the same PR that lifts the underlying
-    # coverage (ratchet upward, never downward). See Wave-UAT ADR for why
-    # the plan's 80/60/50 targets aren't reachable in hermetic tests today.
+    # Thresholds are CURRENT BASELINE (ratcheted 2026-05-31) — not aspirational.
+    # They prevent regression. Raise them in the same PR that lifts the underlying
+    # coverage (ratchet upward, never downward), with a measured before/after in
+    # the commit. Each check_pkg line carries the measured actual + its buffer.
+    # See Wave-UAT ADR for why the plan's 80/60/50 targets aren't reachable in
+    # hermetic tests today.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -172,9 +176,9 @@ jobs:
             fi
           }
 
-          check_pkg "internal/app"             18 "internal/app"
-          check_pkg "internal/adapter/repo"    58 "internal/adapter/repo"
-          check_pkg "internal/adapter/handler" 19 "internal/adapter/handler"
+          check_pkg "internal/app"             25 "internal/app"             # actual 27.0% (2026-05-31); +2pt buffer
+          check_pkg "internal/adapter/repo"    59 "internal/adapter/repo"    # actual 60.9%; +1.9pt buffer
+          check_pkg "internal/adapter/handler" 19 "internal/adapter/handler" # actual 20.0%; keep — raising removes margin, lowering forbidden
 
           if [ "$FAIL" -eq 1 ]; then
             echo ""
@@ -262,3 +266,84 @@ jobs:
         # All existing HIGH findings are suppressed with #nosec + justification comments.
         # New code must not introduce HIGH/CRITICAL severity issues.
         run: gosec -severity high -confidence medium -exclude-dir=.claude ./internal/... ./cmd/...
+
+  lint:
+    name: golangci-lint (gate new issues)
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 gives only-new-issues the base commit to diff against.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: LurusTech/lurus-proto-go
+          path: _sibling/lurus-proto-go
+          fetch-depth: 1
+      - uses: actions/checkout@v4
+        with:
+          repository: hanmahong5-arch/zita-sdk-go
+          ref: e2611da1e01ef77b8227571204d6780a6364fea3
+          path: _sibling/zita-sdk-go
+          fetch-depth: 1
+      - name: Relocate sibling repos to ../shared (matches go.mod replace paths)
+        run: |
+          mkdir -p ../shared
+          mv _sibling/lurus-proto-go ../shared/lurus-proto-go
+          mv _sibling/zita-sdk-go ../shared/zita-sdk-go
+          rmdir _sibling
+      - name: Stub web/dist for //go:embed in web/embed.go
+        run: |
+          mkdir -p web/dist
+          echo '<!doctype html><title>stub</title>' > web/dist/index.html
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+      - name: golangci-lint (curated linters; ratchet — gate only new findings)
+        # 461 pre-existing findings across the module (measured 2026-05-31) are a
+        # known baseline and are NOT gated. only-new-issues ratchets: a PR may not
+        # ADD findings. Action pinned to v6 because it supports golangci-lint v1.x
+        # (v7+ only supports v2). Linter set lives in root .golangci.yml.
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+          args: --timeout=10m ./internal/... ./cmd/...
+          only-new-issues: true
+
+  race:
+    name: go test -race (short, hermetic)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: LurusTech/lurus-proto-go
+          path: _sibling/lurus-proto-go
+          fetch-depth: 1
+      - uses: actions/checkout@v4
+        with:
+          repository: hanmahong5-arch/zita-sdk-go
+          ref: e2611da1e01ef77b8227571204d6780a6364fea3
+          path: _sibling/zita-sdk-go
+          fetch-depth: 1
+      - name: Relocate sibling repos to ../shared (matches go.mod replace paths)
+        run: |
+          mkdir -p ../shared
+          mv _sibling/lurus-proto-go ../shared/lurus-proto-go
+          mv _sibling/zita-sdk-go ../shared/zita-sdk-go
+          rmdir _sibling
+      - name: Stub web/dist for //go:embed in web/embed.go
+        run: |
+          mkdir -p web/dist
+          echo '<!doctype html><title>stub</title>' > web/dist/index.html
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+      # -race needs CGO; ubuntu-latest ships gcc, so CGO_ENABLED defaults to 1.
+      # -short keeps it to the hermetic suite (Postgres/MinIO integration tests
+      # self-skip without their DSNs). Full module was race-detector-clean on
+      # 2026-05-26 (doc/audit/2026-05-26-race-detector-clean.md).
+      - name: go test -short -race ./...
+        run: go test -short -race -count=1 -timeout=15m ./...
