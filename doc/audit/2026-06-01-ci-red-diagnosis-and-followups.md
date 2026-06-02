@@ -10,10 +10,13 @@ After the hardening PRs **#1** (`harden/ci-deploy-quality-2026-05-31`) and **#2*
 green again **without hiding any finding** — each failing gate was ratcheted to
 report-only with a tracked follow-up, the same pattern the repo already uses for
 `bun audit` (informational `continue-on-error` until a cleanup PR ratchets it
-back). This document records the root causes and the two follow-ups — **both now
-RESOLVED (2026-06-01): the data races in PR #5, the CVE bumps in PR #6** — with
-the per-failure updates below carrying the details. All four quality gates
-(coverage, lint, race, Trivy) are now BLOCKING and green on `main`.
+back). This document records the root causes + follow-ups. As of 2026-06-01
+(evening): **coverage, lint, and Trivy gates are BLOCKING + green** (CVEs cleared
+in PR #6). The **`race` gate is REPORT-ONLY** — PR #5 fixed 3 deterministic
+clusters and re-blocked, but #6's main run flaked on an intermittent 4th race, so
+PR #7 reverted to report-only and PR #8 hardened the broadest remaining class
+(slog globals → `atomic.Pointer`). Re-blocking `race` awaits the **test-isolation
+sweep** (last section), verified across REPEATED CI `-race` runs.
 
 Honesty notes (per CLAUDE.md §4.1):
 - The data races below are **real** (the race detector is independent of the
@@ -166,3 +169,40 @@ automatically once it is. **No code fix needed** — configure the
   earlier swarm runs) inflate every `Glob`/`ripgrep` ~9× and clutter
   `git worktree list`. Recommend `git worktree remove` for the abandoned ones
   after confirming their branches are merged or unneeded.
+
+---
+
+## Test-isolation sweep — prerequisite for re-blocking the `race` gate
+
+**Mechanism**: detached goroutines (`gopool.Go` / `common.SafeGo*` / `MustGo` /
+raw `go func`) outlive the test that triggered them and READ package globals
+while the *next* test's setup/cleanup WRITES (resets) those globals. Go runs a
+package's tests sequentially, so the only cross-test overlap is these leaked
+goroutines — which is why the failures are intermittent (schedule-dependent).
+
+**Done**: the broadest class — every detached goroutine logs via
+`SysError`/`SysLog` → `ensureSlogInit` → `slogLogger` — was hardened in PR #8
+(`slogLogger` is now `atomic.Pointer`; `slogOnce` removed). The quota
+cache-refresh spawns were gated on `RedisEnabled` in PR #5.
+
+**Remaining surface** (census from the 2026-06-01 sonnet sweep; the writes are
+sequential-safe but race any leaked goroutine that reads the same global):
+- `repo.DB` / `repo.LOG_DB` — reset by ~25 `*_test.go` setup/cleanup helpers.
+- `common.RedisEnabled` — reset widely; **missing restores**:
+  `middleware/auth_test.go:20` sets it `false` in `init()` and never restores;
+  `internal_api_auth_integration_test.go` cleanup restores only `UsingSQLite`.
+- `common.QuotaForNewUser`, `common.BatchUpdateEnabled`, `common.LogConsumeEnabled`
+  — several setters with **no restore** in cleanup (state leaks across tests).
+- `common.UsingSQLite/UsingPostgreSQL`, `common.DebugEnabled` — mostly restored.
+- Singletons reset by tests: hub `once`/`instance` (`app/hub/smart_routing_test.go`),
+  `quotaThresholdsCacheOnce` (`app/quota_threshold_test.go`).
+
+**Re-block criteria** (do NOT re-block on a single green run — that was the
+#5→#7 mistake):
+1. For each remaining global, either guard it like slog (`atomic`/`RWMutex`) or
+   ensure no detached goroutine reads it after a test resets it (gate the spawn,
+   or drain the goroutine before cleanup). Add missing restores.
+2. Push with `race` still report-only; re-run the `race` job **repeatedly**
+   (≥8–10 green runs, ideally on a loaded runner) to gauge the intermittent tail.
+3. Only then remove `continue-on-error` in `.github/workflows/go-ci.yml`.
+   `-race` needs gcc (absent on the dev host) → CI is the only enforcer.
