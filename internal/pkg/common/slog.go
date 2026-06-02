@@ -238,8 +238,10 @@ func (h *customHandler) WithGroup(name string) slog.Handler {
 	}
 }
 
-// InitSlog initializes the global slog logger with the given config
-func InitSlog(cfg *SlogConfig) {
+// InitSlog initializes the global slog logger with the given config and
+// returns it, so lazy callers can use the freshly-created (local, non-nil)
+// pointer without a second atomic load that a concurrent reset could nil.
+func InitSlog(cfg *SlogConfig) *slog.Logger {
 	if cfg == nil {
 		cfg = DefaultSlogConfig()
 	}
@@ -276,21 +278,26 @@ func InitSlog(cfg *SlogConfig) {
 	l := slog.New(handler)
 	slogLogger.Store(l)
 	slog.SetDefault(l)
+	return l
 }
 
-// ensureSlogInit lazily initializes the slog logger if unset. InitSlog
-// serializes on slogMu and is idempotent, so a rare double-init from two
-// concurrent first-callers is harmless (the second Store wins).
-func ensureSlogInit() {
-	if slogLogger.Load() == nil {
-		InitSlog(nil)
+// ensureSlogInit returns the live logger, lazily initializing it if unset.
+// It returns the pointer (rather than leaving callers to Load() again) so each
+// log call uses ONE captured, non-nil logger — closing the nil-deref window
+// where a concurrent slogLogger.Store(nil) (tests) between an ensure and a
+// separate Load() would panic, and halving the atomic loads on the hot path.
+// InitSlog serializes on slogMu and is idempotent; a rare double-init from two
+// concurrent first-callers is harmless (both build an identical default logger).
+func ensureSlogInit() *slog.Logger {
+	if l := slogLogger.Load(); l != nil {
+		return l
 	}
+	return InitSlog(nil)
 }
 
 // GetSlogLogger returns the global slog logger
 func GetSlogLogger() *slog.Logger {
-	ensureSlogInit()
-	return slogLogger.Load()
+	return ensureSlogInit()
 }
 
 // SetSlogLevel dynamically sets the log level
@@ -317,20 +324,17 @@ func SetSlogErrWriter(w io.Writer) {
 
 // LogInfo logs an info message with optional key-value pairs
 func LogInfo(ctx context.Context, msg string, args ...any) {
-	ensureSlogInit()
-	slogLogger.Load().InfoContext(ctx, msg, args...)
+	ensureSlogInit().InfoContext(ctx, msg, args...)
 }
 
 // LogWarn logs a warning message with optional key-value pairs
 func LogWarn(ctx context.Context, msg string, args ...any) {
-	ensureSlogInit()
-	slogLogger.Load().WarnContext(ctx, msg, args...)
+	ensureSlogInit().WarnContext(ctx, msg, args...)
 }
 
 // LogError logs an error message with optional key-value pairs
 func LogError(ctx context.Context, msg string, args ...any) {
-	ensureSlogInit()
-	slogLogger.Load().ErrorContext(ctx, msg, args...)
+	ensureSlogInit().ErrorContext(ctx, msg, args...)
 }
 
 // LogDebug logs a debug message with optional key-value pairs
@@ -338,19 +342,18 @@ func LogDebug(ctx context.Context, msg string, args ...any) {
 	if !DebugEnabled {
 		return
 	}
-	ensureSlogInit()
-	slogLogger.Load().DebugContext(ctx, msg, args...)
+	ensureSlogInit().DebugContext(ctx, msg, args...)
 }
 
 // LogWithSource logs a message with source file information
 func LogWithSource(ctx context.Context, level slog.Level, msg string, args ...any) {
-	ensureSlogInit()
+	l := ensureSlogInit()
 	// Get caller information
 	_, file, line, ok := runtime.Caller(1)
 	if ok {
 		args = append(args, "source", fmt.Sprintf("%s:%d", file, line))
 	}
-	slogLogger.Load().Log(ctx, level, msg, args...)
+	l.Log(ctx, level, msg, args...)
 }
 
 // Helper functions for common patterns
