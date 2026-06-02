@@ -183,6 +183,7 @@ func TestProvision_Reprovision_SelfHealsLink(t *testing.T) {
 		UserId: u.Id, TenantId: "default", Name: "seed",
 		Key:    "selfheal-key-0000000000000000000000000000000",
 		Status: common.TokenStatusEnabled, ExpiredTime: -1, IdentityAccountID: 0,
+		RemainQuota: 500, UnlimitedQuota: false, // capped, not-yet-linked token
 	}).Error; err != nil {
 		t.Fatalf("seed token: %v", err)
 	}
@@ -213,8 +214,14 @@ func TestProvision_Reprovision_SelfHealsLink(t *testing.T) {
 		t.Errorf("self-heal linked wrong user: got %d want %d", healed.Id, u.Id)
 	}
 	tokens, _ := repo.GetAllUserTokens(u.Id, 0, 10)
-	if len(tokens) == 0 || tokens[0].IdentityAccountID != accountID {
-		t.Errorf("token not backfilled: %+v", tokens)
+	if len(tokens) == 0 {
+		t.Fatal("expected the seeded token to survive self-heal")
+	}
+	if tokens[0].IdentityAccountID != accountID {
+		t.Errorf("token identity_account_id not backfilled: got %d want %d", tokens[0].IdentityAccountID, accountID)
+	}
+	if !tokens[0].UnlimitedQuota {
+		t.Errorf("self-healed linked token must have UnlimitedQuota=true (else wallet-debited AND token-capped at RemainQuota); got false")
 	}
 }
 
@@ -269,5 +276,54 @@ func TestProvision_CreateRace_ReturnsWinner(t *testing.T) {
 	repo.DB.Model(&repo.User{}).Where("lurus_account_id = ?", accountID).Count(&count)
 	if count != 1 {
 		t.Errorf("expected exactly 1 user linked to account %d, got %d", accountID, count)
+	}
+}
+
+// TestProvision_CreateRace_CrossTenant_NoLeak: when the SAME platform account is
+// already linked to a user in tenant "corp-a", provisioning the same sub under a
+// DIFFERENT tenant "corp-b" hits the GLOBAL unique index on users.lurus_account_id.
+// The race winner must NOT be corp-a's user — returning it would leak corp-a's
+// identity to corp-b and misroute corp-b's spend to corp-a's wallet. The tenant
+// guard makes provisionRaceWinner find no winner, so the create error surfaces
+// honestly instead of a false idempotent 200.
+func TestProvision_CreateRace_CrossTenant_NoLeak(t *testing.T) {
+	router, cleanup := SetupIntegrationRouter(t)
+	t.Cleanup(cleanup)
+
+	const sub = "zsub-xtenant-1"
+	const accountID int64 = 12321
+
+	winnerA := &repo.User{
+		Username: "corp_a_winner", TenantId: "corp-a", Email: "a@test.local",
+		Role: common.RoleCommonUser, Status: common.UserStatusEnabled, Group: "default",
+		LurusAccountID: ptrAccount(accountID),
+	}
+	if err := repo.DB.Create(winnerA).Error; err != nil {
+		t.Fatalf("seed corp-a winner: %v", err)
+	}
+
+	stubResolver(t, func(_ context.Context, s string) (*common.IdentityMapping, error) {
+		return &common.IdentityMapping{ID: accountID, ZitadelSub: s}, nil
+	})
+
+	w := internalRequest(router, "POST", "/internal/user/provision", map[string]interface{}{
+		"zitadel_sub": sub,
+		"email":       "b@test.local",
+		"tenant_id":   "corp-b",
+	}, authHeaders())
+
+	// Critical property: must NOT be a false idempotent 200 carrying corp-a's user.
+	if w.Code == http.StatusOK {
+		t.Fatalf("cross-tenant account collision must NOT return 200 (cross-tenant leak); body: %s", w.Body.String())
+	}
+	resp := parseResponse(t, w)
+	if resp["data"] != nil {
+		t.Errorf("error response must carry no user identity across tenants, got data=%v", resp["data"])
+	}
+	// corp-a stays the sole holder of the account; no corp-b user got linked.
+	var linked int64
+	repo.DB.Model(&repo.User{}).Where("lurus_account_id = ?", accountID).Count(&linked)
+	if linked != 1 {
+		t.Errorf("expected exactly 1 (corp-a) user linked to account %d, got %d", accountID, linked)
 	}
 }

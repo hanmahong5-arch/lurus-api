@@ -579,9 +579,13 @@ func backfillUserAccountLink(userID int, accountID int64) error {
 			Update("lurus_account_id", accountID).Error; err != nil {
 			return err
 		}
+		// Set unlimited_quota too, matching the fresh-provision linked-token path
+		// (the commit invariant "linked tokens get UnlimitedQuota=true"). Without
+		// it a self-healed token keeps its local RemainQuota cap, so a wallet-funded
+		// user is both wallet-debited AND 402-stranded once that cap drains.
 		return tx.Model(&repo.Token{}).
 			Where("user_id = ? AND (identity_account_id = 0 OR identity_account_id IS NULL)", userID).
-			Update("identity_account_id", accountID).Error
+			Updates(map[string]interface{}{"identity_account_id": accountID, "unlimited_quota": true}).Error
 	})
 }
 
@@ -592,7 +596,15 @@ func backfillUserAccountLink(userID int, accountID int64) error {
 // i.e. the create failure was not a race and should surface as an error.
 func provisionRaceWinner(zitadelSub, tenantID string, accountID int64) (*repo.User, *repo.UserIdentityMapping) {
 	if accountID > 0 {
-		if u, err := repo.GetUserByLurusAccountID(accountID); err == nil && u != nil {
+		// The unique index on users.lurus_account_id is GLOBAL (cross-tenant), so
+		// GetUserByLurusAccountID (which bypasses tenant isolation) can return a
+		// user from a DIFFERENT tenant. Only accept it as our race winner when the
+		// tenant matches — a cross-tenant account collision is NOT our race, and
+		// returning it would leak another tenant's user identity and misroute that
+		// user's LLM spend to the foreign account's wallet. On mismatch, fall
+		// through to the tenant-scoped sub probe (which finds nothing), so the
+		// create error surfaces instead of a false idempotent success.
+		if u, err := repo.GetUserByLurusAccountID(accountID); err == nil && u != nil && u.TenantId == tenantID {
 			_, m, _ := repo.GetUserByZitadelID(zitadelSub, tenantID)
 			return u, m
 		}
