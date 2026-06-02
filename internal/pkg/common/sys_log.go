@@ -18,7 +18,7 @@ func SysLog(s string) {
 	t := time.Now()
 	_, _ = fmt.Fprintf(gin.DefaultWriter, "[SYS] %v | %s \n", t.Format("2006/01/02 - 15:04:05"), s)
 	// Also log to slog for structured logging
-	slogLogger.Info(s, "source", "system")
+	slogLogger.Load().Info(s, "source", "system")
 }
 
 // SysError logs a system-level error message
@@ -29,7 +29,7 @@ func SysError(s string) {
 	t := time.Now()
 	_, _ = fmt.Fprintf(gin.DefaultErrorWriter, "[SYS] %v | %s \n", t.Format("2006/01/02 - 15:04:05"), s)
 	// Also log to slog for structured logging
-	slogLogger.Error(s, "source", "system")
+	slogLogger.Load().Error(s, "source", "system")
 }
 
 // FatalLog logs a fatal message and exits the program
@@ -39,7 +39,7 @@ func FatalLog(v ...any) {
 	msg := fmt.Sprint(v...)
 	_, _ = fmt.Fprintf(gin.DefaultErrorWriter, "[FATAL] %v | %v \n", t.Format("2006/01/02 - 15:04:05"), msg)
 	// Also log to slog for structured logging
-	slogLogger.Log(context.Background(), slog.LevelError+4, msg, "source", "fatal")
+	slogLogger.Load().Log(context.Background(), slog.LevelError+4, msg, "source", "fatal")
 	os.Exit(1)
 }
 

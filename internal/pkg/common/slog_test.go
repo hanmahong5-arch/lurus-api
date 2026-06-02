@@ -10,20 +10,18 @@ import (
 )
 
 func TestInitSlog_DefaultConfig(t *testing.T) {
-	// Reset slogOnce for testing
-	slogOnce = sync.Once{}
-	slogLogger = nil
+	// Reset slog state for testing
+	slogLogger.Store(nil)
 
 	InitSlog(nil)
 
-	if slogLogger == nil {
+	if slogLogger.Load() == nil {
 		t.Error("slogLogger should not be nil after InitSlog")
 	}
 }
 
 func TestInitSlog_CustomConfig(t *testing.T) {
-	slogOnce = sync.Once{}
-	slogLogger = nil
+	slogLogger.Store(nil)
 
 	buf := &bytes.Buffer{}
 	cfg := &SlogConfig{
@@ -37,14 +35,13 @@ func TestInitSlog_CustomConfig(t *testing.T) {
 
 	InitSlog(cfg)
 
-	if slogLogger == nil {
+	if slogLogger.Load() == nil {
 		t.Error("slogLogger should not be nil after InitSlog with custom config")
 	}
 }
 
 func TestInitSlog_JSONFormat(t *testing.T) {
-	slogOnce = sync.Once{}
-	slogLogger = nil
+	slogLogger.Store(nil)
 
 	buf := &bytes.Buffer{}
 	cfg := &SlogConfig{
@@ -56,14 +53,13 @@ func TestInitSlog_JSONFormat(t *testing.T) {
 
 	InitSlog(cfg)
 
-	if slogLogger == nil {
+	if slogLogger.Load() == nil {
 		t.Error("slogLogger should not be nil after InitSlog with JSON format")
 	}
 }
 
 func TestGetSlogLogger(t *testing.T) {
-	slogOnce = sync.Once{}
-	slogLogger = nil
+	slogLogger.Store(nil)
 
 	logger := GetSlogLogger()
 	if logger == nil {
@@ -78,8 +74,7 @@ func TestGetSlogLogger(t *testing.T) {
 }
 
 func TestSetSlogLevel(t *testing.T) {
-	slogOnce = sync.Once{}
-	slogLogger = nil
+	slogLogger.Store(nil)
 
 	InitSlog(nil)
 
@@ -91,8 +86,7 @@ func TestSetSlogLevel(t *testing.T) {
 }
 
 func TestLogInfo(t *testing.T) {
-	slogOnce = sync.Once{}
-	slogLogger = nil
+	slogLogger.Store(nil)
 
 	buf := &bytes.Buffer{}
 	cfg := &SlogConfig{
@@ -115,8 +109,7 @@ func TestLogInfo(t *testing.T) {
 }
 
 func TestLogError(t *testing.T) {
-	slogOnce = sync.Once{}
-	slogLogger = nil
+	slogLogger.Store(nil)
 
 	buf := &bytes.Buffer{}
 	cfg := &SlogConfig{
@@ -139,8 +132,7 @@ func TestLogError(t *testing.T) {
 }
 
 func TestLogWarn(t *testing.T) {
-	slogOnce = sync.Once{}
-	slogLogger = nil
+	slogLogger.Store(nil)
 
 	buf := &bytes.Buffer{}
 	cfg := &SlogConfig{
@@ -163,8 +155,7 @@ func TestLogWarn(t *testing.T) {
 }
 
 func TestLogDebug_Enabled(t *testing.T) {
-	slogOnce = sync.Once{}
-	slogLogger = nil
+	slogLogger.Store(nil)
 
 	buf := &bytes.Buffer{}
 	cfg := &SlogConfig{
@@ -189,8 +180,7 @@ func TestLogDebug_Enabled(t *testing.T) {
 }
 
 func TestLogDebug_Disabled(t *testing.T) {
-	slogOnce = sync.Once{}
-	slogLogger = nil
+	slogLogger.Store(nil)
 
 	buf := &bytes.Buffer{}
 	cfg := &SlogConfig{
@@ -215,8 +205,7 @@ func TestLogDebug_Disabled(t *testing.T) {
 }
 
 func TestLogWithContext_RequestID(t *testing.T) {
-	slogOnce = sync.Once{}
-	slogLogger = nil
+	slogLogger.Store(nil)
 
 	buf := &bytes.Buffer{}
 	cfg := &SlogConfig{
@@ -236,8 +225,7 @@ func TestLogWithContext_RequestID(t *testing.T) {
 }
 
 func TestLogInfof(t *testing.T) {
-	slogOnce = sync.Once{}
-	slogLogger = nil
+	slogLogger.Store(nil)
 
 	buf := &bytes.Buffer{}
 	cfg := &SlogConfig{
@@ -257,8 +245,7 @@ func TestLogInfof(t *testing.T) {
 }
 
 func TestLogErrorf(t *testing.T) {
-	slogOnce = sync.Once{}
-	slogLogger = nil
+	slogLogger.Store(nil)
 
 	buf := &bytes.Buffer{}
 	cfg := &SlogConfig{
@@ -287,8 +274,7 @@ func TestWithRequestID(t *testing.T) {
 }
 
 func TestTimer(t *testing.T) {
-	slogOnce = sync.Once{}
-	slogLogger = nil
+	slogLogger.Store(nil)
 
 	buf := &bytes.Buffer{}
 	cfg := &SlogConfig{
@@ -365,8 +351,7 @@ func TestSetSlogErrWriter(t *testing.T) {
 }
 
 func TestConcurrentLogging(t *testing.T) {
-	slogOnce = sync.Once{}
-	slogLogger = nil
+	slogLogger.Store(nil)
 
 	buf := &bytes.Buffer{}
 	cfg := &SlogConfig{
