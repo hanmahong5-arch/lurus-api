@@ -10,8 +10,10 @@ After the hardening PRs **#1** (`harden/ci-deploy-quality-2026-05-31`) and **#2*
 green again **without hiding any finding** — each failing gate was ratcheted to
 report-only with a tracked follow-up, the same pattern the repo already uses for
 `bun audit` (informational `continue-on-error` until a cleanup PR ratchets it
-back). This document records the root causes and the two real follow-ups so they
-can be fixed + verified efficiently by whoever has the right environment.
+back). This document records the root causes and the two follow-ups — **both now
+RESOLVED (2026-06-01): the data races in PR #5, the CVE bumps in PR #6** — with
+the per-failure updates below carrying the details. All four quality gates
+(coverage, lint, race, Trivy) are now BLOCKING and green on `main`.
 
 Honesty notes (per CLAUDE.md §4.1):
 - The data races below are **real** (the race detector is independent of the
@@ -103,7 +105,14 @@ only manifests because tests rewrite shared process state.
 
 ---
 
-## Failure 2 — Build: Trivy found 9 fixable HIGH/CRITICAL CVEs (report-only)
+## Failure 2 — Build: Trivy found 9 fixable HIGH/CRITICAL CVEs → **RESOLVED in PR #6**
+
+> **Update (PR #6, merge `3c13c81b`)**: all 9 CVEs cleared and Trivy is back to
+> **blocking** (`exit-code: '1'`, CI Build job green). pgx → **5.9.2** (the fix
+> landed in 5.9.2, not the 5.9.0 in the table below that Trivy first reported),
+> otel family → 1.43.0, grpc → 1.79.3, and `apt-get upgrade -y` in the Dockerfile
+> pulls libgnutls30 deb12u7 (also busts the stale GHA apt-layer cache). Original
+> diagnosis kept below for the record.
 
 The image scan added in PR #1 (`severity HIGH,CRITICAL`, `ignore-unfixed: true`,
 `exit-code: 1`) tripped on fixable CVEs, which also blocked image publication.
