@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -16,12 +17,15 @@ import (
 
 // Global slog logger instance
 var (
-	slogLogger     *slog.Logger
-	slogOnce       sync.Once
-	slogLevel      = new(slog.LevelVar) // Dynamic log level
-	slogWriter     io.Writer
-	slogErrWriter  io.Writer
-	slogMu         sync.RWMutex
+	// slogLogger is an atomic.Pointer so every read (each LogXxx and the
+	// SysError/SysLog path, including detached goroutines) is race-free with a
+	// test that resets it. Replaces the old `*slog.Logger` + `sync.Once`, whose
+	// raw reassignment in tests raced ensureSlogInit's read (a -race finding).
+	slogLogger    atomic.Pointer[slog.Logger]
+	slogLevel     = new(slog.LevelVar) // Dynamic log level
+	slogWriter    io.Writer
+	slogErrWriter io.Writer
+	slogMu        sync.RWMutex
 )
 
 // SlogConfig holds configuration for the slog logger
@@ -269,23 +273,24 @@ func InitSlog(cfg *SlogConfig) {
 		}
 	}
 
-	slogLogger = slog.New(handler)
-	slog.SetDefault(slogLogger)
+	l := slog.New(handler)
+	slogLogger.Store(l)
+	slog.SetDefault(l)
 }
 
-// ensureSlogInit ensures the slog logger is initialized
+// ensureSlogInit lazily initializes the slog logger if unset. InitSlog
+// serializes on slogMu and is idempotent, so a rare double-init from two
+// concurrent first-callers is harmless (the second Store wins).
 func ensureSlogInit() {
-	slogOnce.Do(func() {
-		if slogLogger == nil {
-			InitSlog(nil)
-		}
-	})
+	if slogLogger.Load() == nil {
+		InitSlog(nil)
+	}
 }
 
 // GetSlogLogger returns the global slog logger
 func GetSlogLogger() *slog.Logger {
 	ensureSlogInit()
-	return slogLogger
+	return slogLogger.Load()
 }
 
 // SetSlogLevel dynamically sets the log level
@@ -313,19 +318,19 @@ func SetSlogErrWriter(w io.Writer) {
 // LogInfo logs an info message with optional key-value pairs
 func LogInfo(ctx context.Context, msg string, args ...any) {
 	ensureSlogInit()
-	slogLogger.InfoContext(ctx, msg, args...)
+	slogLogger.Load().InfoContext(ctx, msg, args...)
 }
 
 // LogWarn logs a warning message with optional key-value pairs
 func LogWarn(ctx context.Context, msg string, args ...any) {
 	ensureSlogInit()
-	slogLogger.WarnContext(ctx, msg, args...)
+	slogLogger.Load().WarnContext(ctx, msg, args...)
 }
 
 // LogError logs an error message with optional key-value pairs
 func LogError(ctx context.Context, msg string, args ...any) {
 	ensureSlogInit()
-	slogLogger.ErrorContext(ctx, msg, args...)
+	slogLogger.Load().ErrorContext(ctx, msg, args...)
 }
 
 // LogDebug logs a debug message with optional key-value pairs
@@ -334,7 +339,7 @@ func LogDebug(ctx context.Context, msg string, args ...any) {
 		return
 	}
 	ensureSlogInit()
-	slogLogger.DebugContext(ctx, msg, args...)
+	slogLogger.Load().DebugContext(ctx, msg, args...)
 }
 
 // LogWithSource logs a message with source file information
@@ -345,7 +350,7 @@ func LogWithSource(ctx context.Context, level slog.Level, msg string, args ...an
 	if ok {
 		args = append(args, "source", fmt.Sprintf("%s:%d", file, line))
 	}
-	slogLogger.Log(ctx, level, msg, args...)
+	slogLogger.Load().Log(ctx, level, msg, args...)
 }
 
 // Helper functions for common patterns
