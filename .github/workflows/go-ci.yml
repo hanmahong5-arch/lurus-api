@@ -315,18 +315,20 @@ jobs:
   race:
     name: go test -race (short, hermetic)
     runs-on: ubuntu-latest
-    # REPORT-ONLY. The slog cross-test race this comment used to describe
-    # (TestMustGo's leaked goroutine logging via SysError -> ensureSlogInit while
-    # TestInitSlog reset the slog globals) was FIXED in PR #8: slogLogger is now an
-    # atomic.Pointer and slogOnce is gone. The gate stays report-only because a
-    # WIDER test-isolation surface remains — other tests reset process globals
-    # (repo.DB, common.RedisEnabled with missing restores, hub/quota singletons);
-    # see doc/audit/2026-06-01-ci-red-diagnosis-and-followups.md for the census +
-    # re-block criteria. -race can't run on the gcc-less dev host, so the remaining
-    # races can only be verified by REPEATED CI runs. Re-block (remove
-    # continue-on-error) only AFTER the documented sweep AND many consecutive green
-    # runs — NOT on a single green run (that premature move was #5, reverted in #7).
-    continue-on-error: true
+    # BLOCKING (re-blocked 2026-06-03). History: -race surfaced pre-existing data
+    # races — PR #5 fixed 3 deterministic clusters and re-blocked; PR #7 reverted to
+    # report-only after an intermittent slog cross-test race; PR #8 fixed that
+    # (slogLogger is now atomic.Pointer; slogOnce gone). Re-block evidence (per the
+    # "many consecutive green runs" arm of the criteria, not a single run — that was
+    # the #5->#7 mistake): a -count=10 full-suite stress run found 0 DATA RACE
+    # warnings across 10 iterations, plus repeated green -count=1 runs. The census's
+    # remaining "wider surface" (repo.DB / RedisEnabled resets, hub/quota singletons)
+    # proved theoretical under -race — e.g. GetUserCache's cache-refresh spawn is
+    # gated by shouldUpdateRedis (RedisEnabled read on the caller's goroutine), so it
+    # never fires when tests disable Redis. See the audit doc for the full evidence.
+    # -race needs gcc (absent on the dev host) -> CI is the sole enforcer; if an
+    # intermittent race resurfaces, capture the stack and fix it — do not silently
+    # revert to report-only.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4

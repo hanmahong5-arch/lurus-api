@@ -206,3 +206,55 @@ sequential-safe but race any leaked goroutine that reads the same global):
    (≥8–10 green runs, ideally on a loaded runner) to gauge the intermittent tail.
 3. Only then remove `continue-on-error` in `.github/workflows/go-ci.yml`.
    `-race` needs gcc (absent on the dev host) → CI is the only enforcer.
+
+---
+
+## Resolution — `race` gate re-blocked (2026-06-03)
+
+The `race` gate is back to **BLOCKING** (`continue-on-error` removed from
+`.github/workflows/go-ci.yml`). This took the **"many consecutive green runs"**
+arm of the re-block criteria above, **not** the speculative global-state sweep —
+deliberately, for two reasons:
+
+1. **The census overcounts the live race surface.** The "remaining surface" list
+   above is a *static* census of globals that detached goroutines *could* read.
+   Inspection shows the headline one does not race in tests: `GetUserCache`'s
+   cache-refresh `gopool.Go` spawn is gated by `shouldUpdateRedis` (utils.go),
+   which reads `common.RedisEnabled` **on the caller's goroutine before
+   spawning** — so when a test disables Redis (the default), the goroutine is
+   never started and never reads the global. The broadest *actual* class (every
+   detached goroutine logging via `ensureSlogInit`) was already fixed in PR #8.
+2. **Speculative edits to billing-core globals (`repo.DB`, quota cache,
+   `RedisEnabled`) risk colliding with the in-flight money-path work** — the same
+   hazard this doc flagged for PR #3. A measured re-block beats a risky rewrite.
+
+### Evidence (CI only — `-race` needs gcc, absent on the dev host)
+- **`-count=10` full-suite stress run**: `go test -short -race -count=10 ./...` —
+  **0 `DATA RACE` warnings across all 10 iterations** of the whole `-short` suite.
+  This is ~10× the race-detector exposure of the normal `-count=1` gate.
+- **6 green `-count=1` runs in the blocking config** (the gate's real command),
+  across distinct CI attempts — the re-block PR's push-triggered `race` job plus
+  5 genuine re-runs (distinct job ids), all `success`, 0 races.
+- Corroborated by PR #10's `race` job (clean `-count=1`).
+
+Total: ~17 race-clean full-suite executions (10 stress iterations + 7 `-count=1`
+runs), 0 `DATA RACE` — comfortably past the ≥8–10 bar.
+
+A single green run was explicitly avoided (that was the #5→#7 mistake). If an
+intermittent race resurfaces, the response is to capture the `-race` stack and
+fix that specific site — **not** to silently revert to report-only.
+
+### Side finding — tests that are not `-count`-safe (NOT races, NOT gate-blocking)
+The `-count=10` stress run surfaced test **failures** (not data races) in tests
+that share package-level / process-global state across `-count` iterations and
+never reset it:
+- `internal/app`: `TestCheckNotificationLimit_Memory*` (in-memory limiter store).
+- `internal/pkg/metrics`: `TestRecordChannelError`, `TestRecordQuotaConsumed`,
+  `TestRecordRelayRequest`, `TestRecordTokens` (global Prometheus counters
+  accumulate across iterations → exact-count asserts fail).
+- `internal/pkg/pool`: `TestPoolExhaustedRejections`; and `TestBillingDebitAmountCNY`.
+
+These pass at `-count=1` (the gate's config), so they do **not** block the
+re-block. They are a separate test-hygiene follow-up (reset the shared store /
+use a fresh registry per test) — tracked, not fixed here, to keep the re-block
+surgical. Do not bump the gate to `-count>1` until they are made count-safe.
