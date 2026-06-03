@@ -64,6 +64,7 @@ func enforceTenantQuota(tenantID string, preConsumedQuota int) *types.NewAPIErro
 			http.StatusPaymentRequired,
 			types.ErrOptionWithSkipRetry(),
 			types.ErrOptionWithNoRecordErrorLog(),
+			types.ErrOptionWithUpgradeURL(),
 		)
 		// Hint clients when the monthly quota window resets (next month UTC start),
 		// surfaced as Retry-After by the relay error responder.

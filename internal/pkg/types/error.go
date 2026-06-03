@@ -11,6 +11,13 @@ import (
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 )
 
+const (
+	// walletTopupPath is the relative path appended to IdentityPublicURL for wallet top-up.
+	walletTopupPath = "/wallet/topup"
+	// pricingPath is the relative path appended to IdentityPublicURL for plan upgrade.
+	pricingPath = "/pricing"
+)
+
 type OpenAIError struct {
 	Message  string          `json:"message"`
 	Type     string          `json:"type"`
@@ -187,6 +194,14 @@ func (e *NewAPIError) ToOpenAIError() OpenAIError {
 			Param:   "",
 			Code:    e.errorCode,
 		}
+	}
+	// Forward structured Metadata (e.g. {"topup_url":...} on a 402) to the
+	// client envelope. The switch above only carries it for the upstream
+	// OpenAIError case; new_api_error / claude_error errors set it via
+	// ErrOptionWithTopupURL/UpgradeURL and would otherwise lose it here.
+	// Metadata is not run through MaskSensitiveInfo, so the URL survives.
+	if len(e.Metadata) > 0 {
+		result.Metadata = e.Metadata
 	}
 	if e.errorCode != ErrorCodeCountTokenFailed {
 		result.Message = common.MaskSensitiveInfo(result.Message)
@@ -430,4 +445,29 @@ func IsRecordErrorLog(e *NewAPIError) bool {
 		return true
 	}
 	return *e.recordErrorLog
+}
+
+// ErrOptionWithTopupURL attaches a {"topup_url": ...} JSON object to the error
+// Metadata so the client can navigate directly to the wallet top-up page.
+// Used for per-user balance exhaustion (HTTP 402).
+// Note: types imports common — no import cycle.
+func ErrOptionWithTopupURL() NewAPIErrorOptions {
+	return func(e *NewAPIError) {
+		raw, _ := json.Marshal(map[string]string{
+			"topup_url": common.IdentityPublicURL + walletTopupPath,
+		})
+		e.Metadata = json.RawMessage(raw)
+	}
+}
+
+// ErrOptionWithUpgradeURL attaches a {"upgrade_url": ...} JSON object to the error
+// Metadata so the client can navigate to the plan pricing page.
+// Used for tenant monthly-cap exhaustion (HTTP 402).
+func ErrOptionWithUpgradeURL() NewAPIErrorOptions {
+	return func(e *NewAPIError) {
+		raw, _ := json.Marshal(map[string]string{
+			"upgrade_url": common.IdentityPublicURL + pricingPath,
+		})
+		e.Metadata = json.RawMessage(raw)
+	}
 }

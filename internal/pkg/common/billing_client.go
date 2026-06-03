@@ -8,13 +8,35 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sync/atomic"
 	"time"
 )
 
-// BillingUnifiedEnabled controls whether the pre-authorize billing path is active.
-// When true and IdentityAccountID > 0, relay requests use freeze/settle/release.
-// When false, the legacy fire-and-forget DebitWallet path is used.
-var BillingUnifiedEnabled = os.Getenv("BILLING_UNIFIED_ENABLED") == "true"
+// billingUnifiedEnabled is an atomic flag controlling the pre-authorize billing path.
+// Use BillingUnifiedEnabled() to read and SetBillingUnifiedEnabled() to write.
+// 1 = enabled, 0 = disabled (default).
+var billingUnifiedEnabled int32
+
+// BillingUnifiedEnabled reports whether the unified billing path (freeze/settle/release)
+// is active. Safe for concurrent use without a lock.
+func BillingUnifiedEnabled() bool {
+	return atomic.LoadInt32(&billingUnifiedEnabled) == 1
+}
+
+// SetBillingUnifiedEnabled updates the unified-billing flag atomically.
+// Called at init time (from env) and by the platform config poller.
+func SetBillingUnifiedEnabled(v bool) {
+	var n int32
+	if v {
+		n = 1
+	}
+	atomic.StoreInt32(&billingUnifiedEnabled, n)
+}
+
+func init() {
+	// Preserve backward compat: BILLING_UNIFIED_ENABLED=true starts the flag ON.
+	SetBillingUnifiedEnabled(os.Getenv("BILLING_UNIFIED_ENABLED") == "true")
+}
 
 // PreAuthResult holds the response from a wallet pre-authorization call.
 type PreAuthResult struct {

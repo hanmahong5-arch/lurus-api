@@ -71,7 +71,7 @@ func PreConsumeQuota(c *gin.Context, preConsumedQuota int, relayInfo *relaycommo
 	if relayInfo.PlatformPreAuthID > 0 {
 		// Already pre-authorized — skip platform call, continue to local quota check
 		logger.LogInfo(c, fmt.Sprintf("skipping re-entry PreAuthorize, existing preAuthID=%d", relayInfo.PlatformPreAuthID))
-	} else if common.BillingUnifiedEnabled && relayInfo.IdentityAccountID > 0 && preConsumedQuota > 0 {
+	} else if common.BillingUnifiedEnabled() && relayInfo.IdentityAccountID > 0 && preConsumedQuota > 0 {
 		if apiErr := platformPreAuthorize(c, preConsumedQuota, relayInfo); apiErr != nil {
 			return apiErr
 		}
@@ -91,7 +91,8 @@ func PreConsumeQuota(c *gin.Context, preConsumedQuota int, relayInfo *relaycommo
 			fmt.Errorf("insufficient quota: available %s, required %s",
 				logger.FormatQuota(userQuota), logger.FormatQuota(preConsumedQuota)),
 			types.ErrorCodeInsufficientUserQuota, http.StatusPaymentRequired,
-			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog(),
+			types.ErrOptionWithTopupURL())
 	}
 
 	// Tenant monthly quota enforcement (runs after user-level check).
@@ -155,7 +156,8 @@ func platformPreAuthorize(c *gin.Context, estimatedQuota int, relayInfo *relayco
 		return types.NewErrorWithStatusCode(
 			fmt.Errorf("insufficient balance or billing service unavailable"),
 			types.ErrorCodeInsufficientUserQuota, http.StatusPaymentRequired,
-			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog(),
+			types.ErrOptionWithTopupURL())
 	}
 
 	relayInfo.PlatformPreAuthID = result.PreAuthID

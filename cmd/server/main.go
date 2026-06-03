@@ -226,8 +226,13 @@ func run(ctx context.Context, startTime time.Time) error {
 		})
 	}
 
+	// Background task: poll platform billing-config endpoint every 30s so the
+	// unified-billing toggle can be flipped from the platform console at runtime
+	// without a pod restart.  No-op when IDENTITY_SERVICE_URL is unset.
+	common.StartBillingConfigPoller(ctx)
+
 	// Background task: billing outbox processor (5s ticker)
-	if common.BillingUnifiedEnabled {
+	if common.BillingUnifiedEnabled() {
 		g.Go(func() error {
 			ticker := time.NewTicker(5 * time.Second)
 			defer ticker.Stop()
@@ -537,7 +542,7 @@ func InitResources(ctx context.Context) error {
 	}
 
 	// Initialize billing outbox (pre-auth settlement retry queue)
-	if common.BillingUnifiedEnabled {
+	if common.BillingUnifiedEnabled() {
 		if err := app.InitBillingOutbox(repo.DB); err != nil {
 			common.SysError(fmt.Sprintf("Failed to initialize billing outbox: %v", err))
 		} else {
