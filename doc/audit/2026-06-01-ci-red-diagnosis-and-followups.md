@@ -258,3 +258,47 @@ These pass at `-count=1` (the gate's config), so they do **not** block the
 re-block. They are a separate test-hygiene follow-up (reset the shared store /
 use a fresh registry per test) — tracked, not fixed here, to keep the re-block
 surgical. Do not bump the gate to `-count>1` until they are made count-safe.
+
+---
+
+## Resolution — `pg-integration` gate added (真 PG / 钱路 e2e) (2026-06-03)
+
+The "真 PG / 钱路 e2e" follow-up tracked above is **DONE** (PR #12, merge
+`887724bb`). A new **BLOCKING** `pg-integration` job in `go-ci.yml` stands up a
+disposable `postgres:16` service, sets `TEST_POSTGRES_DSN`, and runs
+`./internal/adapter/repo/...`.
+
+**Why it mattered.** The ~11 `SetupTestDB`-gated repo integration tests
+(`token_*`, `user_integration_*`, `daily_quota_*`, `tenant_*`,
+`internal_api_key_*`) `t.Skip` without `TEST_POSTGRES_DSN`, so in CI they
+**never ran** and reported a hollow green (§4.1③) — despite covering money-path
+invariants (quota debit/credit atomicity, token validate/expire/exhaust,
+tenant-whitelist auth, daily-reset idempotency). The compensating
+`internal_api_key_scopeall_honesty_test.go` only patched one of them.
+
+**Anti-hollow design.** A `TestIntegrationPGHarness_RealPostgres` sentinel asks
+the server `SELECT version()` (measurement independent of the DSN string we
+passed) and asserts `common.UsingPostgreSQL`; a CI grep step fails the job if the
+sentinel was `SKIP`ped or absent — so a misconfigured DSN that reverts the whole
+suite to all-skip can no longer pass vacuously. Added
+`TestIntegrationUserQuota_ConcurrentDebit_NoLostUpdate` (50 concurrent
+`DecreaseUserQuota` → quota lands at exactly 0) — an invariant SQLite's
+single-writer model can't exercise, so it is meaningful only on real Postgres.
+
+**Evidence (locally reproducible — unlike `-race`, Docker is usable on the dev
+host).** `docker run -p 127.0.0.1:55432:5432 postgres:16-alpine` + DSN exported →
+`go test -short -v ./internal/adapter/repo/...` = **719 PASS / 0 FAIL / 7 SKIP**
+(the 7 are `-short` stress + SQLite-only tests; **zero "TEST_POSTGRES_DSN not
+set" skips** — every PG-gated test ran). Reproduced in CI (PostgreSQL 16.14;
+sentinel + concurrency e2e both PASS; grep guard printed "sentinel confirmed").
+Post-merge `main` CI: all 8 jobs green.
+
+**Scope / safety.** Off `origin/main`, additive only (CI job + 2 test files), **no
+money-path source edits**; the money-path linkage WIP is feature-branch-only and
+not on `main`, so this runs against the stable baseline with zero collision.
+
+### Follow-up (not in PR #12)
+Running the PG-only code paths under `-race` is a separate hardening step: those
+paths were never exercised by the detector before (they always skipped), so
+enabling `-race` on them could surface pre-existing races and should be its own
+investigation rather than coupled to wiring the gate.

@@ -498,3 +498,13 @@ L2 ADR 调研发现 11 条 alert + 15 个 dashboard panel 全用错指标前缀 
 - `8e29a97e` Lane β：entity + **repo atomic race invariant**（20 goroutines × 10 vs pool 50 → 5 ok / 0 negative）+ middleware contract
 
 3 agent timed out 中段，剩余在 main 手工补完。Build/vet/tests 全绿。STAGE drill 与 G1/G2/G3 仍 pending — 不冒充 "done"。
+
+## 2026-06-03 · CI: pg-integration disposable-PG gate (真 PG / 钱路 e2e)
+
+承接 race 闸门 re-block (#11)，闭合审计 doc 里 "真 PG / 钱路 e2e" 这条 deferred followup。
+
+- **病灶**: `internal/adapter/repo` 的 ~11 个集成测试经 `SetupTestDB` 取 PG，无 `TEST_POSTGRES_DSN` 即 `t.Skip` → CI 里从不跑、报空绿（§4.1③ hollow skip）。覆盖钱路不变量（quota 增减原子性、token validate/expire/exhaust、tenant-whitelist auth、daily-reset 幂等）。
+- **修复 (PR #12 `887724bb`, 2 commits)**: go-ci.yml 加 `pg-integration` job — 起 disposable `postgres:16` service、设 DSN、跑 `./internal/adapter/repo/...`。反-hollow 卫士: `TestIntegrationPGHarness_RealPostgres` 哨兵用 `SELECT version()` 证活 PG，grep step 在哨兵被 skip/缺席时 fail job。新增 `TestIntegrationUserQuota_ConcurrentDebit_NoLostUpdate`（仅真 PG 有意义: 50 并发 `DecreaseUserQuota` → quota 恰好落 0）。BLOCKING，非 report-only。
+- **证据（本地实跑，Docker v28.2.2 可用 → 不像 -race 只能靠 CI）**: `docker run postgres:16-alpine` + DSN → **719 PASS / 0 FAIL / 7 SKIP**（7 = `-short` stress + SQLite-only），0 个 "DSN not set" skip。CI 复现绿（PostgreSQL 16.14，哨兵 + 并发 e2e 均 PASS）。merge 后 main CI 全 8 job 绿。
+- **范围**: off `origin/main`，纯增量（CI job + 2 测试文件），**零 money-path 源改动**；money-path linkage WIP 仍只在 feature 分支、不在 main，无冲突。
+- **未做（followup）**: PG-only 路径跑 `-race`（这些路径从未经探测器，可能暴露既存 race，单独硬化）。
