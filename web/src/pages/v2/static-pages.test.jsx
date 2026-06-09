@@ -36,32 +36,8 @@ vi.mock('../../components/hifi/HFShell', () => ({
     ),
 }));
 
-// AccountDisabled uses Semi UI — stub the used components.
-vi.mock('@douyinfe/semi-ui', () => {
-  const Empty = ({ title, description, children }) =>
-    React.createElement(
-      'div',
-      { 'data-testid': 'semi-empty' },
-      title,
-      description,
-      children,
-    );
-  const Button = ({ children, onClick }) =>
-    React.createElement('button', { onClick }, children);
-  const Typography = {
-    Title: ({ children }) => React.createElement('h4', null, children),
-    Text: ({ children }) => React.createElement('span', null, children),
-  };
-  return { Empty, Button, Typography };
-});
-
-// AccountDisabled uses Semi illustrations — stub with empty divs.
-vi.mock('@douyinfe/semi-illustrations', () => ({
-  IllustrationNoAccess: () =>
-    React.createElement('div', { 'data-testid': 'illus' }),
-  IllustrationNoAccessDark: () =>
-    React.createElement('div', { 'data-testid': 'illus-dark' }),
-}));
+// AccountDisabled is hi-fi now (no Semi UI / no illustrations) — nothing to
+// stub for it beyond react-i18next below.
 
 // react-i18next
 vi.mock('react-i18next', () => ({
@@ -101,9 +77,18 @@ describe('AccountDisabled page', () => {
     expect(container.firstChild).toBeTruthy();
   });
 
-  it('contains contact admin CTA', () => {
-    const { getByText } = render(React.createElement(AccountDisabled));
+  it('renders a hi-fi error card with both CTAs and no nav shell', () => {
+    const { getByText, queryByTestId, container } = render(
+      React.createElement(AccountDisabled),
+    );
+    // hi-fi scope is active (the `.hf` root powers --hf-* vars + shared classes)…
+    expect(container.querySelector('.hf')).toBeTruthy();
+    expect(container.querySelector('.btn.primary')).toBeTruthy();
+    // …and a suspended account must NOT mount the nav shell.
+    expect(queryByTestId('hf-shell')).toBeNull();
+    // Both i18n CTAs render (mock t() echoes the key).
     expect(getByText('联系管理员')).toBeTruthy();
+    expect(getByText('切换账号')).toBeTruthy();
   });
 });
 

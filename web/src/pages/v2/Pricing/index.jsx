@@ -17,7 +17,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Spin } from '@douyinfe/semi-ui';
 import HFShell from '../../../components/hifi/HFShell';
 import { API, showError, showSuccess } from '../../../helpers';
 import useFormDraft from '../../../hooks/common/useFormDraft';
@@ -141,233 +140,238 @@ const PricingPage = () => {
       active='pricing'
       crumbs={['平台', '定价管理']}
       actions={
-        <button
-          type='button'
-          className='btn primary'
-          disabled={!isDirty || saving}
-          data-testid='pricing-save'
-          onClick={handleSave}
-        >
-          {saving ? '保存中…' : '保存'}
-        </button>
-      }
-    >
-      <Spin spinning={loading}>
-        <div className='hf-page-head'>
-          <div>
-            <div className='lbl' style={{ marginBottom: 6 }}>
-              定价管理
-            </div>
-            <h1>模型定价</h1>
-            <div className='sub'>供应商成本 · 分组倍率 · 计费类型</div>
-          </div>
-        </div>
-
-        {/* Vendor filter toolbar */}
-        <div
-          style={{
-            padding: '0 24px 12px',
-            display: 'flex',
-            gap: 8,
-            flexWrap: 'wrap',
-          }}
-        >
+        <>
+          {loading && (
+            <span className='muted mono' style={{ fontSize: 11 }}>
+              加载中…
+            </span>
+          )}
           <button
             type='button'
-            className={`btn${!vendorFilter ? ' primary' : ''}`}
-            onClick={() => setVendorFilter('')}
+            className='btn primary'
+            disabled={!isDirty || saving}
+            data-testid='pricing-save'
+            onClick={handleSave}
           >
-            全部
+            {saving ? '保存中…' : '保存'}
           </button>
-          {vendors.map((v) => (
-            <button
-              key={v}
-              type='button'
-              className={`btn${vendorFilter === v ? ' primary' : ''}`}
-              onClick={() => setVendorFilter(v)}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ padding: '0 24px 24px' }}>
-          <div className='panel'>
-            <div
-              style={{
-                padding: '14px 18px',
-                borderBottom: '1px solid var(--hf-rule)',
-                display: 'flex',
-                alignItems: 'baseline',
-              }}
-            >
-              <div className='lbl'>模型列表</div>
-              <span
-                className='muted mono'
-                style={{ fontSize: 10, marginLeft: 'auto' }}
-              >
-                {filteredPricing.length} 个模型
-              </span>
-            </div>
-            <table className='t' data-testid='pricing-table'>
-              <thead>
-                <tr>
-                  <th>模型名称</th>
-                  <th>供应商</th>
-                  <th>计费类型</th>
-                  <th>模型倍率</th>
-                  <th>完成倍率</th>
-                  <th>模型单价</th>
-                  <th>启用分组</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredPricing.map((row, i) => (
-                  <tr key={row.model_name ?? i}>
-                    <td className='strong mono' style={{ fontSize: 12 }}>
-                      {row.model_name}
-                    </td>
-                    <td>{row.vendor ?? '—'}</td>
-                    <td>
-                      <span className='tag'>
-                        {row.quota_type === 1 ? '单价计费' : '倍率计费'}
-                      </span>
-                    </td>
-                    <td>
-                      {row.quota_type === 0 ? (
-                        <input
-                          type='number'
-                          className='field'
-                          step='0.0001'
-                          min='0.0001'
-                          value={
-                            edits[row.model_name]?.model_ratio ??
-                            row.model_ratio ??
-                            ''
-                          }
-                          onChange={(e) =>
-                            handleFieldChange(
-                              row.model_name,
-                              'model_ratio',
-                              e.target.value,
-                            )
-                          }
-                          style={{ width: 90, height: 24, fontSize: 11 }}
-                          data-testid={`field-model_ratio-${row.model_name}`}
-                        />
-                      ) : (
-                        <span className='mono muted'>—</span>
-                      )}
-                    </td>
-                    <td>
-                      {row.quota_type === 0 ? (
-                        <input
-                          type='number'
-                          className='field'
-                          step='0.0001'
-                          min='0.0001'
-                          value={
-                            edits[row.model_name]?.completion_ratio ??
-                            row.completion_ratio ??
-                            ''
-                          }
-                          onChange={(e) =>
-                            handleFieldChange(
-                              row.model_name,
-                              'completion_ratio',
-                              e.target.value,
-                            )
-                          }
-                          style={{ width: 90, height: 24, fontSize: 11 }}
-                          data-testid={`field-completion_ratio-${row.model_name}`}
-                        />
-                      ) : (
-                        <span className='mono muted'>—</span>
-                      )}
-                    </td>
-                    <td>
-                      {row.quota_type === 1 ? (
-                        <input
-                          type='number'
-                          className='field'
-                          step='0.000001'
-                          min='0.000001'
-                          value={
-                            edits[row.model_name]?.model_price ??
-                            row.model_price ??
-                            ''
-                          }
-                          onChange={(e) =>
-                            handleFieldChange(
-                              row.model_name,
-                              'model_price',
-                              e.target.value,
-                            )
-                          }
-                          style={{ width: 90, height: 24, fontSize: 11 }}
-                          data-testid={`field-model_price-${row.model_name}`}
-                        />
-                      ) : (
-                        <span className='mono muted'>—</span>
-                      )}
-                    </td>
-                    <td>
-                      <span className='muted' style={{ fontSize: 11 }}>
-                        {Array.isArray(row.enable_groups)
-                          ? row.enable_groups.join(', ') || '—'
-                          : '—'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-                {filteredPricing.length === 0 && !loading && (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className='muted'
-                      style={{ textAlign: 'center', padding: 24 }}
-                    >
-                      暂无数据
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+        </>
+      }
+    >
+      <div className='hf-page-head'>
+        <div>
+          <div className='lbl' style={{ marginBottom: 6 }}>
+            定价管理
           </div>
-
-          {/* Group ratio — readonly display */}
-          {Object.keys(groupRatio).length > 0 && (
-            <div className='panel' style={{ marginTop: 18, padding: 18 }}>
-              <div className='lbl' style={{ marginBottom: 10 }}>
-                分组倍率（只读）
-              </div>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                {Object.entries(groupRatio).map(([group, ratio]) => (
-                  <div
-                    key={group}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      padding: '8px 14px',
-                      border: '1px solid var(--hf-rule)',
-                      borderRadius: 4,
-                      minWidth: 80,
-                    }}
-                  >
-                    <span className='tag' style={{ marginBottom: 4 }}>
-                      {group}
-                    </span>
-                    <span className='display mono' style={{ fontSize: 16 }}>
-                      ×{Number(ratio).toFixed(2)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <h1>模型定价</h1>
+          <div className='sub'>供应商成本 · 分组倍率 · 计费类型</div>
         </div>
-      </Spin>
+      </div>
+
+      {/* Vendor filter toolbar */}
+      <div
+        style={{
+          padding: '0 24px 12px',
+          display: 'flex',
+          gap: 8,
+          flexWrap: 'wrap',
+        }}
+      >
+        <button
+          type='button'
+          className={`btn${!vendorFilter ? ' primary' : ''}`}
+          onClick={() => setVendorFilter('')}
+        >
+          全部
+        </button>
+        {vendors.map((v) => (
+          <button
+            key={v}
+            type='button'
+            className={`btn${vendorFilter === v ? ' primary' : ''}`}
+            onClick={() => setVendorFilter(v)}
+          >
+            {v}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ padding: '0 24px 24px' }}>
+        <div className='panel'>
+          <div
+            style={{
+              padding: '14px 18px',
+              borderBottom: '1px solid var(--hf-rule)',
+              display: 'flex',
+              alignItems: 'baseline',
+            }}
+          >
+            <div className='lbl'>模型列表</div>
+            <span
+              className='muted mono'
+              style={{ fontSize: 10, marginLeft: 'auto' }}
+            >
+              {filteredPricing.length} 个模型
+            </span>
+          </div>
+          <table className='t' data-testid='pricing-table'>
+            <thead>
+              <tr>
+                <th>模型名称</th>
+                <th>供应商</th>
+                <th>计费类型</th>
+                <th>模型倍率</th>
+                <th>完成倍率</th>
+                <th>模型单价</th>
+                <th>启用分组</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredPricing.map((row, i) => (
+                <tr key={row.model_name ?? i}>
+                  <td className='strong mono' style={{ fontSize: 12 }}>
+                    {row.model_name}
+                  </td>
+                  <td>{row.vendor ?? '—'}</td>
+                  <td>
+                    <span className='tag'>
+                      {row.quota_type === 1 ? '单价计费' : '倍率计费'}
+                    </span>
+                  </td>
+                  <td>
+                    {row.quota_type === 0 ? (
+                      <input
+                        type='number'
+                        className='field'
+                        step='0.0001'
+                        min='0.0001'
+                        value={
+                          edits[row.model_name]?.model_ratio ??
+                          row.model_ratio ??
+                          ''
+                        }
+                        onChange={(e) =>
+                          handleFieldChange(
+                            row.model_name,
+                            'model_ratio',
+                            e.target.value,
+                          )
+                        }
+                        style={{ width: 90, height: 24, fontSize: 11 }}
+                        data-testid={`field-model_ratio-${row.model_name}`}
+                      />
+                    ) : (
+                      <span className='mono muted'>—</span>
+                    )}
+                  </td>
+                  <td>
+                    {row.quota_type === 0 ? (
+                      <input
+                        type='number'
+                        className='field'
+                        step='0.0001'
+                        min='0.0001'
+                        value={
+                          edits[row.model_name]?.completion_ratio ??
+                          row.completion_ratio ??
+                          ''
+                        }
+                        onChange={(e) =>
+                          handleFieldChange(
+                            row.model_name,
+                            'completion_ratio',
+                            e.target.value,
+                          )
+                        }
+                        style={{ width: 90, height: 24, fontSize: 11 }}
+                        data-testid={`field-completion_ratio-${row.model_name}`}
+                      />
+                    ) : (
+                      <span className='mono muted'>—</span>
+                    )}
+                  </td>
+                  <td>
+                    {row.quota_type === 1 ? (
+                      <input
+                        type='number'
+                        className='field'
+                        step='0.000001'
+                        min='0.000001'
+                        value={
+                          edits[row.model_name]?.model_price ??
+                          row.model_price ??
+                          ''
+                        }
+                        onChange={(e) =>
+                          handleFieldChange(
+                            row.model_name,
+                            'model_price',
+                            e.target.value,
+                          )
+                        }
+                        style={{ width: 90, height: 24, fontSize: 11 }}
+                        data-testid={`field-model_price-${row.model_name}`}
+                      />
+                    ) : (
+                      <span className='mono muted'>—</span>
+                    )}
+                  </td>
+                  <td>
+                    <span className='muted' style={{ fontSize: 11 }}>
+                      {Array.isArray(row.enable_groups)
+                        ? row.enable_groups.join(', ') || '—'
+                        : '—'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {filteredPricing.length === 0 && !loading && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className='muted'
+                    style={{ textAlign: 'center', padding: 24 }}
+                  >
+                    暂无数据
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Group ratio — readonly display */}
+        {Object.keys(groupRatio).length > 0 && (
+          <div className='panel' style={{ marginTop: 18, padding: 18 }}>
+            <div className='lbl' style={{ marginBottom: 10 }}>
+              分组倍率（只读）
+            </div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {Object.entries(groupRatio).map(([group, ratio]) => (
+                <div
+                  key={group}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    padding: '8px 14px',
+                    border: '1px solid var(--hf-rule)',
+                    borderRadius: 4,
+                    minWidth: 80,
+                  }}
+                >
+                  <span className='tag' style={{ marginBottom: 4 }}>
+                    {group}
+                  </span>
+                  <span className='display mono' style={{ fontSize: 16 }}>
+                    ×{Number(ratio).toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </HFShell>
   );
 };

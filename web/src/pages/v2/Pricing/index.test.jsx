@@ -45,11 +45,6 @@ vi.mock('../../../components/hifi/HFShell', () => ({
     ),
 }));
 
-// Stub Semi Spin — just renders children.
-vi.mock('@douyinfe/semi-ui', () => ({
-  Spin: ({ children }) => React.createElement('div', null, children),
-}));
-
 // Stub useFormDraft — use real implementation but provide storage mock via localStorage.
 vi.mock('../../../hooks/common/useFormDraft', () => {
   const { useState } = require('react');
