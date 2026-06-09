@@ -36,7 +36,9 @@ test.describe('Phase E2 — token scope rejection', () => {
     request,
   }) => {
     await page.goto(`/api/v2/bridge/exchange?token=${BRIDGE_TOKEN}`);
-    await expect(page).toHaveURL(/\/console\/v2\/dashboard/, { timeout: 10_000 });
+    await expect(page).toHaveURL(/\/console\/v2\/dashboard/, {
+      timeout: 10_000,
+    });
 
     const createRes = await request.post(`/api/v2/${TENANT_SLUG}/tokens`, {
       data: {
@@ -89,7 +91,10 @@ test.describe('Phase E2 — token scope rejection', () => {
     const recent = (auditAfterJson?.data?.events ?? []).find((e: any) =>
       String(e?.details ?? '').includes('embedding'),
     );
-    expect(recent, 'audit row with rejected scope=embedding should exist').toBeTruthy();
+    expect(
+      recent,
+      'audit row with rejected scope=embedding should exist',
+    ).toBeTruthy();
   });
 
   test.afterEach(async ({ request }) => {
