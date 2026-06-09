@@ -25,21 +25,23 @@ const BRIDGE_TOKEN = process.env.E2E_BRIDGE_TOKEN;
 const TENANT_SLUG = process.env.E2E_TENANT_SLUG || 'default';
 
 test.describe('Phase E4 — quota threshold audit', () => {
-  test.skip(
-    !BRIDGE_TOKEN,
-    'E2E_BRIDGE_TOKEN not set — skipping STAGE e2e.',
-  );
+  test.skip(!BRIDGE_TOKEN, 'E2E_BRIDGE_TOKEN not set — skipping STAGE e2e.');
 
   test('action present in taxonomy + historical rows queryable', async ({
     page,
     request,
   }) => {
     await page.goto(`/api/v2/bridge/exchange?token=${BRIDGE_TOKEN}`);
-    await expect(page).toHaveURL(/\/console\/v2\/dashboard/, { timeout: 10_000 });
+    await expect(page).toHaveURL(/\/console\/v2\/dashboard/, {
+      timeout: 10_000,
+    });
 
-    const actionsRes = await request.get(`/api/v2/${TENANT_SLUG}/admin/audit/actions`);
+    const actionsRes = await request.get(
+      `/api/v2/${TENANT_SLUG}/admin/audit/actions`,
+    );
     expect(actionsRes.ok()).toBeTruthy();
-    const actions = ((await actionsRes.json())?.data?.actions ?? []) as string[];
+    const actions = ((await actionsRes.json())?.data?.actions ??
+      []) as string[];
     expect(actions).toContain('billing.quota_threshold');
 
     const eventsRes = await request.get(

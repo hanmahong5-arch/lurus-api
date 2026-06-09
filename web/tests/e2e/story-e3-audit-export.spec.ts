@@ -20,19 +20,23 @@ const BRIDGE_TOKEN = process.env.E2E_BRIDGE_TOKEN;
 const TENANT_SLUG = process.env.E2E_TENANT_SLUG || 'default';
 
 test.describe('Phase E3 — audit export round-trip', () => {
-  test.skip(
-    !BRIDGE_TOKEN,
-    'E2E_BRIDGE_TOKEN not set — skipping STAGE e2e.',
-  );
+  test.skip(!BRIDGE_TOKEN, 'E2E_BRIDGE_TOKEN not set — skipping STAGE e2e.');
 
   const tokenName = `e2e-audit-export-${Date.now()}`;
   let createdId: string | null = null;
 
-  test('action discovery + CSV/JSON export round-trip', async ({ page, request }) => {
+  test('action discovery + CSV/JSON export round-trip', async ({
+    page,
+    request,
+  }) => {
     await page.goto(`/api/v2/bridge/exchange?token=${BRIDGE_TOKEN}`);
-    await expect(page).toHaveURL(/\/console\/v2\/dashboard/, { timeout: 10_000 });
+    await expect(page).toHaveURL(/\/console\/v2\/dashboard/, {
+      timeout: 10_000,
+    });
 
-    const actionsRes = await request.get(`/api/v2/${TENANT_SLUG}/admin/audit/actions`);
+    const actionsRes = await request.get(
+      `/api/v2/${TENANT_SLUG}/admin/audit/actions`,
+    );
     expect(actionsRes.ok()).toBeTruthy();
     const actionsJson = await actionsRes.json();
     const actions = (actionsJson?.data?.actions ?? []) as string[];
@@ -47,9 +51,12 @@ test.describe('Phase E3 — audit export round-trip', () => {
     createdId = String((await createRes.json())?.data?.id ?? '');
     expect(createdId).toBeTruthy();
 
-    const updateRes = await request.put(`/api/v2/${TENANT_SLUG}/tokens/${createdId}`, {
-      data: { remain_quota: 500 },
-    });
+    const updateRes = await request.put(
+      `/api/v2/${TENANT_SLUG}/tokens/${createdId}`,
+      {
+        data: { remain_quota: 500 },
+      },
+    );
     expect(updateRes.ok()).toBeTruthy();
 
     await new Promise((r) => setTimeout(r, 2_000));
@@ -60,7 +67,9 @@ test.describe('Phase E3 — audit export round-trip', () => {
     expect(csvRes.ok()).toBeTruthy();
     expect(csvRes.headers()['content-type']).toMatch(/text\/csv/);
     const csvBody = await csvRes.text();
-    expect(csvBody.split('\n')[0]).toMatch(/^id,ts,actor,actor_id,action,resource/);
+    expect(csvBody.split('\n')[0]).toMatch(
+      /^id,ts,actor,actor_id,action,resource/,
+    );
     expect(csvBody).toContain('token.updated');
     expect(csvBody).toContain(createdId);
 
