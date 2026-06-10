@@ -1,8 +1,10 @@
 package repo
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/LurusTech/lurus-hub/internal/domain/entity"
@@ -14,6 +16,7 @@ import (
 // importing the entity package directly (matches Tenant / Token convention).
 type TenantCreditPool = entity.TenantCreditPool
 type TenantCreditPoolDraw = entity.TenantCreditPoolDraw
+type CreditPoolFundEvent = entity.CreditPoolFundEvent
 
 // Re-export pool-related constants from entity.
 const (
@@ -256,6 +259,161 @@ func ListPoolDraws(poolID int64, offset int, limit int) ([]*TenantCreditPoolDraw
 	}
 
 	return draws, total, nil
+}
+
+// ErrFundEventExists is returned by FundPoolIdempotent when the event_id was
+// already processed. The caller should treat this as a successful replay and
+// return the previously-recorded new_balance to the caller without re-crediting.
+var ErrFundEventExists = errors.New("fund event already processed (idempotent replay)")
+
+// FundPoolIdempotent atomically credits a tenant pool funded by an external
+// platform BillingOutbox event. Idempotency is enforced via a UNIQUE constraint
+// on credit_pool_fund_events.event_id:
+//
+//   - If event_id was already processed, the existing CreditPoolFundEvent is
+//     returned alongside ErrFundEventExists — caller returns 200 with that row's
+//     data, not an error to the caller of the endpoint.
+//   - Otherwise: TopupPool is called inside a transaction, then a fund event row
+//     is inserted. If the insert fails with a unique-constraint violation (race
+//     replay), the function re-fetches and returns the existing row with
+//     ErrFundEventExists so the caller still returns 200.
+//
+// The function does NOT call DebitWalletGRPC — the wallet debit happened on the
+// platform side before the BillingOutbox event was emitted. This is a pure
+// credit to the local pool.
+//
+// amount must be > 0. Returns (fundEvent, nil) on first write,
+// (existingEvent, ErrFundEventExists) on replay.
+func FundPoolIdempotent(
+	ctx context.Context,
+	poolID int64, tenantID string, amount int64,
+	eventID string, source string, actorUserID int,
+) (*CreditPoolFundEvent, error) {
+	if amount <= 0 {
+		return nil, fmt.Errorf("fund amount must be positive, got %d: pass a value > 0", amount)
+	}
+	if eventID == "" {
+		return nil, fmt.Errorf("event_id is required for idempotent fund: provide the BillingOutbox event ID")
+	}
+
+	// Fast-path: check if already processed before entering the transaction.
+	// The unique-constraint is the authoritative guard; this pre-check merely
+	// avoids the TopupPool write on obvious replays.
+	var existing CreditPoolFundEvent
+	if err := DB.WithContext(ctx).Where("event_id = ?", eventID).First(&existing).Error; err == nil {
+		return &existing, ErrFundEventExists
+	}
+
+	var funded *CreditPoolFundEvent
+	txErr := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Credit the pool balance (enforces ceiling via ErrPoolWouldExceedCeiling).
+		newBalance, err := topupPoolInTx(tx, poolID, tenantID, amount, actorUserID, PoolDrawReasonTopup)
+		if err != nil {
+			return err
+		}
+
+		now := time.Now()
+		event := &CreditPoolFundEvent{
+			EventID:    eventID,
+			TenantID:   tenantID,
+			PoolID:     poolID,
+			Amount:     amount,
+			NewBalance: newBalance,
+			Source:     source,
+			CreatedAt:  now,
+		}
+		if insertErr := tx.Create(event).Error; insertErr != nil {
+			// Unique-constraint violation from a concurrent replay: fetch the
+			// winner's row and surface ErrFundEventExists to the caller.
+			if isUniqueViolation(insertErr) {
+				var race CreditPoolFundEvent
+				if fetchErr := tx.Where("event_id = ?", eventID).First(&race).Error; fetchErr != nil {
+					return fmt.Errorf("fund event insert conflict and re-fetch failed: %w", fetchErr)
+				}
+				funded = &race
+				// Signal replay to the outer scope via a sentinel that we handle below.
+				return ErrFundEventExists
+			}
+			return fmt.Errorf("fund event insert: %w", insertErr)
+		}
+
+		funded = event
+		return nil
+	})
+
+	if txErr != nil {
+		if errors.Is(txErr, ErrFundEventExists) {
+			// Re-fetch outside the rolled-back TX so we return a clean row.
+			if funded != nil {
+				return funded, ErrFundEventExists
+			}
+			var race CreditPoolFundEvent
+			if err := DB.WithContext(ctx).Where("event_id = ?", eventID).First(&race).Error; err != nil {
+				return nil, fmt.Errorf("fund event replay re-fetch: %w", err)
+			}
+			return &race, ErrFundEventExists
+		}
+		return nil, txErr
+	}
+
+	return funded, nil
+}
+
+// topupPoolInTx is the transactional core of TopupPool extracted so that
+// FundPoolIdempotent can participate in the same DB.Transaction block.
+// Returns the new balance after crediting.
+func topupPoolInTx(tx *gorm.DB, poolID int64, tenantID string, amount int64, actorUserID int, reason string) (int64, error) {
+	result := tx.Model(&TenantCreditPool{}).
+		Where(
+			"id = ? AND (max_balance = ? OR current_balance + ? <= max_balance)",
+			poolID, PoolMaxBalanceUnlimited, amount,
+		).
+		Updates(map[string]interface{}{
+			"current_balance": gorm.Expr("current_balance + ?", amount),
+			"updated_at":      time.Now(),
+		})
+	if result.Error != nil {
+		return 0, fmt.Errorf("fund pool balance update: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return 0, ErrPoolWouldExceedCeiling
+	}
+
+	var pool TenantCreditPool
+	if err := tx.Select("current_balance").Where("id = ?", poolID).First(&pool).Error; err != nil {
+		return 0, fmt.Errorf("fund pool readback: %w", err)
+	}
+
+	draw := &TenantCreditPoolDraw{
+		PoolID:      poolID,
+		TenantID:    tenantID,
+		Direction:   PoolDrawDirectionCredit,
+		Amount:      amount,
+		Reason:      reason,
+		ActorUserID: actorUserID,
+		CreatedAt:   time.Now(),
+	}
+	if err := tx.Create(draw).Error; err != nil {
+		return 0, fmt.Errorf("fund pool draw insert: %w", err)
+	}
+
+	return pool.CurrentBalance, nil
+}
+
+// isUniqueViolation reports whether a DB error is a UNIQUE constraint violation
+// across both PostgreSQL (error code 23505) and SQLite ("UNIQUE constraint").
+// Avoids importing the pq driver directly — string matching is sufficient for
+// this internal guard.
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	// PostgreSQL driver wraps with "ERROR: duplicate key value violates unique constraint"
+	// SQLite driver: "UNIQUE constraint failed: ..."
+	return strings.Contains(s, "duplicate key value") ||
+		strings.Contains(s, "UNIQUE constraint failed") ||
+		strings.Contains(s, "23505")
 }
 
 // nextResetAt computes the next scheduled reset timestamp for a pool.

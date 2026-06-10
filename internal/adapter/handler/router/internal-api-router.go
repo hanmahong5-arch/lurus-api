@@ -139,4 +139,14 @@ func SetInternalApiRouter(router *gin.Engine) {
 		provisioningGroup.GET("/tenants/:slug/keys", handler.ListProvisionedKeys)
 		provisioningGroup.DELETE("/tenants/:slug/keys/:key_id", handler.RevokeProvisionedKey)
 	}
+
+	// Platform BillingOutbox supply endpoint — SEAM S1 model (b).
+	// Scope: balance:write — platform's internal key already carries this scope
+	// for wallet operations; no new key rotation required.
+	// Idempotency: enforced via UNIQUE(event_id) in credit_pool_fund_events (migration 019).
+	poolFundGroup := internalGroup.Group("/v1/provisioning")
+	poolFundGroup.Use(middleware.RequireScope(repo.ScopeBalanceWrite))
+	{
+		poolFundGroup.POST("/tenants/:slug/credit-pool/fund", handler.InternalFundCreditPool)
+	}
 }
