@@ -302,15 +302,20 @@ jobs:
           cache: true
       - name: golangci-lint (curated linters; ratchet — gate only new findings)
         # Pre-existing findings across the module are a known baseline and are NOT
-        # gated. only-new-issues ratchets: a PR may not ADD findings. Action v7 +
-        # golangci-lint v2 are required here — v1 (last release v1.64.8) is built
-        # with go 1.24 and cannot load this module's go 1.25.1 directive. Linter
-        # set + timeout live in root .golangci.yml.
+        # gated. The ratchet (a PR may not ADD findings) is enforced with
+        # --new-from-rev=origin/main instead of the action's only-new-issues:
+        # only-new-issues fetches the PR patch from the GitHub API, which 406s
+        # once the PR diff exceeds 20k lines — the action then silently falls
+        # back to whole-repo lint and reports the entire pre-existing baseline
+        # (observed on PR #14). --new-from-rev diffs locally (fetch-depth: 0
+        # above provides origin/main) with the same new-issues-only semantics.
+        # Action v7 + golangci-lint v2 are required here — v1 (last release
+        # v1.64.8) is built with go 1.24 and cannot load this module's go
+        # 1.25.1 directive. Linter set + timeout live in root .golangci.yml.
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.12.2
-          args: ./internal/... ./cmd/...
-          only-new-issues: true
+          args: --new-from-rev=origin/main ./internal/... ./cmd/...
 
   race:
     name: go test -race (short, hermetic)
