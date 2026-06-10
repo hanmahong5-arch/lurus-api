@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -479,6 +480,72 @@ func DeleteTokenV2(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Token deleted successfully",
+	})
+}
+
+// maxBatchDeleteTokens bounds a single batch-delete request. Above this the
+// request is rejected rather than sweeping an unbounded set in one transaction.
+const maxBatchDeleteTokens = 100
+
+// DeleteTokensV2 batch-deletes the caller's own tokens (v2 API with tenant context).
+// Route: POST /api/v2/:tenant_slug/tokens/batch-delete  Body: { "ids": [int] }
+//
+// Ownership is enforced inside repo.BatchDeleteTokens (the delete is scoped to
+// tenantCtx.UserID), so ids belonging to other users are silently ignored and
+// never deleted. An empty list is a no-op (the UI may submit an empty selection).
+func DeleteTokensV2(c *gin.Context) {
+	tenantCtx, err := middleware.GetTenantContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Tenant context not found",
+		})
+		return
+	}
+
+	var req struct {
+		Ids []int `json:"ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid request parameters",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Empty selection deletes nothing — succeed with deleted:0 rather than error.
+	if len(req.Ids) == 0 {
+		c.JSON(http.StatusOK, gin.H{"success": true, "deleted": 0})
+		return
+	}
+
+	if len(req.Ids) > maxBatchDeleteTokens {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": fmt.Sprintf("Too many ids: %d (max %d per batch)", len(req.Ids), maxBatchDeleteTokens),
+		})
+		return
+	}
+
+	deleted, err := repo.BatchDeleteTokens(req.Ids, tenantCtx.UserID)
+	if err != nil {
+		common.SysError("Failed to batch-delete tokens: " + err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to delete tokens",
+		})
+		return
+	}
+
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorUser, tenantCtx.UserID,
+		governance.ActionTokenDeleted, governance.ResourceToken, 0,
+		fmt.Sprintf(`{"action":"batch_delete","count":%d}`, deleted)))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"deleted": deleted,
 	})
 }
 

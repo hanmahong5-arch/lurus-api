@@ -298,6 +298,89 @@ func DisableUserById(id int) error {
 	return DB.Model(&User{}).Where("id = ?", id).Update("status", common.UserStatusDisabled).Error
 }
 
+// AdminListUsers returns a paginated, optionally-filtered list of users across
+// ALL tenants (platform-admin view — bypasses tenant isolation). keyword matches
+// id/username/email/display_name; group and status (when > 0) are exact filters.
+// Soft-deleted rows are excluded.
+func AdminListUsers(keyword, group string, status, offset, limit int) ([]*User, int64, error) {
+	query := GetSystemDB().Model(&User{})
+	if keyword != "" {
+		like := "%" + keyword + "%"
+		if idVal, err := strconv.Atoi(keyword); err == nil {
+			query = query.Where("id = ? OR username LIKE ? OR email LIKE ? OR display_name LIKE ?",
+				idVal, like, like, like)
+		} else {
+			query = query.Where("username LIKE ? OR email LIKE ? OR display_name LIKE ?", like, like, like)
+		}
+	}
+	if group != "" {
+		query = query.Where(commonGroupCol+" = ?", group)
+	}
+	if status > 0 {
+		query = query.Where("status = ?", status)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var users []*User
+	if err := query.Order("id desc").Offset(offset).Limit(limit).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+	return users, total, nil
+}
+
+// AdminUpdateUser updates only the platform-admin-editable fields (role, status,
+// quota, group) for a user, bypassing tenant isolation, and refreshes the user
+// cache so relay/auth observe the change immediately. Fields are passed
+// explicitly (not via a struct) so a zero value — e.g. quota=0 — is honoured
+// rather than silently skipped by GORM's struct-update semantics.
+func AdminUpdateUser(id, role, status, quota int, group string) (*User, error) {
+	if id == 0 {
+		return nil, errors.New("id 为空！")
+	}
+	var user User
+	if err := GetSystemDB().First(&user, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	updates := map[string]interface{}{
+		"role":   role,
+		"status": status,
+		"quota":  quota,
+		"group":  group,
+	}
+	if err := GetSystemDB().Model(&User{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+	user.Role, user.Status, user.Quota, user.Group = role, status, quota, group
+	if err := updateUserCache(user); err != nil {
+		common.SysLog("admin update user cache refresh failed: " + err.Error())
+	}
+	return &user, nil
+}
+
+// AdminDeleteUser soft-deletes a user across tenant boundaries (platform-admin)
+// and invalidates the user cache.
+func AdminDeleteUser(id int) error {
+	if id == 0 {
+		return errors.New("id 为空！")
+	}
+	if err := GetSystemDB().Delete(&User{}, "id = ?", id).Error; err != nil {
+		return err
+	}
+	return invalidateUserCache(id)
+}
+
+// CountUsersByRole counts non-deleted users holding the given role across all
+// tenants. Used by the admin delete guard to refuse removing the last root.
+func CountUsersByRole(role int) (int64, error) {
+	var total int64
+	err := GetSystemDB().Model(&User{}).Where("role = ?", role).Count(&total).Error
+	return total, err
+}
+
 func (user *User) Insert() error {
 	user.Quota = common.QuotaForNewUser
 

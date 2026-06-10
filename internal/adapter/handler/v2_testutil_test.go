@@ -205,6 +205,7 @@ func SetupV2TestRouter(t *testing.T) *V2TestContext {
 		// Token routes
 		v2.GET("/tokens", ListTokensV2)
 		v2.POST("/tokens", CreateTokenV2)
+		v2.POST("/tokens/batch-delete", DeleteTokensV2)
 		v2.PUT("/tokens/:id", UpdateTokenV2)
 		v2.DELETE("/tokens/:id", DeleteTokenV2)
 
@@ -231,6 +232,7 @@ func SetupV2TestRouter(t *testing.T) *V2TestContext {
 		v2.GET("/logs", GetLogsV2)
 		v2.GET("/logs/all", GetAllLogsV2)
 		v2.GET("/logs/cluster", GetLogClusterV2)
+		v2.GET("/logs/stat", GetLogStatV2)
 	}
 
 	// Admin routes (platform-level, use v1 session auth)
@@ -241,6 +243,11 @@ func SetupV2TestRouter(t *testing.T) *V2TestContext {
 		admin.GET("/mappings/:id", GetUserMappingV2)
 		admin.DELETE("/mappings/:id", DeleteUserMappingV2)
 		admin.GET("/stats", GetSystemStatsV2)
+		admin.GET("/users", ListAdminUsersV2)
+		admin.PUT("/users/:id", UpdateAdminUserV2)
+		admin.DELETE("/users/:id", DeleteAdminUserV2)
+		admin.GET("/options", ListAdminOptionsV2)
+		admin.PUT("/options", UpdateAdminOptionV2)
 	}
 
 	cleanup := func() {
