@@ -53,12 +53,22 @@ const SyncModelsModal = ({ tenantSlug, channel, onClose, onApply }) => {
           // Pre-select new models by default.
           setSelected(new Set(d.new ?? []));
         } else {
-          showError(t('获取上游模型失败'));
+          showError(
+            t(
+              'console.channel.sync_fetch_failed',
+              'Failed to fetch upstream models',
+            ),
+          );
           onClose();
         }
       })
       .catch(() => {
-        showError(t('获取上游模型失败'));
+        showError(
+          t(
+            'console.channel.sync_fetch_failed',
+            'Failed to fetch upstream models',
+          ),
+        );
         onClose();
       })
       .finally(() => setLoading(false));
@@ -94,7 +104,9 @@ const SyncModelsModal = ({ tenantSlug, channel, onClose, onApply }) => {
         { models: newModels },
       );
       if (res?.data?.success) {
-        showSuccess(t('同步上游模型'));
+        showSuccess(
+          t('console.channel.toast_synced', 'Upstream models synced'),
+        );
         onApply();
       }
     } catch (_) {
@@ -144,20 +156,23 @@ const SyncModelsModal = ({ tenantSlug, channel, onClose, onApply }) => {
         }}
       >
         <div className='strong' style={{ fontSize: 15 }}>
-          {t('同步上游模型')} · {channel.name}
+          {t('console.channel.sync_title', 'Sync upstream models')} ·{' '}
+          {channel.name}
         </div>
 
         {loading ? (
           <div className='muted' style={{ fontSize: 12 }}>
-            {t('正在获取上游模型…')}
+            {t('console.channel.sync_loading', 'Fetching upstream models…')}
           </div>
         ) : diff ? (
           <>
             <div>
               <div className='lbl' style={{ marginBottom: 6 }}>
-                {t('上游模型 (共 {{count}} 个)', {
-                  count: diff.upstream?.length ?? 0,
-                })}
+                {t(
+                  'console.channel.sync_upstream_count',
+                  'upstream models ({{count}} total)',
+                  { count: diff.upstream?.length ?? 0 },
+                )}
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                 {(diff.upstream ?? []).map((m) => (
@@ -174,8 +189,11 @@ const SyncModelsModal = ({ tenantSlug, channel, onClose, onApply }) => {
                   className='lbl'
                   style={{ marginBottom: 6, color: 'var(--hf-ok)' }}
                 >
-                  {t('新增 {{count}} 个模型', { count: diff.new.length })} —
-                  点击切换
+                  {t(
+                    'console.channel.sync_new_count',
+                    '{{count}} new models — click to toggle',
+                    { count: diff.new.length },
+                  )}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                   {diff.new.map((m) => (
@@ -198,7 +216,11 @@ const SyncModelsModal = ({ tenantSlug, channel, onClose, onApply }) => {
                   className='lbl'
                   style={{ marginBottom: 6, color: 'var(--hf-warn)' }}
                 >
-                  {t('已移除 {{count}} 个模型', { count: diff.missing.length })}
+                  {t(
+                    'console.channel.sync_removed_count',
+                    '{{count}} models removed upstream',
+                    { count: diff.missing.length },
+                  )}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                   {diff.missing.map((m) => (
@@ -220,7 +242,10 @@ const SyncModelsModal = ({ tenantSlug, channel, onClose, onApply }) => {
 
             {diff.new?.length === 0 && diff.missing?.length === 0 && (
               <div className='muted' style={{ fontSize: 12 }}>
-                模型列表已是最新，无需同步。
+                {t(
+                  'console.channel.sync_up_to_date',
+                  'Model list is already up to date — nothing to sync.',
+                )}
               </div>
             )}
           </>
@@ -235,7 +260,7 @@ const SyncModelsModal = ({ tenantSlug, channel, onClose, onApply }) => {
           }}
         >
           <button type='button' className='btn ghost' onClick={onClose}>
-            取消
+            {t('console.common.cancel', 'cancel')}
           </button>
           <button
             type='button'
@@ -244,7 +269,9 @@ const SyncModelsModal = ({ tenantSlug, channel, onClose, onApply }) => {
             disabled={applying || loading || selected.size === 0}
             onClick={handleApply}
           >
-            {applying ? '应用中…' : t('应用所选模型')}
+            {applying
+              ? t('console.channel.sync_applying', 'applying…')
+              : t('console.channel.sync_apply', 'apply selected models')}
           </button>
         </div>
       </div>
@@ -386,6 +413,7 @@ const EMPTY_FORM = {
 // Clone never copies the upstream key (secret, masked server-side) and appends
 // " copy" to the name so the duplicate is obvious.
 const ChannelModal = ({ tenantSlug, existing, prefill, onDone, onClose }) => {
+  const { t } = useTranslation();
   const source = existing || prefill;
   const [form, setForm] = useState(
     source
@@ -448,7 +476,11 @@ const ChannelModal = ({ tenantSlug, existing, prefill, onDone, onClose }) => {
       }
 
       if (res?.data?.success) {
-        showSuccess(existing ? 'Channel updated' : 'Channel created');
+        showSuccess(
+          existing
+            ? t('console.channel.toast_updated', 'Channel updated')
+            : t('console.channel.toast_created', 'Channel created'),
+        );
         onDone();
       }
     } catch (_) {
@@ -511,27 +543,31 @@ const ChannelModal = ({ tenantSlug, existing, prefill, onDone, onClose }) => {
       >
         <div className='strong' style={{ fontSize: 15 }}>
           {existing
-            ? `Edit · ${existing.name}`
+            ? `${t('console.channel.modal_edit', 'Edit')} · ${existing.name}`
             : prefill
-              ? `Clone · ${prefill.name}`
-              : 'New channel'}
+              ? `${t('console.channel.modal_clone', 'Clone')} · ${prefill.name}`
+              : t('console.channel.modal_new', 'New channel')}
         </div>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className='lbl'>name *</span>
+          <span className='lbl'>
+            {t('console.channel.field_name', 'name *')}
+          </span>
           <input
             ref={nameRef}
             style={inputStyle}
             value={form.name}
             onChange={set('name')}
-            placeholder='e.g. openai/main'
+            placeholder={t('console.channel.ph_name', 'e.g. openai/main')}
             required
           />
         </label>
 
         {!existing && (
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className='lbl'>api key</span>
+            <span className='lbl'>
+              {t('console.channel.field_api_key', 'api key')}
+            </span>
             <input
               style={inputStyle}
               value={form.key}
@@ -541,12 +577,14 @@ const ChannelModal = ({ tenantSlug, existing, prefill, onDone, onClose }) => {
           </label>
         )}
 
-        {field('base url', 'baseURL', {
+        {field(t('console.channel.field_base_url', 'base url'), 'baseURL', {
           placeholder: 'https://api.openai.com/v1',
         })}
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className='lbl'>type (int)</span>
+          <span className='lbl'>
+            {t('console.channel.field_type', 'type (int)')}
+          </span>
           <input
             style={inputStyle}
             type='number'
@@ -557,7 +595,9 @@ const ChannelModal = ({ tenantSlug, existing, prefill, onDone, onClose }) => {
         </label>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className='lbl'>models (comma-separated)</span>
+          <span className='lbl'>
+            {t('console.channel.field_models', 'models (comma-separated)')}
+          </span>
           <input
             style={inputStyle}
             value={form.models}
@@ -566,13 +606,17 @@ const ChannelModal = ({ tenantSlug, existing, prefill, onDone, onClose }) => {
           />
         </label>
 
-        {field('group', 'group', { placeholder: 'default' })}
+        {field(t('console.channel.field_group', 'group'), 'group', {
+          placeholder: 'default',
+        })}
 
         <div
           style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}
         >
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className='lbl'>weight</span>
+            <span className='lbl'>
+              {t('console.channel.field_weight', 'weight')}
+            </span>
             <input
               style={inputStyle}
               type='number'
@@ -583,7 +627,9 @@ const ChannelModal = ({ tenantSlug, existing, prefill, onDone, onClose }) => {
             />
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className='lbl'>priority</span>
+            <span className='lbl'>
+              {t('console.channel.field_priority', 'priority')}
+            </span>
             <input
               style={inputStyle}
               type='number'
@@ -595,7 +641,10 @@ const ChannelModal = ({ tenantSlug, existing, prefill, onDone, onClose }) => {
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span className='lbl'>
-            model mapping (from=to, comma-separated or JSON)
+            {t(
+              'console.channel.field_model_mapping',
+              'model mapping (from=to, comma-separated or JSON)',
+            )}
           </span>
           <input
             style={inputStyle}
@@ -605,15 +654,19 @@ const ChannelModal = ({ tenantSlug, existing, prefill, onDone, onClose }) => {
           />
         </label>
 
-        {field('tag', 'tag', { placeholder: 'optional tag' })}
+        {field(t('console.channel.field_tag', 'tag'), 'tag', {
+          placeholder: t('console.channel.ph_tag', 'optional tag'),
+        })}
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className='lbl'>remark</span>
+          <span className='lbl'>
+            {t('console.channel.field_remark', 'remark')}
+          </span>
           <input
             style={inputStyle}
             value={form.remark}
             onChange={set('remark')}
-            placeholder='optional note'
+            placeholder={t('console.channel.ph_remark', 'optional note')}
           />
         </label>
 
@@ -626,10 +679,14 @@ const ChannelModal = ({ tenantSlug, existing, prefill, onDone, onClose }) => {
           }}
         >
           <button type='button' className='btn ghost' onClick={onClose}>
-            cancel
+            {t('console.common.cancel', 'cancel')}
           </button>
           <button type='submit' className='btn primary' disabled={saving}>
-            {saving ? 'saving…' : existing ? 'save changes' : 'create channel'}
+            {saving
+              ? t('console.channel.saving', 'saving…')
+              : existing
+                ? t('console.channel.save_changes', 'save changes')
+                : t('console.channel.create_channel', 'create channel')}
           </button>
         </div>
       </form>
@@ -674,7 +731,7 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
         body,
       );
       if (res?.data?.success) {
-        showSuccess('Saved');
+        showSuccess(t('console.channel.toast_saved', 'Saved'));
         onRefresh();
       }
     } catch (_) {
@@ -693,7 +750,7 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
         `/api/v2/${tenantSlug}/channels/${channel.id}`,
       );
       if (res?.data?.success) {
-        showSuccess('Channel deleted');
+        showSuccess(t('console.channel.toast_deleted', 'Channel deleted'));
         setConfirmDelete(false);
         onRefresh();
       }
@@ -712,7 +769,11 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
         { status: newStatus },
       );
       if (res?.data?.success) {
-        showSuccess(newStatus === 1 ? 'Channel enabled' : 'Channel disabled');
+        showSuccess(
+          newStatus === 1
+            ? t('console.channel.toast_enabled', 'Channel enabled')
+            : t('console.channel.toast_disabled', 'Channel disabled'),
+        );
         onRefresh();
       }
     } catch (_) {
@@ -753,7 +814,7 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
           disabled={saving}
           onClick={() => setEditField(field)}
         >
-          edit
+          {t('console.common.edit', 'edit')}
         </button>
       )}
     </div>
@@ -771,21 +832,43 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
       {/* Column 1: settings */}
       <div>
         <div className='lbl' style={{ marginBottom: 8 }}>
-          channel settings
+          {t('console.channel.settings', 'channel settings')}
         </div>
         <div>
-          {row('base url', channel.base_url, 'baseURL')}
-          {row('group', channel.group, 'group')}
-          {row('weight', channel.weight, 'weight')}
-          {row('priority', channel.priority, 'priority')}
-          {row('remark', channel.remark, 'remark')}
+          {row(
+            t('console.channel.field_base_url', 'base url'),
+            channel.base_url,
+            'baseURL',
+          )}
+          {row(
+            t('console.channel.field_group', 'group'),
+            channel.group,
+            'group',
+          )}
+          {row(
+            t('console.channel.field_weight', 'weight'),
+            channel.weight,
+            'weight',
+          )}
+          {row(
+            t('console.channel.field_priority', 'priority'),
+            channel.priority,
+            'priority',
+          )}
+          {row(
+            t('console.channel.field_remark', 'remark'),
+            channel.remark,
+            'remark',
+          )}
         </div>
       </div>
 
       {/* Column 2: models */}
       <div>
         <div className='lbl' style={{ marginBottom: 8 }}>
-          models ({modelsList.length})
+          {t('console.channel.models_count', 'models ({{count}})', {
+            count: modelsList.length,
+          })}
         </div>
         <div
           style={{
@@ -798,7 +881,7 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
         >
           {modelsList.length === 0 && (
             <span className='muted' style={{ fontSize: 11 }}>
-              no models configured
+              {t('console.channel.no_models', 'no models configured')}
             </span>
           )}
           {modelsList.map((m, i) => (
@@ -814,7 +897,7 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
           disabled={saving}
           onClick={() => setEditField('models')}
         >
-          edit models
+          {t('console.channel.edit_models', 'edit models')}
         </button>
         {editField === 'models' && (
           <div style={{ marginTop: 6 }}>
@@ -830,12 +913,12 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
       {/* Column 3: model mapping + actions */}
       <div>
         <div className='lbl' style={{ marginBottom: 8 }}>
-          model mapping
+          {t('console.channel.mapping', 'model mapping')}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           {mappings.length === 0 && (
             <span className='muted' style={{ fontSize: 11 }}>
-              none
+              {t('console.channel.mapping_none', 'none')}
             </span>
           )}
           {mappings.map(([from, to], j) => (
@@ -872,7 +955,7 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
               disabled={saving}
               onClick={() => setEditField('modelMapping')}
             >
-              edit mapping
+              {t('console.channel.edit_mapping', 'edit mapping')}
             </button>
           )}
         </div>
@@ -886,7 +969,9 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
             disabled={saving}
             onClick={toggleStatus}
           >
-            {channel.status === 1 ? 'disable' : 'enable'}
+            {channel.status === 1
+              ? t('console.channel.btn_disable', 'disable')
+              : t('console.channel.btn_enable', 'enable')}
           </button>
           {/* Honestly deferred — these New-API features have no v2 backend yet,
               so they are visibly greyed with a reason, never silently absent. */}
@@ -894,17 +979,23 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
             type='button'
             className='btn sm'
             disabled
-            title='upstream balance refresh is provider-specific and unreliable — not wired in v2'
+            title={t(
+              'console.channel.refresh_balance_deferred',
+              'upstream balance refresh is provider-specific and unreliable — not wired in v2',
+            )}
           >
-            refresh balance
+            {t('console.channel.refresh_balance', 'refresh balance')}
           </button>
           <button
             type='button'
             className='btn sm'
             disabled
-            title='multi-key management needs a backend key-pool model — deferred'
+            title={t(
+              'console.channel.multi_key_deferred',
+              'multi-key management needs a backend key-pool model — deferred',
+            )}
           >
-            multi-key
+            {t('console.channel.multi_key', 'multi-key')}
           </button>
           <button
             type='button'
@@ -913,15 +1004,28 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
             disabled={saving}
             onClick={handleDelete}
           >
-            delete
+            {t('console.common.delete', 'delete')}
           </button>
         </div>
       </div>
 
       <ConfirmDialog
         visible={confirmDelete}
-        title={t('删除渠道 "{{name}}" ?', { name: channel.name })}
-        consequenceList={[t('停止通过此渠道路由请求'), t('此操作无法撤销')]}
+        title={t(
+          'console.channel.confirm_delete_title',
+          'Delete channel "{{name}}"?',
+          { name: channel.name },
+        )}
+        consequenceList={[
+          t(
+            'console.channel.confirm_delete_route',
+            'Requests will stop routing through this channel',
+          ),
+          t(
+            'console.channel.confirm_irreversible',
+            'This action cannot be undone',
+          ),
+        ]}
         confirmText={channel.name}
         onConfirm={performDelete}
         onCancel={() => !saving && setConfirmDelete(false)}
@@ -1033,16 +1137,23 @@ const HFChannel = () => {
       const data = res?.data ?? {};
       setTestState((prev) => ({ ...prev, [id]: data }));
       if (data.success) {
-        showSuccess(t('渠道延迟 {{ms}}ms', { ms: data.latency_ms ?? 0 }));
+        showSuccess(
+          t('console.channel.toast_latency', 'Channel latency {{ms}}ms', {
+            ms: data.latency_ms ?? 0,
+          }),
+        );
       } else {
-        showError(t('渠道测试失败') + (data.error ? `: ${data.error}` : ''));
+        showError(
+          t('console.channel.toast_test_failed', 'Channel test failed') +
+            (data.error ? `: ${data.error}` : ''),
+        );
       }
     } catch (err) {
       setTestState((prev) => ({
         ...prev,
         [id]: { success: false, error: String(err) },
       }));
-      showError(t('渠道测试失败'));
+      showError(t('console.channel.toast_test_failed', 'Channel test failed'));
     }
   };
 
@@ -1053,7 +1164,9 @@ const HFChannel = () => {
     if (batchTesting) return;
     const targets = channels.filter((c) => c.status === 1);
     if (targets.length === 0) {
-      showError(t('没有启用的渠道可测试'));
+      showError(
+        t('console.channel.no_enabled_channels', 'No enabled channels to test'),
+      );
       return;
     }
     setBatchTesting({ done: 0, total: targets.length });
@@ -1090,10 +1203,11 @@ const HFChannel = () => {
     );
     setBatchTesting(null);
     showSuccess(
-      t('批量测试完成：{{ok}}/{{total}} 通过', {
-        ok: okCnt,
-        total: targets.length,
-      }),
+      t(
+        'console.channel.toast_batch_done',
+        'Batch test complete: {{ok}}/{{total}} passed',
+        { ok: okCnt, total: targets.length },
+      ),
     );
   };
 
@@ -1118,7 +1232,11 @@ const HFChannel = () => {
           API.put(`/api/v2/${tenantSlug}/channels/${ch.id}`, { status }),
         ),
       );
-      showSuccess(`${targets.length} channel(s) updated`);
+      showSuccess(
+        t('console.channel.toast_batch_updated', '{{count}} channels updated', {
+          count: targets.length,
+        }),
+      );
       await applyChannelFilters();
     } catch (_) {}
   };
@@ -1126,7 +1244,10 @@ const HFChannel = () => {
   return (
     <HFShell
       active='channels'
-      crumbs={['platform · admin', 'channels']}
+      crumbs={[
+        t('console.nav.section_platform_admin', 'platform · admin'),
+        t('console.channel.crumb', 'channels'),
+      ]}
       actions={
         <>
           <button
@@ -1135,21 +1256,25 @@ const HFChannel = () => {
             data-testid='batch-test-all-btn'
             disabled={!!batchTesting || loading}
             onClick={runBatchTest}
-            title='test every enabled channel (max 4 in parallel)'
+            title={t(
+              'console.channel.test_all_title',
+              'test every enabled channel (max 4 in parallel)',
+            )}
           >
             {batchTesting
-              ? t('测试中 {{done}}/{{total}}', {
-                  done: batchTesting.done,
-                  total: batchTesting.total,
-                })
-              : t('测试全部启用')}
+              ? t(
+                  'console.channel.testing_progress',
+                  'testing {{done}}/{{total}}',
+                  { done: batchTesting.done, total: batchTesting.total },
+                )
+              : t('console.channel.test_all', 'test all enabled')}
           </button>
           <button
             type='button'
             className='btn primary'
             onClick={() => setCreating(true)}
           >
-            + new channel
+            {t('console.channel.new_channel', '+ new channel')}
           </button>
         </>
       }
@@ -1158,24 +1283,36 @@ const HFChannel = () => {
       <div className='hf-page-head'>
         <div>
           <div className='lbl' style={{ marginBottom: 6 }}>
-            channels
+            {t('console.channel.crumb', 'channels')}
           </div>
           <h1>
             {loading
               ? '…'
-              : `${total} upstream channel${total !== 1 ? 's' : ''}`}
+              : t('console.channel.count', '{{count}} upstream channels', {
+                  count: total,
+                })}
           </h1>
-          <div className='sub'>channel management · live data</div>
+          <div className='sub'>
+            {t('console.channel.sub', 'channel management · live data')}
+          </div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 28 }}>
           {[
-            ['healthy', loading ? '…' : String(okCount), 'var(--hf-ok)'],
             [
-              'disabled',
+              t('console.channel.stat_healthy', 'healthy'),
+              loading ? '…' : String(okCount),
+              'var(--hf-ok)',
+            ],
+            [
+              t('console.channel.stat_disabled', 'disabled'),
               loading ? '…' : String(disabledCount),
               'var(--hf-warn)',
             ],
-            ['error', loading ? '…' : String(errorCount), 'var(--hf-err)'],
+            [
+              t('console.channel.stat_error', 'error'),
+              loading ? '…' : String(errorCount),
+              'var(--hf-err)',
+            ],
           ].map(([l, v, c], i) => (
             <div key={i}>
               <div className='lbl'>{l}</div>
@@ -1215,7 +1352,7 @@ const HFChannel = () => {
             outline: 'none',
             width: 180,
           }}
-          placeholder='search name / key…'
+          placeholder={t('console.channel.ph_search', 'search name / key…')}
           value={filterKeyword}
           onChange={(e) => setFilterKeyword(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && applyChannelFilters()}
@@ -1233,7 +1370,7 @@ const HFChannel = () => {
             outline: 'none',
             width: 130,
           }}
-          placeholder='group…'
+          placeholder={t('console.channel.ph_group', 'group…')}
           value={filterGroup}
           onChange={(e) => setFilterGroup(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && applyChannelFilters()}
@@ -1253,17 +1390,25 @@ const HFChannel = () => {
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
         >
-          <option value='all'>all status</option>
-          <option value='ok'>enabled</option>
-          <option value='disabled'>disabled</option>
-          <option value='error'>error</option>
+          <option value='all'>
+            {t('console.channel.filter_all', 'all status')}
+          </option>
+          <option value='ok'>
+            {t('console.channel.filter_enabled', 'enabled')}
+          </option>
+          <option value='disabled'>
+            {t('console.channel.filter_disabled', 'disabled')}
+          </option>
+          <option value='error'>
+            {t('console.channel.filter_error', 'error')}
+          </option>
         </select>
         <button
           type='button'
           className='btn primary'
           onClick={applyChannelFilters}
         >
-          search
+          {t('console.common.search', 'search')}
         </button>
         <button
           type='button'
@@ -1275,7 +1420,7 @@ const HFChannel = () => {
             fetchChannels('', '');
           }}
         >
-          clear
+          {t('console.channel.clear', 'clear')}
         </button>
       </div>
 
@@ -1297,7 +1442,7 @@ const HFChannel = () => {
         {sel.size ? (
           <>
             <span>
-              <b>{sel.size}</b> selected
+              <b>{sel.size}</b> {t('console.channel.selected', 'selected')}
             </span>
             <span style={{ opacity: 0.5 }}>·</span>
             <button
@@ -1310,7 +1455,7 @@ const HFChannel = () => {
               }}
               onClick={() => batchSetStatus(1)}
             >
-              enable
+              {t('console.channel.btn_enable', 'enable')}
             </button>
             <button
               type='button'
@@ -1322,7 +1467,7 @@ const HFChannel = () => {
               }}
               onClick={() => batchSetStatus(2)}
             >
-              disable
+              {t('console.channel.btn_disable', 'disable')}
             </button>
             <span style={{ flex: 1 }} />
             <button
@@ -1331,12 +1476,15 @@ const HFChannel = () => {
               style={{ color: '#fff' }}
               onClick={() => setSel(new Set())}
             >
-              clear
+              {t('console.channel.clear', 'clear')}
             </button>
           </>
         ) : (
           <span>
-            tip · select rows for batch operations · or click any row to expand
+            {t(
+              'console.channel.tip',
+              'tip · select rows for batch operations · or click any row to expand',
+            )}
           </span>
         )}
       </div>
@@ -1344,27 +1492,33 @@ const HFChannel = () => {
       {/* Table */}
       {loading ? (
         <div className='muted' style={{ padding: '24px 28px', fontSize: 12 }}>
-          Loading…
+          {t('console.common.loading', 'Loading…')}
         </div>
       ) : visibleChannels.length === 0 ? (
         <div className='muted' style={{ padding: '24px 28px', fontSize: 12 }}>
           {channels.length === 0
-            ? 'No channels yet. Add one to get started.'
-            : 'No channels match the current filters.'}
+            ? t(
+                'console.channel.empty',
+                'No channels yet. Add one to get started.',
+              )
+            : t(
+                'console.channel.empty_filtered',
+                'No channels match the current filters.',
+              )}
         </div>
       ) : (
         <table className='t'>
           <thead>
             <tr>
               <th style={{ width: 32 }}></th>
-              <th>channel</th>
-              <th>type</th>
-              <th>models</th>
-              <th>qps · 1h trend</th>
-              <th>p50 / p95</th>
-              <th>success</th>
-              <th>cost · 1h</th>
-              <th>status</th>
+              <th>{t('console.channel.th_channel', 'channel')}</th>
+              <th>{t('console.channel.th_type', 'type')}</th>
+              <th>{t('console.channel.th_models', 'models')}</th>
+              <th>{t('console.channel.th_qps', 'qps · 1h trend')}</th>
+              <th>{t('console.channel.th_latency', 'p50 / p95')}</th>
+              <th>{t('console.channel.th_success', 'success')}</th>
+              <th>{t('console.channel.th_cost', 'cost · 1h')}</th>
+              <th>{t('console.channel.th_status', 'status')}</th>
               <th></th>
             </tr>
           </thead>
@@ -1447,7 +1601,12 @@ const HFChannel = () => {
                       style={{ fontSize: 11 }}
                       onClick={() => setOpen(isOpen ? null : ch.id)}
                     >
-                      <NotAvailable reason='no metrics backend: per-channel QPS is not aggregated' />
+                      <NotAvailable
+                        reason={t(
+                          'console.channel.na_qps',
+                          'no metrics backend: per-channel QPS is not aggregated',
+                        )}
+                      />
                     </td>
 
                     {/* Latency p50/p95 — no metrics backend */}
@@ -1456,7 +1615,12 @@ const HFChannel = () => {
                       style={{ fontSize: 11 }}
                       onClick={() => setOpen(isOpen ? null : ch.id)}
                     >
-                      <NotAvailable reason='no metrics backend: per-channel latency percentiles are not aggregated' />
+                      <NotAvailable
+                        reason={t(
+                          'console.channel.na_latency',
+                          'no metrics backend: per-channel latency percentiles are not aggregated',
+                        )}
+                      />
                     </td>
 
                     {/* Success rate */}
@@ -1517,12 +1681,19 @@ const HFChannel = () => {
                       style={{ fontSize: 11 }}
                       onClick={() => setOpen(isOpen ? null : ch.id)}
                     >
-                      <NotAvailable reason='no metrics backend: per-channel hourly cost is not aggregated' />
+                      <NotAvailable
+                        reason={t(
+                          'console.channel.na_cost',
+                          'no metrics backend: per-channel hourly cost is not aggregated',
+                        )}
+                      />
                     </td>
 
                     {/* Status badge */}
                     <td onClick={() => setOpen(isOpen ? null : ch.id)}>
-                      <span className={statusTag(st)}>{st}</span>
+                      <span className={statusTag(st)}>
+                        {t(`console.channel.status_${st}`, st)}
+                      </span>
                     </td>
 
                     {/* Row actions: test + expand */}
@@ -1531,8 +1702,8 @@ const HFChannel = () => {
                         const ts = testState[ch.id];
                         const isTesting = ts === 'testing';
                         const testLabel = isTesting
-                          ? t('测试中…')
-                          : t('测试渠道');
+                          ? t('console.channel.testing', 'testing…')
+                          : t('console.channel.test_channel', 'test channel');
                         const testColor =
                           ts && ts !== 'testing'
                             ? ts.success
@@ -1595,16 +1766,22 @@ const HFChannel = () => {
                             className='btn sm'
                             onClick={() => setEditing(ch)}
                           >
-                            edit all fields
+                            {t('console.channel.edit_all', 'edit all fields')}
                           </button>
                           <button
                             type='button'
                             className='btn sm'
                             data-testid={`clone-btn-${ch.id}`}
                             onClick={() => setCloning(ch)}
-                            title='create a new channel pre-filled from this one (key not copied)'
+                            title={t(
+                              'console.channel.clone_title',
+                              'create a new channel pre-filled from this one (key not copied)',
+                            )}
                           >
-                            {t('克隆渠道')}
+                            {t(
+                              'console.channel.clone_channel',
+                              'clone channel',
+                            )}
                           </button>
                           <button
                             type='button'
@@ -1612,7 +1789,10 @@ const HFChannel = () => {
                             data-testid={`sync-btn-${ch.id}`}
                             onClick={() => setSyncTarget(ch)}
                           >
-                            {t('同步上游模型')}
+                            {t(
+                              'console.channel.sync_title',
+                              'Sync upstream models',
+                            )}
                           </button>
                         </div>
                       </td>

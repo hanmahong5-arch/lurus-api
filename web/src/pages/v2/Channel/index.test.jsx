@@ -65,8 +65,22 @@ vi.mock('../../../components/common/ConfirmDialog', () => ({
       : null,
 }));
 
+// Mirror i18next's en behaviour: return the English defaultValue (2nd arg)
+// with {{var}} interpolation, falling back to the key when no default given.
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (k, _opts) => k }),
+  useTranslation: () => ({
+    t: (key, fallback, opts) => {
+      const vars =
+        typeof fallback === 'object' && fallback !== null ? fallback : opts;
+      let out = typeof fallback === 'string' ? fallback : key;
+      if (vars) {
+        for (const [k, v] of Object.entries(vars)) {
+          out = out.split(`{{${k}}}`).join(String(v));
+        }
+      }
+      return out;
+    },
+  }),
 }));
 
 import HFChannel from './index';
@@ -126,9 +140,7 @@ describe('channel test button', () => {
     });
 
     await waitFor(() => {
-      expect(showSuccess).toHaveBeenCalledWith(
-        expect.stringContaining('渠道延迟 {{ms}}ms'),
-      );
+      expect(showSuccess).toHaveBeenCalledWith('Channel latency 137ms');
     });
   });
 
