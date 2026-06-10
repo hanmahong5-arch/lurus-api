@@ -230,15 +230,13 @@ func TestGetAllLogsV2_NonAdminRejected(t *testing.T) {
 
 	SeedV2Log(t, ctx, ctx.NormalUser.Id, repo.LogTypeConsume)
 
-	// Normal user without admin role accessing admin-level /logs/all endpoint
-	// The endpoint itself doesn't enforce admin role (it returns all tenant logs),
-	// but it scopes to tenant. Verify the normal user can still access (no role gate).
+	// /logs/all returns every tenant member's logs (GetTenantLogsWithParams, no
+	// user_id filter), so a non-admin tenant member must be rejected. The route is
+	// mounted under UserAuth(); the admin gate is enforced in the handler via
+	// requireTenantAdmin (see TestSecurityLogsAllRequiresAdmin for full coverage).
 	w := V2RequestAsUser(ctx, ctx.NormalUser, http.MethodGet, "/api/v2/test-tenant/logs/all", nil, nil)
 
-	// GetAllLogsV2 does NOT enforce admin role in the controller —
-	// it relies on route-level middleware. In our test router, it's accessible.
-	// Verify it returns 200 (the endpoint works without admin check in the handler).
-	AssertV2Status(t, w, http.StatusOK)
+	AssertV2Status(t, w, http.StatusForbidden)
 }
 
 // TestGetLogsV2_ForbiddenFields guards the logView whitelist: the log endpoints

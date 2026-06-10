@@ -33,7 +33,12 @@ RUN go build -ldflags "-s -w -X 'github.com/LurusTech/lurus-hub/internal/pkg/com
 
 FROM debian:bookworm-slim
 
+# apt-get upgrade applies the latest Debian security patches (e.g. libgnutls30
+# 3.7.9-2+deb12u7, pulled in transitively by wget) — without it the GHA layer
+# cache can pin an older, CVE-flagged package set. Keep this so the Trivy gate
+# stays green on base-image CVEs.
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends ca-certificates tzdata libasan8 wget \
     && rm -rf /var/lib/apt/lists/* \
     && update-ca-certificates

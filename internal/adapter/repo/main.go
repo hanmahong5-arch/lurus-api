@@ -166,7 +166,23 @@ func chooseDB(envName string, isLog bool) (*gorm.DB, error) {
 	})
 }
 
+// shouldRefuseSQLiteFallback reports whether the process must fail fast rather than
+// silently falling back to the SQLite dev database: true when no SQL_DSN is configured
+// AND we are running inside a container. In a container the SQLite file lands on a
+// readOnlyRootFilesystem, so the pod boots and passes health checks while every write
+// silently fails. Locally (not in a container) the SQLite fallback stays a valid dev
+// convenience. Any non-empty SQL_DSN routes to PostgreSQL/MySQL (see chooseDB) and
+// never triggers the refusal.
+func shouldRefuseSQLiteFallback(sqlDSN string, inContainer bool) bool {
+	return sqlDSN == "" && inContainer
+}
+
 func InitDB() (err error) {
+	if shouldRefuseSQLiteFallback(os.Getenv("SQL_DSN"), common.IsRunningInContainer()) {
+		common.FatalLog("SQL_DSN is required in a container environment; refusing to start " +
+			"with the SQLite dev fallback (writes silently fail on a read-only root filesystem). " +
+			"Set SQL_DSN to a PostgreSQL or MySQL DSN.")
+	}
 	db, err := chooseDB("SQL_DSN", false)
 	if err == nil {
 		if common.DebugEnabled {

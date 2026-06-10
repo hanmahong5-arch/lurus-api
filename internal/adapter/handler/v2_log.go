@@ -145,6 +145,17 @@ func GetAllLogsV2(c *gin.Context) {
 		return
 	}
 
+	// This endpoint returns every tenant member's logs (no user_id filter below),
+	// so it must be restricted to tenant admins. The route is mounted under
+	// UserAuth(), so the role check lives here in the handler.
+	if !requireTenantAdmin(c, tenantCtx) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "Admin role required",
+		})
+		return
+	}
+
 	// Parse pagination and filter parameters
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))

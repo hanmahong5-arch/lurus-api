@@ -77,12 +77,13 @@ jobs:
           platforms: linux/amd64
 
       - name: Scan image for HIGH/CRITICAL vulnerabilities (Trivy)
-        # REPORT-ONLY (2026-06-01): prints a HIGH/CRITICAL table but does NOT fail
-        # the build (exit-code 0). First enable surfaced 9 FIXABLE CVEs in the base
-        # image + Go deps (gnutls, jackc/pgx v5, otel/sdk, grpc). Blocking here also
-        # blocks image publication, so the gate stays informational until a
-        # dep/base-image bump PR clears them — same ratchet pattern as bun-audit.
-        # Flip exit-code back to '1' in the PR that bumps the deps + base image.
+        # BLOCKING gate: fails the build on FIXABLE HIGH/CRITICAL CVEs.
+        # ignore-unfixed drops CVEs with no upstream fix yet so the gate stays
+        # actionable. The 9 CVEs that forced this report-only earlier were cleared
+        # 2026-06-01: base-image gnutls via apt upgrade (deb12u7), and Go deps
+        # jackc/pgx/v5 -> 5.9.2, otel/sdk family -> 1.43.0, grpc -> 1.79.3.
+        # If this goes red a NEW fixable CVE landed: bump the dep/base + rebuild
+        # (a deliberate forcing function) — do not silently set exit-code back to 0.
         # On PRs this scans the locally-loaded image; on push/tag it scans the ref
         # just pushed (the login step above authenticates the registry pull).
         uses: aquasecurity/trivy-action@v0.36.0
@@ -92,4 +93,4 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           vuln-type: os,library
-          exit-code: '0'
+          exit-code: '1'

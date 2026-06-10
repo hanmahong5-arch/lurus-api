@@ -315,16 +315,20 @@ jobs:
   race:
     name: go test -race (short, hermetic)
     runs-on: ubuntu-latest
-    # REPORT-ONLY (2026-06-01): turning on -race across the full -short suite
-    # surfaced PRE-EXISTING data races in shared test globals (repo + governance
-    # paths: TestUser_*Quota_DirectDB, TestDailyQuota_*, TestUserRepo_*Group,
-    # TestInteg_Topup/AdjustQuota, TestSetAuditWriter_AtomicSafety — 11 DATA RACE
-    # warnings total). The job still runs and shows its TRUE result, but
-    # continue-on-error keeps it from blocking `main` while the races are
-    # root-caused + fixed under a CGO-capable env (the dev host has no gcc, so
-    # -race can only be verified in CI). Flip back to blocking in the PR that
-    # fixes + verifies them. This supersedes the stale "race-clean" note below.
-    continue-on-error: true
+    # BLOCKING (re-blocked 2026-06-03). History: -race surfaced pre-existing data
+    # races — PR #5 fixed 3 deterministic clusters and re-blocked; PR #7 reverted to
+    # report-only after an intermittent slog cross-test race; PR #8 fixed that
+    # (slogLogger is now atomic.Pointer; slogOnce gone). Re-block evidence (per the
+    # "many consecutive green runs" arm of the criteria, not a single run — that was
+    # the #5->#7 mistake): a -count=10 full-suite stress run found 0 DATA RACE
+    # warnings across 10 iterations, plus repeated green -count=1 runs. The census's
+    # remaining "wider surface" (repo.DB / RedisEnabled resets, hub/quota singletons)
+    # proved theoretical under -race — e.g. GetUserCache's cache-refresh spawn is
+    # gated by shouldUpdateRedis (RedisEnabled read on the caller's goroutine), so it
+    # never fires when tests disable Redis. See the audit doc for the full evidence.
+    # -race needs gcc (absent on the dev host) -> CI is the sole enforcer; if an
+    # intermittent race resurfaces, capture the stack and fix it — do not silently
+    # revert to report-only.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -354,8 +358,87 @@ jobs:
           cache: true
       # -race needs CGO; ubuntu-latest ships gcc, so CGO_ENABLED defaults to 1.
       # -short keeps it to the hermetic suite (Postgres/MinIO integration tests
-      # self-skip without their DSNs). NOTE: the module is NOT currently
-      # race-clean — see the report-only note on the job above. The earlier
-      # 2026-05-26 audit did not exercise -race across this whole suite.
+      # self-skip without their DSNs).
       - name: go test -short -race ./...
         run: go test -short -race -count=1 -timeout=15m ./...
+
+  pg-integration:
+    name: repo integration tests (disposable Postgres)
+    runs-on: ubuntu-latest
+    # The internal/adapter/repo integration tests (token / user-quota / tenant /
+    # internal-api-key) reach the database through SetupTestDB, which t.Skip()s
+    # when TEST_POSTGRES_DSN is unset — so before this job they NEVER ran in CI
+    # and reported a hollow green (CLAUDE.md §4.1③). They cover money-path
+    # invariants (quota debit/credit atomicity, token validate/expire/exhaust,
+    # tenant-whitelist auth, daily-reset idempotency) that only mean anything
+    # against a real PostgreSQL. This job stands one up as a disposable service,
+    # points TEST_POSTGRES_DSN at it, and runs the suite. The
+    # TestIntegrationPGHarness_RealPostgres sentinel + the grep step below keep
+    # the gate from silently reverting to all-skip. BLOCKING: it must stay green;
+    # a real money-path regression should fail `main`.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        # Gate the test step on a ready server so the first CREATE DATABASE in
+        # SetupTestDB does not race the container's startup.
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: LurusTech/lurus-proto-go
+          path: _sibling/lurus-proto-go
+          fetch-depth: 1
+      - uses: actions/checkout@v4
+        with:
+          repository: hanmahong5-arch/zita-sdk-go
+          ref: e2611da1e01ef77b8227571204d6780a6364fea3
+          path: _sibling/zita-sdk-go
+          fetch-depth: 1
+      - name: Relocate sibling repos to ../shared (matches go.mod replace paths)
+        run: |
+          mkdir -p ../shared
+          mv _sibling/lurus-proto-go ../shared/lurus-proto-go
+          mv _sibling/zita-sdk-go ../shared/zita-sdk-go
+          rmdir _sibling
+      - name: Stub web/dist for //go:embed in web/embed.go
+        run: |
+          mkdir -p web/dist
+          echo '<!doctype html><title>stub</title>' > web/dist/index.html
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+      - name: go test ./internal/adapter/repo/... against Postgres
+        # -short skips the !testing.Short() stress tests; the PG integration tests
+        # gate on the DSN (not on -short), so they all run here. -v + tee lets the
+        # next step assert the harness sentinel actually executed.
+        env:
+          TEST_POSTGRES_DSN: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+        run: |
+          set -o pipefail
+          go test -short -count=1 -timeout=15m -v ./internal/adapter/repo/... 2>&1 | tee /tmp/pg-test.log
+      - name: Assert the PG harness was not hollow (sentinel ran + passed)
+        # Defends against a misconfigured DSN that would make SetupTestDB t.Skip
+        # the whole suite into a vacuous green. The sentinel only PASSes when it
+        # reached a live PostgreSQL; if it was skipped or absent, fail the job.
+        run: |
+          if grep -q -- '--- SKIP: TestIntegrationPGHarness_RealPostgres' /tmp/pg-test.log; then
+            echo "::error::PG harness sentinel was SKIPPED — TEST_POSTGRES_DSN did not reach a live Postgres; the integration suite ran hollow."
+            exit 1
+          fi
+          if ! grep -q -- '--- PASS: TestIntegrationPGHarness_RealPostgres' /tmp/pg-test.log; then
+            echo "::error::PG harness sentinel did not PASS — expected it to run against the disposable Postgres."
+            exit 1
+          fi
+          echo "PG harness sentinel confirmed: integration suite ran against a live Postgres."

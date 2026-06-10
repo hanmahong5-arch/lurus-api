@@ -13,33 +13,33 @@ import (
 // SysLog logs a system-level info message
 // This is a compatibility wrapper that uses slog internally
 func SysLog(s string) {
-	ensureSlogInit()
+	l := ensureSlogInit()
 	// Use custom format to match legacy output: [SYS] timestamp | message
 	t := time.Now()
 	_, _ = fmt.Fprintf(gin.DefaultWriter, "[SYS] %v | %s \n", t.Format("2006/01/02 - 15:04:05"), s)
 	// Also log to slog for structured logging
-	slogLogger.Info(s, "source", "system")
+	l.Info(s, "source", "system")
 }
 
 // SysError logs a system-level error message
 // This is a compatibility wrapper that uses slog internally
 func SysError(s string) {
-	ensureSlogInit()
+	l := ensureSlogInit()
 	// Use custom format to match legacy output: [SYS] timestamp | message
 	t := time.Now()
 	_, _ = fmt.Fprintf(gin.DefaultErrorWriter, "[SYS] %v | %s \n", t.Format("2006/01/02 - 15:04:05"), s)
 	// Also log to slog for structured logging
-	slogLogger.Error(s, "source", "system")
+	l.Error(s, "source", "system")
 }
 
 // FatalLog logs a fatal message and exits the program
 func FatalLog(v ...any) {
-	ensureSlogInit()
+	l := ensureSlogInit()
 	t := time.Now()
 	msg := fmt.Sprint(v...)
 	_, _ = fmt.Fprintf(gin.DefaultErrorWriter, "[FATAL] %v | %v \n", t.Format("2006/01/02 - 15:04:05"), msg)
 	// Also log to slog for structured logging
-	slogLogger.Log(context.Background(), slog.LevelError+4, msg, "source", "fatal")
+	l.Log(context.Background(), slog.LevelError+4, msg, "source", "fatal")
 	os.Exit(1)
 }
 
