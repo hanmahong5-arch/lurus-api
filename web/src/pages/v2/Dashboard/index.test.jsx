@@ -138,7 +138,8 @@ describe('Dashboard page — user/me + logs fetched with correct URLs', () => {
     API.get
       .mockResolvedValueOnce({ data: { success: true, data: makeMe() } })
       .mockResolvedValueOnce({
-        data: { success: true, data: { items: [makeLog()] } },
+        // Real backend shape: GET /logs returns { logs: [...] }.
+        data: { success: true, data: { logs: [makeLog()] } },
       });
 
     render(React.createElement(HFDashboard));
@@ -147,6 +148,33 @@ describe('Dashboard page — user/me + logs fetched with correct URLs', () => {
       const calls = API.get.mock.calls.map((c) => c[0]);
       expect(calls.some((u) => u.includes('/api/v2/acme/user/me'))).toBe(true);
       expect(calls.some((u) => u.includes('/api/v2/acme/logs'))).toBe(true);
+    });
+  });
+
+  // Regression guard: the dashboard must derive realtime KPIs from the `.logs`
+  // array (the real backend key). The prior code read `.items`, so the latency
+  // percentiles were always empty against production.
+  it('derives realtime latency KPIs from the .logs array', async () => {
+    const me = makeMe({ token_count: 3 });
+    const now = Math.floor(Date.now() / 1000);
+    const logs = [
+      makeLog({ type: 2, total_latency_ms: 100, created_at: now - 10 }),
+      makeLog({ type: 2, total_latency_ms: 200, created_at: now - 20 }),
+    ];
+    API.get.mockImplementation((url) => {
+      if (url.includes('/user/me')) {
+        return Promise.resolve({ data: { success: true, data: me } });
+      }
+      return Promise.resolve({
+        data: { success: true, data: { logs, total: logs.length } },
+      });
+    });
+
+    render(React.createElement(HFDashboard));
+
+    // p50 of [100, 200] = 150ms — only renders if `.logs` was consumed.
+    await waitFor(() => {
+      expect(screen.getByText('150ms')).toBeTruthy();
     });
   });
 

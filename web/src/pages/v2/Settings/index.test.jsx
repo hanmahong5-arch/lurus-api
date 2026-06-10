@@ -342,4 +342,43 @@ describe('Settings page', () => {
       expect(btn.title).toMatch(/wave b/i);
     }
   });
+
+  // 9. Honesty: Integrations must NOT paint fake "connected · ok" status.
+  //    Every channel reads "not configured"; no green status dot; connect
+  //    buttons are disabled (no real integration registry behind them).
+  it('integrations section shows no fake connected/ok status', async () => {
+    render(<HFSettings />);
+
+    screen.getByText('Integrations').click();
+
+    await waitFor(() => {
+      expect(screen.getAllByText('not configured').length).toBeGreaterThan(0);
+    });
+
+    // No "connected" text anywhere in the section.
+    expect(screen.queryAllByText(/connected/i).length).toBe(0);
+    // No green status dots (class "dot ok") in the rendered section.
+    expect(document.querySelectorAll('.dot.ok').length).toBe(0);
+    // Every connect button is disabled (registry deferred).
+    const connectButtons = screen.getAllByText('connect');
+    expect(connectButtons.length).toBeGreaterThan(0);
+    connectButtons.forEach((b) =>
+      expect(b.closest('button').disabled).toBe(true),
+    );
+  });
+
+  // 10. Honesty: Region must not claim a fabricated "current" residency.
+  it('region section claims no current data-residency region', async () => {
+    render(<HFSettings />);
+
+    screen.getByText('Region & data').click();
+
+    await waitFor(() => {
+      expect(screen.getByText('data residency')).toBeTruthy();
+    });
+
+    // No region labelled "current" — all are merely "available".
+    expect(screen.queryByText('current')).toBeNull();
+    expect(screen.getAllByText('available').length).toBe(3);
+  });
 });

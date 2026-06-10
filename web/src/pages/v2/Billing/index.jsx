@@ -56,28 +56,38 @@ const HFBilling = () => {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [recharging, setRecharging] = useState(false);
+  // True when the platform billing service is unreachable (e.g. 503). Surfaced
+  // as an honest banner instead of silently rendering "—" as if zero-balance.
+  const [platformDown, setPlatformDown] = useState(false);
 
   const fetchAll = useCallback(async () => {
     if (!tenantSlug) return;
     setLoading(true);
+    setPlatformDown(false);
     try {
-      const [invRes, sumRes] = await Promise.all([
+      // allSettled so a platform-summary 503 doesn't also blank the invoices
+      // table. summary uses skipErrorHandler so its failure shows the banner,
+      // not a duplicate toast.
+      const [invRes, sumRes] = await Promise.allSettled([
         API.get(`/api/v2/${tenantSlug}/billing/invoices`),
-        API.get('/api/v2/user/billing/summary'),
+        API.get('/api/v2/user/billing/summary', { skipErrorHandler: true }),
       ]);
 
-      if (invRes?.data?.success) {
-        setInvoices(invRes.data.data?.items ?? []);
-      } else {
-        showError(invRes?.data?.message || '加载账单失败');
+      if (invRes.status === 'fulfilled' && invRes.value?.data?.success) {
+        setInvoices(invRes.value.data.data?.items ?? []);
+      } else if (invRes.status === 'fulfilled') {
+        showError(invRes.value?.data?.message || '加载账单失败');
       }
+      // invRes rejected → the global interceptor already toasted it.
 
-      if (sumRes?.data?.success) {
-        setSummary(sumRes.data.data);
+      if (sumRes.status === 'fulfilled' && sumRes.value?.data?.success) {
+        setSummary(sumRes.value.data.data);
+      } else if (sumRes.status === 'rejected') {
+        // Platform billing service unreachable — balance/MTD can't be trusted.
+        setPlatformDown(true);
       }
-      // summary failure is non-fatal: page still works without it
     } catch (_) {
-      // network errors surfaced by API interceptor
+      // unreachable with allSettled; kept as a defensive backstop
     } finally {
       setLoading(false);
     }
@@ -90,18 +100,25 @@ const HFBilling = () => {
   const handleRecharge = async () => {
     setRecharging(true);
     try {
-      const res = await API.post('/api/v2/user/billing/checkout', {
-        amount_cny: 200,
-        payment_method: 'alipay',
-        return_url: window.location.href,
-      });
+      const res = await API.post(
+        '/api/v2/user/billing/checkout',
+        {
+          amount_cny: 200,
+          payment_method: 'alipay',
+          return_url: window.location.href,
+        },
+        { skipErrorHandler: true },
+      );
       if (res?.data?.success && res.data.data?.checkout_url) {
         window.location.href = res.data.data.checkout_url;
       } else {
         showError(res?.data?.message || '创建充值订单失败');
       }
     } catch (_) {
-      // interceptor handles toast
+      // Checkout reaches the same platform billing service — a failure here is
+      // the same outage. Surface the honest banner rather than only a toast.
+      setPlatformDown(true);
+      showError('计费服务暂时不可用，请稍后再试');
     } finally {
       setRecharging(false);
     }
@@ -140,6 +157,32 @@ const HFBilling = () => {
         </>
       }
     >
+      {platformDown && (
+        <div
+          role='alert'
+          data-testid='billing-platform-down'
+          style={{
+            margin: '14px 24px 0',
+            padding: '10px 14px',
+            border: '1px solid var(--hf-err)',
+            borderRadius: 2,
+            background: 'rgba(200,60,60,0.08)',
+            color: 'var(--hf-ink-2)',
+            fontFamily: 'var(--hf-mono)',
+            fontSize: 11,
+            lineHeight: 1.55,
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 2 }}>
+            ⚠ Billing temporarily unavailable
+          </div>
+          <div style={{ opacity: 0.85 }}>
+            The platform billing service is not responding. Balance and spend
+            figures may be missing or stale; top-up is paused. Invoices below
+            are tenant-local and unaffected.
+          </div>
+        </div>
+      )}
       <div className='hf-page-head'>
         <div>
           <div className='lbl' style={{ marginBottom: 6 }}>

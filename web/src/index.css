@@ -1,6 +1,21 @@
 /* ==================== Tailwind CSS 配置 ==================== */
 @layer tailwind-base, semi, tailwind-components, tailwind-utils;
 
+/* Self-hosted webfonts (fontsource — woff2 bundled, no Google Fonts / CDN so
+ * the CN network path stays reliable). Latin subset only: the console is
+ * zh/en, and CJK falls back to system fonts (PingFang SC / Microsoft YaHei /
+ * Noto) via the --hf-* stacks in hifi-tokens.css — see that file. Weights are
+ * pruned to the ones the hi-fi tokens actually request:
+ *   Fraunces (display) 400/500 · Inter Tight (sans) 400/500/600 ·
+ *   JetBrains Mono (mono) 400/500. */
+@import '@fontsource/fraunces/latin-400.css';
+@import '@fontsource/fraunces/latin-500.css';
+@import '@fontsource/inter-tight/latin-400.css';
+@import '@fontsource/inter-tight/latin-500.css';
+@import '@fontsource/inter-tight/latin-600.css';
+@import '@fontsource/jetbrains-mono/latin-400.css';
+@import '@fontsource/jetbrains-mono/latin-500.css';
+
 /* Hi-Fi tokens — scoped under `.hf`, no collision with Tailwind/Semi. */
 @import './styles/hifi-tokens.css';
 

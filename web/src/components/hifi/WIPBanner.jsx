@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 /**
  * WIPBanner — explicit "not yet wired" marker for v2 hi-fi pages whose
@@ -29,28 +30,44 @@ import React from 'react';
  *     todo="path/to/issue or planning artifact"
  *   />
  */
-const WIPBanner = ({ reason, todo }) => (
-  <div
-    role='status'
-    aria-label='work in progress'
-    style={{
-      margin: '14px 24px 0',
-      padding: '10px 14px',
-      border: '1px dashed var(--hf-warn, #c08a3e)',
-      borderRadius: 2,
-      background: 'rgba(192,138,62,0.08)',
-      color: 'var(--hf-ink-2)',
-      fontFamily: 'var(--hf-mono)',
-      fontSize: 11,
-      lineHeight: 1.55,
-    }}
-  >
-    <div style={{ fontWeight: 600, marginBottom: 2, letterSpacing: '0.04em' }}>
-      ⚠ WORK IN PROGRESS — content is design-mock only
+const WIPBanner = ({ reason, todo }) => {
+  const { t } = useTranslation();
+  return (
+    <div
+      role='status'
+      aria-label={t('console.wip.aria', 'work in progress')}
+      style={{
+        margin: '14px 24px 0',
+        padding: '10px 14px',
+        border: '1px dashed var(--hf-warn, #c08a3e)',
+        borderRadius: 2,
+        background: 'rgba(192,138,62,0.08)',
+        color: 'var(--hf-ink-2)',
+        fontFamily: 'var(--hf-mono)',
+        fontSize: 11,
+        lineHeight: 1.55,
+      }}
+    >
+      <div
+        style={{ fontWeight: 600, marginBottom: 2, letterSpacing: '0.04em' }}
+      >
+        {t(
+          'console.wip.title',
+          '⚠ WORK IN PROGRESS — content is design-mock only',
+        )}
+      </div>
+      {reason && (
+        <div style={{ opacity: 0.85 }}>
+          {t('console.wip.reason_label', 'Reason:')} {reason}
+        </div>
+      )}
+      {todo && (
+        <div style={{ opacity: 0.7 }}>
+          {t('console.wip.todo_label', 'TODO:')} {todo}
+        </div>
+      )}
     </div>
-    {reason && <div style={{ opacity: 0.85 }}>Reason: {reason}</div>}
-    {todo && <div style={{ opacity: 0.7 }}>TODO: {todo}</div>}
-  </div>
-);
+  );
+};
 
 export default WIPBanner;

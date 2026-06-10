@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright (C) 2025 QuantumNous
 
 This program is free software: you can redistribute it and/or modify
@@ -27,6 +27,11 @@ import {
 } from '../constants/playground.constants';
 import { TABLE_COMPACT_MODES_KEY } from '../constants';
 import { MOBILE_BREAKPOINT } from '../hooks/common/useIsMobile';
+import {
+  resolveErrorMessage,
+  isHardUnauthorized,
+  shouldEmit,
+} from './errorMessages';
 
 const HTMLToastContent = ({ htmlContent }) => {
   return <div dangerouslySetInnerHTML={{ __html: htmlContent }} />;
@@ -144,45 +149,30 @@ if (isMobileScreen) {
   // showNoticeOptions.transition = 'flip';
 }
 
+// showError is the single funnel for every error toast (the axios interceptor
+// and ~30 page call sites). It now (1) maps technical backend errors to calm,
+// bilingual, business-language copy via resolveErrorMessage, and (2) collapses
+// identical messages fired in a short window into ONE toast — root-fixing the
+// "wall of red" a stale-session page mount used to produce. A true logged-out
+// 401 (no client-side user) redirects to /login exactly once instead of
+// toasting; transient 401s (user shim present) show a single calm line.
 export function showError(error) {
   console.error(error);
-  if (error.message) {
-    if (error.name === 'AxiosError') {
-      switch (error.response.status) {
-        case 401:
-          // Loop guard during Layer C transition: ZitadelRedirect
-          // synthesizes a localStorage user from the SDK cookie, but
-          // legacy v2 APIs still use ZitadelAuth middleware which
-          // requires a Bearer JWT (not the SDK cookie). 401s from those
-          // APIs are expected until Layer C cleanup ships. Auto-redirecting
-          // to zita-login here would loop: dashboard → 401 → zita-login →
-          // identity (has session) → bounce back → 401 → ...
-          // If user is set, the cookie is valid — show toast and let the
-          // user keep navigating. If not, kick to /login (ZitadelRedirect
-          // there will probe cookie or redirect to identity).
-          if (localStorage.getItem('user')) {
-            Toast.error('部分 API 暂未对接 SDK 会话（Layer C 进行中）');
-          } else {
-            window.location.href = '/login';
-          }
-          break;
-        case 429:
-          Toast.error('错误：请求次数过多，请稍后再试！');
-          break;
-        case 500:
-          Toast.error('错误：服务器内部错误，请联系管理员！');
-          break;
-        case 405:
-          Toast.info('本站仅作演示之用，无服务端！');
-          break;
-        default:
-          Toast.error('错误：' + error.message);
-      }
-      return;
-    }
-    Toast.error('错误：' + error.message);
-  } else {
-    Toast.error('错误：' + error);
+
+  // Plain string passed in by a caller (e.g. showError('Copy failed')).
+  if (typeof error === 'string') {
+    if (shouldEmit(error)) Toast.error(error);
+    return;
+  }
+
+  if (isHardUnauthorized(error)) {
+    window.location.href = '/login';
+    return;
+  }
+
+  const message = resolveErrorMessage(error);
+  if (shouldEmit(message)) {
+    Toast.error(message);
   }
 }
 

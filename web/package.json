@@ -6,6 +6,9 @@
   "dependencies": {
     "@douyinfe/semi-icons": "~2.72.2",
     "@douyinfe/semi-ui": "~2.72.2",
+    "@fontsource/fraunces": "^5.2.9",
+    "@fontsource/inter-tight": "^5.2.7",
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "@lobehub/icons": "^2.48.0",
     "@visactor/react-vchart": "~1.8.11",
     "@visactor/vchart": "~1.8.11",

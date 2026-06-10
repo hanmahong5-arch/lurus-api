@@ -180,4 +180,30 @@ describe('Billing page', () => {
     expect(payLink.tagName.toLowerCase()).toBe('a');
     expect(payLink.href).toContain('identity.lurus.cn');
   });
+
+  // 4. Platform summary 503 → honest "billing temporarily unavailable" banner,
+  //    while the tenant-local invoices table still renders (allSettled isolation).
+  it('shows an honest platform-down banner when billing summary is unreachable', async () => {
+    API.get.mockImplementation((url) => {
+      if (url.includes('/billing/invoices')) {
+        return Promise.resolve({
+          data: { success: true, data: { items: fakeInvoices } },
+        });
+      }
+      // summary call rejects like a 503 from the platform billing service
+      return Promise.reject(new Error('503 Service Unavailable'));
+    });
+
+    render(<HFBilling />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('billing-platform-down')).toBeTruthy();
+    });
+    expect(screen.getByTestId('billing-platform-down').textContent).toMatch(
+      /temporarily unavailable/i,
+    );
+
+    // Invoices remain visible despite the summary outage.
+    expect(screen.getByText('2026-05')).toBeTruthy();
+  });
 });

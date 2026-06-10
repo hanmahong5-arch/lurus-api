@@ -137,19 +137,25 @@ const NOTIFICATION_CHANNELS = [
   },
 ];
 
+// Integration registry is not implemented — there is no connection store and
+// no live status to report. Every channel is honestly "not configured"; we do
+// NOT paint fake green "connected · ok" dots (§4.1 ①: a value you can't measure
+// is not a value you may show).
 const INTEGRATIONS = [
-  ['Slack', 'connected · #alerts', 'ok'],
-  ['PagerDuty', 'connected · sev1 only', 'ok'],
-  ['Datadog', 'metrics export', 'ok'],
-  ['Webhook', '2 endpoints', 'ok'],
-  ['Sentry', 'not connected', 'idle'],
-  ['Discord', 'not connected', 'idle'],
+  ['Slack', 'not configured', 'idle'],
+  ['PagerDuty', 'not configured', 'idle'],
+  ['Datadog', 'not configured', 'idle'],
+  ['Webhook', 'not configured', 'idle'],
+  ['Sentry', 'not configured', 'idle'],
+  ['Discord', 'not configured', 'idle'],
 ];
 
+// Data-residency selection is not wired (no backend). No region is "current" —
+// claiming one would be a fabricated state. All shown as merely available.
 const REGIONS = [
   ['us-west', false],
   ['eu-frankfurt', false],
-  ['ap-shanghai', true],
+  ['ap-shanghai', false],
 ];
 
 // Shared inline input style (no hf-input class)
@@ -1039,7 +1045,12 @@ const HFSettings = () => {
                                   ? formatRelativeTime(t.created_at)
                                   : '—'}
                               </td>
-                              <td style={{ padding: '8px 12px' }}>topup</td>
+                              {/* Type derived from the row; this list is the
+                                  topups ledger, so 'topup' is the accurate
+                                  fallback (not a fabricated label). */}
+                              <td style={{ padding: '8px 12px' }}>
+                                {t.type || 'topup'}
+                              </td>
                               <td
                                 style={{
                                   padding: '8px 12px',
@@ -1050,13 +1061,20 @@ const HFSettings = () => {
                                   ? `${(t.quota / QUOTA_PER_USD).toFixed(2)} USD eq.`
                                   : '—'}
                               </td>
+                              {/* Status derived from the row — no unconditional
+                                  green "settled". Honest '—' when the topup
+                                  record carries no status field. */}
                               <td
                                 style={{
                                   padding: '8px 12px',
                                   textAlign: 'right',
                                 }}
                               >
-                                <span className='tag ok'>settled</span>
+                                {t.status ? (
+                                  <span className='tag ok'>{t.status}</span>
+                                ) : (
+                                  <span className='faint mono'>—</span>
+                                )}
                               </td>
                             </tr>
                           ))}

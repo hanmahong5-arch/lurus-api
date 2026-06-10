@@ -18,7 +18,13 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 
 // Mock helpers BEFORE importing the component — vi.mock is hoisted.
 vi.mock('../../../helpers', () => ({
@@ -40,12 +46,6 @@ vi.mock('../../../components/hifi/HFShell', () => ({
       React.createElement('div', null, actions),
       children,
     ),
-}));
-
-// WIPBanner stub: renders a div with a detectable attribute.
-vi.mock('../../../components/hifi/WIPBanner', () => ({
-  default: ({ reason }) =>
-    React.createElement('div', { 'data-testid': 'wip-banner' }, reason),
 }));
 
 import HFLog from './index';
@@ -157,15 +157,157 @@ describe('Log page', () => {
     expect(counts[0]).toBe(50);
   });
 
-  // 3. Clicking Live tail tab shows WIPBanner (SSE deferred to v3).
-  it('shows WIPBanner on Live tail tab', async () => {
+  // 3. Live tail seeds then polls with after_id + disableDuplicate, prepending
+  //    newly-arrived rows on top of the buffer.
+  it('seeds then polls with after_id + disableDuplicate and prepends new rows', async () => {
+    vi.useFakeTimers();
+    const seedLog = {
+      id: 10,
+      type: 2,
+      model_name: 'seed-model',
+      created_at: 1700000000,
+    };
+    const pollLog = {
+      id: 11,
+      type: 2,
+      model_name: 'poll-model',
+      created_at: 1700000003,
+    };
+    API.get.mockImplementation((url) => {
+      if (/after_id=/.test(url)) {
+        return Promise.resolve({
+          data: { success: true, data: { logs: [pollLog], total: 1 } },
+        });
+      }
+      if (/\/logs\/stat/.test(url)) {
+        return Promise.resolve({ data: { success: true, data: {} } });
+      }
+      return Promise.resolve({
+        data: { success: true, data: { logs: [seedLog], total: 1 } },
+      });
+    });
+
     render(<HFLog />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
 
     fireEvent.click(screen.getByText('Live tail'));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('wip-banner')).toBeDefined();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
     });
+    // Seed row is visible immediately (no 3s wait).
+    expect(screen.getByText('seed-model')).toBeTruthy();
+
+    // One poll interval elapses.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    const pollCall = API.get.mock.calls.find(
+      ([url, cfg]) => /after_id=/.test(url) && cfg?.disableDuplicate,
+    );
+    expect(pollCall).toBeTruthy();
+    // New row prepended to the live buffer.
+    expect(screen.getByText('poll-model')).toBeTruthy();
+
+    vi.useRealTimers();
+  });
+
+  // 3b. Pausing stops further polling.
+  it('pause stops further polls', async () => {
+    vi.useFakeTimers();
+    const seedLog = {
+      id: 5,
+      type: 2,
+      model_name: 'seed',
+      created_at: 1700000000,
+    };
+    API.get.mockImplementation((url) => {
+      if (/after_id=/.test(url)) {
+        return Promise.resolve({
+          data: { success: true, data: { logs: [], total: 0 } },
+        });
+      }
+      if (/\/logs\/stat/.test(url)) {
+        return Promise.resolve({ data: { success: true, data: {} } });
+      }
+      return Promise.resolve({
+        data: { success: true, data: { logs: [seedLog], total: 1 } },
+      });
+    });
+
+    render(<HFLog />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    fireEvent.click(screen.getByText('Live tail'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    fireEvent.click(screen.getByTestId('live-pause-btn'));
+    const before = API.get.mock.calls.filter(([url]) =>
+      /after_id=/.test(url),
+    ).length;
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9000);
+    });
+    const after = API.get.mock.calls.filter(([url]) =>
+      /after_id=/.test(url),
+    ).length;
+    expect(after).toBe(before);
+
+    vi.useRealTimers();
+  });
+
+  // 3c. Unmounting clears the polling interval.
+  it('unmount clears the polling interval', async () => {
+    vi.useFakeTimers();
+    const seedLog = {
+      id: 5,
+      type: 2,
+      model_name: 'seed',
+      created_at: 1700000000,
+    };
+    API.get.mockImplementation((url) => {
+      if (/after_id=/.test(url)) {
+        return Promise.resolve({
+          data: { success: true, data: { logs: [], total: 0 } },
+        });
+      }
+      if (/\/logs\/stat/.test(url)) {
+        return Promise.resolve({ data: { success: true, data: {} } });
+      }
+      return Promise.resolve({
+        data: { success: true, data: { logs: [seedLog], total: 1 } },
+      });
+    });
+
+    const { unmount } = render(<HFLog />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    fireEvent.click(screen.getByText('Live tail'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    const before = API.get.mock.calls.filter(([url]) =>
+      /after_id=/.test(url),
+    ).length;
+    expect(before).toBeGreaterThan(0);
+
+    unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9000);
+    });
+    const after = API.get.mock.calls.filter(([url]) =>
+      /after_id=/.test(url),
+    ).length;
+    expect(after).toBe(before);
+
+    vi.useRealTimers();
   });
 
   // 4. Export button sets window.location.href to the correct URL with
@@ -207,5 +349,79 @@ describe('Log page', () => {
     expect(assignedHref).toContain('/api/v2/acme/logs/export');
     expect(assignedHref).toContain('model_name=gpt-4o');
     expect(assignedHref).toContain('token_name=my-token');
+  });
+
+  // 5. Stat header is wired to GET /logs/stat and renders the aggregates.
+  it('fetches the stat header from /logs/stat and renders aggregates', async () => {
+    API.get.mockImplementation((url) => {
+      if (url.includes('/logs/stat')) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              total_requests: 42,
+              total_quota: 1_000_000,
+              rpm: 3,
+              tpm: 1500,
+            },
+          },
+        });
+      }
+      return Promise.resolve({
+        data: { success: true, data: { logs: [], total: 0 } },
+      });
+    });
+
+    render(<HFLog />);
+
+    await waitFor(() => {
+      const calls = API.get.mock.calls.map(([u]) => u);
+      expect(calls.some((u) => u.includes('/api/v2/acme/logs/stat'))).toBe(
+        true,
+      );
+    });
+
+    await waitFor(() => {
+      const header = screen.getByTestId('log-stat-header');
+      expect(header.textContent).toContain('42'); // total requests
+      expect(header.textContent).toContain('$2.0000'); // 1_000_000 / 500_000
+      expect(header.textContent).toContain('1,500'); // tpm, locale-formatted
+    });
+  });
+
+  // 6. TTFT renders as an honest n/a cell (with a reason), never a silent —;
+  //    upstream shows the channel id when the row carries one.
+  it('renders TTFT as n/a and upstream from the channel id', async () => {
+    const log = {
+      id: 1,
+      type: 2,
+      model_name: 'gpt-4o',
+      total_latency_ms: 120,
+      prompt_tokens: 100,
+      completion_tokens: 200,
+      quota: 1000,
+      created_at: Math.floor(Date.now() / 1000),
+      channel: 7,
+    };
+    API.get.mockImplementation((url) => {
+      if (url.includes('/logs/stat')) {
+        return Promise.resolve({ data: { success: true, data: {} } });
+      }
+      return Promise.resolve({
+        data: { success: true, data: { logs: [log], total: 1 } },
+      });
+    });
+
+    render(<HFLog />);
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('na-cell').length).toBeGreaterThan(0);
+    });
+    const naCells = screen.getAllByTestId('na-cell');
+    expect(
+      naCells.some((c) => /ttft/i.test(c.getAttribute('title') || '')),
+    ).toBe(true);
+    // upstream column shows "#7" because log.channel is present.
+    expect(screen.getByText('#7')).toBeTruthy();
   });
 });

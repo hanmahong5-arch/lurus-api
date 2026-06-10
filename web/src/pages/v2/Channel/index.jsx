@@ -20,13 +20,19 @@ import React, {
   Fragment,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import HFShell from '../../../components/hifi/HFShell';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import NotAvailable from '../../../components/hifi/NotAvailable';
 import { API, showError, showSuccess } from '../../../helpers';
+
+// Bounded concurrency for the "test all enabled" sweep — never fan out an
+// unbounded burst of upstream test calls.
+const BATCH_TEST_CONCURRENCY = 4;
 
 // ─── SyncModelsModal ─────────────────────────────────────────────────────────
 
@@ -373,23 +379,32 @@ const EMPTY_FORM = {
   remark: '',
 };
 
-const ChannelModal = ({ tenantSlug, existing, onDone, onClose }) => {
+// ChannelModal handles three intents from two props:
+//   existing       → edit (PUT)
+//   prefill (clone)→ create a new channel pre-filled from another (POST)
+//   neither        → create blank (POST)
+// Clone never copies the upstream key (secret, masked server-side) and appends
+// " copy" to the name so the duplicate is obvious.
+const ChannelModal = ({ tenantSlug, existing, prefill, onDone, onClose }) => {
+  const source = existing || prefill;
   const [form, setForm] = useState(
-    existing
+    source
       ? {
-          name: existing.name ?? '',
+          name: existing
+            ? (source.name ?? '')
+            : `${source.name ?? 'channel'} copy`,
           key: '',
-          type: existing.type ?? 1,
-          baseURL: existing.base_url ?? '',
-          models: Array.isArray(existing.models)
-            ? existing.models.join(',')
-            : (existing.models ?? ''),
-          group: existing.group ?? 'default',
-          weight: existing.weight ?? 1,
-          priority: existing.priority ?? 0,
-          modelMapping: existing.model_mapping ?? '',
-          tag: existing.tag ?? '',
-          remark: existing.remark ?? '',
+          type: source.type ?? 1,
+          baseURL: source.base_url ?? '',
+          models: Array.isArray(source.models)
+            ? source.models.join(',')
+            : (source.models ?? ''),
+          group: source.group ?? 'default',
+          weight: source.weight ?? 1,
+          priority: source.priority ?? 0,
+          modelMapping: source.model_mapping ?? '',
+          tag: source.tag ?? '',
+          remark: source.remark ?? '',
         }
       : { ...EMPTY_FORM },
   );
@@ -495,7 +510,11 @@ const ChannelModal = ({ tenantSlug, existing, onDone, onClose }) => {
         }}
       >
         <div className='strong' style={{ fontSize: 15 }}>
-          {existing ? `Edit · ${existing.name}` : 'New channel'}
+          {existing
+            ? `Edit · ${existing.name}`
+            : prefill
+              ? `Clone · ${prefill.name}`
+              : 'New channel'}
         </div>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -869,6 +888,24 @@ const ExpandedRow = ({ channel, tenantSlug, onRefresh }) => {
           >
             {channel.status === 1 ? 'disable' : 'enable'}
           </button>
+          {/* Honestly deferred — these New-API features have no v2 backend yet,
+              so they are visibly greyed with a reason, never silently absent. */}
+          <button
+            type='button'
+            className='btn sm'
+            disabled
+            title='upstream balance refresh is provider-specific and unreliable — not wired in v2'
+          >
+            refresh balance
+          </button>
+          <button
+            type='button'
+            className='btn sm'
+            disabled
+            title='multi-key management needs a backend key-pool model — deferred'
+          >
+            multi-key
+          </button>
           <button
             type='button'
             className='btn sm'
@@ -902,42 +939,77 @@ const HFChannel = () => {
   const [channels, setChannels] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  // Selection & expansion are keyed by channel id (not list index) so they stay
+  // correct when the client-side status filter changes the rendered set.
   const [sel, setSel] = useState(new Set());
-  const [open, setOpen] = useState(-1);
+  const [open, setOpen] = useState(null); // expanded channel id, or null
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(null); // channel object being edited
+  const [cloning, setCloning] = useState(null); // channel object being cloned
   const [syncTarget, setSyncTarget] = useState(null); // channel being synced
   // testState: { [channelId]: 'testing' | { latency_ms, success, error? } }
   const [testState, setTestState] = useState({});
+  // batchTesting: { done, total } while a "test all enabled" sweep runs, else null
+  const [batchTesting, setBatchTesting] = useState(null);
 
-  const fetchChannels = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await API.get(
-        `/api/v2/${tenantSlug}/channels?page=1&page_size=100`,
-      );
-      if (res?.data?.success) {
-        const d = res.data.data;
-        setChannels(d.channels ?? []);
-        setTotal(d.total ?? d.channels?.length ?? 0);
-        setSel(new Set());
-        setOpen(-1);
+  // Filters — keyword + group are server-side (ListChannelsV2 supports them);
+  // status is client-side (the list endpoint has no status filter).
+  const [filterKeyword, setFilterKeyword] = useState('');
+  const [filterGroup, setFilterGroup] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all'); // all|ok|disabled|error
+
+  const fetchChannels = useCallback(
+    async (keyword = '', group = '') => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ page: '1', page_size: '100' });
+        if (keyword.trim()) params.set('keyword', keyword.trim());
+        if (group.trim()) params.set('group', group.trim());
+        const res = await API.get(
+          `/api/v2/${tenantSlug}/channels?${params.toString()}`,
+        );
+        if (res?.data?.success) {
+          const d = res.data.data;
+          setChannels(d.channels ?? []);
+          setTotal(d.total ?? d.channels?.length ?? 0);
+          setSel(new Set());
+          setOpen(null);
+        }
+      } catch (_) {
+      } finally {
+        setLoading(false);
       }
-    } catch (_) {
-    } finally {
-      setLoading(false);
-    }
-  }, [tenantSlug]);
+    },
+    [tenantSlug],
+  );
+
+  // Re-fetch preserving the active keyword/group filters — used by every
+  // post-mutation refresh so an edit doesn't silently drop the filter.
+  const applyChannelFilters = useCallback(() => {
+    fetchChannels(filterKeyword, filterGroup);
+  }, [fetchChannels, filterKeyword, filterGroup]);
 
   useEffect(() => {
     if (tenantSlug) fetchChannels();
   }, [fetchChannels, tenantSlug]);
 
-  const toggle = (i) => {
+  // Status filter is client-side; clear stale selection/expansion when it
+  // changes so id-based selection never points at a now-hidden row.
+  const visibleChannels = useMemo(() => {
+    if (filterStatus === 'all') return channels;
+    return channels.filter((c) => channelStatus(c) === filterStatus);
+  }, [channels, filterStatus]);
+
+  useEffect(() => {
+    setSel(new Set());
+    setOpen(null);
+  }, [filterStatus]);
+
+  const toggle = (id) => {
     setSel((prev) => {
       const n = new Set(prev);
-      if (n.has(i)) n.delete(i);
-      else n.add(i);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
       return n;
     });
   };
@@ -945,7 +1017,8 @@ const HFChannel = () => {
   const handleModalDone = async () => {
     setCreating(false);
     setEditing(null);
-    await fetchChannels();
+    setCloning(null);
+    await applyChannelFilters();
   };
 
   const handleTestChannel = async (e, ch) => {
@@ -973,7 +1046,58 @@ const HFChannel = () => {
     }
   };
 
-  // Derived summary counts
+  // Test every enabled channel with bounded concurrency. Each channel keeps its
+  // own per-row result (reusing testState); a shared cursor caps the in-flight
+  // count at BATCH_TEST_CONCURRENCY. Idempotent — re-running just re-tests.
+  const runBatchTest = async () => {
+    if (batchTesting) return;
+    const targets = channels.filter((c) => c.status === 1);
+    if (targets.length === 0) {
+      showError(t('没有启用的渠道可测试'));
+      return;
+    }
+    setBatchTesting({ done: 0, total: targets.length });
+    let cursor = 0;
+    let okCnt = 0;
+    const worker = async () => {
+      // cursor++ is synchronous between awaits, so each channel is claimed once.
+      while (cursor < targets.length) {
+        const ch = targets[cursor++];
+        setTestState((prev) => ({ ...prev, [ch.id]: 'testing' }));
+        try {
+          const res = await API.post(
+            `/api/v2/${tenantSlug}/channels/${ch.id}/test`,
+            {},
+          );
+          const data = res?.data ?? {};
+          setTestState((prev) => ({ ...prev, [ch.id]: data }));
+          if (data.success) okCnt += 1;
+        } catch (err) {
+          setTestState((prev) => ({
+            ...prev,
+            [ch.id]: { success: false, error: String(err) },
+          }));
+        } finally {
+          setBatchTesting((b) => (b ? { ...b, done: b.done + 1 } : b));
+        }
+      }
+    };
+    await Promise.all(
+      Array.from(
+        { length: Math.min(BATCH_TEST_CONCURRENCY, targets.length) },
+        () => worker(),
+      ),
+    );
+    setBatchTesting(null);
+    showSuccess(
+      t('批量测试完成：{{ok}}/{{total}} 通过', {
+        ok: okCnt,
+        total: targets.length,
+      }),
+    );
+  };
+
+  // Derived summary counts (always over the full set, not the filtered view).
   const okCount = channels.filter((c) => channelStatus(c) === 'ok').length;
   const disabledCount = channels.filter(
     (c) => channelStatus(c) === 'disabled',
@@ -982,9 +1106,11 @@ const HFChannel = () => {
     (c) => channelStatus(c) === 'error',
   ).length;
 
-  // Batch enable/disable
+  // Batch enable/disable — selection holds channel ids.
   const batchSetStatus = async (status) => {
-    const targets = [...sel].map((i) => channels[i]).filter(Boolean);
+    const targets = [...sel]
+      .map((id) => channels.find((c) => c.id === id))
+      .filter(Boolean);
     if (targets.length === 0) return;
     try {
       await Promise.all(
@@ -993,7 +1119,7 @@ const HFChannel = () => {
         ),
       );
       showSuccess(`${targets.length} channel(s) updated`);
-      await fetchChannels();
+      await applyChannelFilters();
     } catch (_) {}
   };
 
@@ -1003,6 +1129,21 @@ const HFChannel = () => {
       crumbs={['platform · admin', 'channels']}
       actions={
         <>
+          <button
+            type='button'
+            className='btn'
+            data-testid='batch-test-all-btn'
+            disabled={!!batchTesting || loading}
+            onClick={runBatchTest}
+            title='test every enabled channel (max 4 in parallel)'
+          >
+            {batchTesting
+              ? t('测试中 {{done}}/{{total}}', {
+                  done: batchTesting.done,
+                  total: batchTesting.total,
+                })
+              : t('测试全部启用')}
+          </button>
           <button
             type='button'
             className='btn primary'
@@ -1047,6 +1188,95 @@ const HFChannel = () => {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Filter bar — keyword + group are server-side; status is client-side */}
+      <div
+        style={{
+          padding: '10px 28px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          borderBottom: '1px solid var(--hf-rule)',
+          background: 'var(--hf-paper)',
+          flexWrap: 'wrap',
+        }}
+      >
+        <input
+          data-testid='channel-filter-keyword'
+          style={{
+            fontFamily: 'var(--hf-mono)',
+            fontSize: 11,
+            padding: '4px 8px',
+            border: '1px solid var(--hf-rule)',
+            background: 'var(--hf-sunken)',
+            color: 'var(--hf-ink)',
+            borderRadius: 2,
+            outline: 'none',
+            width: 180,
+          }}
+          placeholder='search name / key…'
+          value={filterKeyword}
+          onChange={(e) => setFilterKeyword(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && applyChannelFilters()}
+        />
+        <input
+          data-testid='channel-filter-group'
+          style={{
+            fontFamily: 'var(--hf-mono)',
+            fontSize: 11,
+            padding: '4px 8px',
+            border: '1px solid var(--hf-rule)',
+            background: 'var(--hf-sunken)',
+            color: 'var(--hf-ink)',
+            borderRadius: 2,
+            outline: 'none',
+            width: 130,
+          }}
+          placeholder='group…'
+          value={filterGroup}
+          onChange={(e) => setFilterGroup(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && applyChannelFilters()}
+        />
+        <select
+          data-testid='channel-filter-status'
+          style={{
+            fontFamily: 'var(--hf-mono)',
+            fontSize: 11,
+            padding: '4px 8px',
+            border: '1px solid var(--hf-rule)',
+            background: 'var(--hf-sunken)',
+            color: 'var(--hf-ink)',
+            borderRadius: 2,
+            outline: 'none',
+          }}
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+        >
+          <option value='all'>all status</option>
+          <option value='ok'>enabled</option>
+          <option value='disabled'>disabled</option>
+          <option value='error'>error</option>
+        </select>
+        <button
+          type='button'
+          className='btn primary'
+          onClick={applyChannelFilters}
+        >
+          search
+        </button>
+        <button
+          type='button'
+          className='btn ghost'
+          onClick={() => {
+            setFilterKeyword('');
+            setFilterGroup('');
+            setFilterStatus('all');
+            fetchChannels('', '');
+          }}
+        >
+          clear
+        </button>
       </div>
 
       {/* Batch action bar */}
@@ -1116,9 +1346,11 @@ const HFChannel = () => {
         <div className='muted' style={{ padding: '24px 28px', fontSize: 12 }}>
           Loading…
         </div>
-      ) : channels.length === 0 ? (
+      ) : visibleChannels.length === 0 ? (
         <div className='muted' style={{ padding: '24px 28px', fontSize: 12 }}>
-          No channels yet. Add one to get started.
+          {channels.length === 0
+            ? 'No channels yet. Add one to get started.'
+            : 'No channels match the current filters.'}
         </div>
       ) : (
         <table className='t'>
@@ -1137,9 +1369,9 @@ const HFChannel = () => {
             </tr>
           </thead>
           <tbody>
-            {channels.map((ch, i) => {
+            {visibleChannels.map((ch, i) => {
               const st = channelStatus(ch);
-              const isOpen = open === i;
+              const isOpen = open === ch.id;
 
               const modelsList = (() => {
                 if (!ch.models) return [];
@@ -1154,22 +1386,26 @@ const HFChannel = () => {
                 <Fragment key={ch.id ?? i}>
                   <tr
                     style={{
-                      background: sel.has(i)
+                      background: sel.has(ch.id)
                         ? 'rgba(255,93,31,0.08)'
                         : undefined,
-                      borderLeft: sel.has(i)
+                      borderLeft: sel.has(ch.id)
                         ? '2px solid var(--hf-accent)'
                         : '2px solid transparent',
                       cursor: 'pointer',
                     }}
                   >
                     {/* Checkbox */}
-                    <td onClick={() => toggle(i)}>
-                      <input type='checkbox' checked={sel.has(i)} readOnly />
+                    <td onClick={() => toggle(ch.id)}>
+                      <input
+                        type='checkbox'
+                        checked={sel.has(ch.id)}
+                        readOnly
+                      />
                     </td>
 
                     {/* Name + group */}
-                    <td onClick={() => setOpen(isOpen ? -1 : i)}>
+                    <td onClick={() => setOpen(isOpen ? null : ch.id)}>
                       <div
                         style={{
                           display: 'flex',
@@ -1192,7 +1428,7 @@ const HFChannel = () => {
                     <td
                       className='mono muted'
                       style={{ fontSize: 11 }}
-                      onClick={() => setOpen(isOpen ? -1 : i)}
+                      onClick={() => setOpen(isOpen ? null : ch.id)}
                     >
                       {ch.type ?? '—'}
                     </td>
@@ -1200,31 +1436,31 @@ const HFChannel = () => {
                     {/* Model count */}
                     <td
                       className='mono'
-                      onClick={() => setOpen(isOpen ? -1 : i)}
+                      onClick={() => setOpen(isOpen ? null : ch.id)}
                     >
                       {modelsList.length > 0 ? modelsList.length : '—'}
                     </td>
 
-                    {/* QPS — no backend aggregation yet */}
+                    {/* QPS — no metrics backend (no per-channel aggregation) */}
                     <td
                       className='muted'
                       style={{ fontSize: 11 }}
-                      onClick={() => setOpen(isOpen ? -1 : i)}
+                      onClick={() => setOpen(isOpen ? null : ch.id)}
                     >
-                      —
+                      <NotAvailable reason='no metrics backend: per-channel QPS is not aggregated' />
                     </td>
 
-                    {/* Latency — no backend aggregation yet */}
+                    {/* Latency p50/p95 — no metrics backend */}
                     <td
                       className='muted'
                       style={{ fontSize: 11 }}
-                      onClick={() => setOpen(isOpen ? -1 : i)}
+                      onClick={() => setOpen(isOpen ? null : ch.id)}
                     >
-                      —
+                      <NotAvailable reason='no metrics backend: per-channel latency percentiles are not aggregated' />
                     </td>
 
                     {/* Success rate */}
-                    <td onClick={() => setOpen(isOpen ? -1 : i)}>
+                    <td onClick={() => setOpen(isOpen ? null : ch.id)}>
                       {ch.success_rate != null && ch.success_rate > 0 ? (
                         <div
                           style={{
@@ -1275,17 +1511,17 @@ const HFChannel = () => {
                       )}
                     </td>
 
-                    {/* Cost — no backend aggregation yet */}
+                    {/* Cost · 1h — no metrics backend */}
                     <td
                       className='muted'
                       style={{ fontSize: 11 }}
-                      onClick={() => setOpen(isOpen ? -1 : i)}
+                      onClick={() => setOpen(isOpen ? null : ch.id)}
                     >
-                      —
+                      <NotAvailable reason='no metrics backend: per-channel hourly cost is not aggregated' />
                     </td>
 
                     {/* Status badge */}
-                    <td onClick={() => setOpen(isOpen ? -1 : i)}>
+                    <td onClick={() => setOpen(isOpen ? null : ch.id)}>
                       <span className={statusTag(st)}>{st}</span>
                     </td>
 
@@ -1324,7 +1560,7 @@ const HFChannel = () => {
                         type='button'
                         className='btn ghost'
                         style={{ marginLeft: 4 }}
-                        onClick={() => setOpen(isOpen ? -1 : i)}
+                        onClick={() => setOpen(isOpen ? null : ch.id)}
                       >
                         {isOpen ? '▾' : '▸'}
                       </button>
@@ -1345,7 +1581,7 @@ const HFChannel = () => {
                         <ExpandedRow
                           channel={ch}
                           tenantSlug={tenantSlug}
-                          onRefresh={fetchChannels}
+                          onRefresh={applyChannelFilters}
                         />
                         <div
                           style={{
@@ -1360,6 +1596,15 @@ const HFChannel = () => {
                             onClick={() => setEditing(ch)}
                           >
                             edit all fields
+                          </button>
+                          <button
+                            type='button'
+                            className='btn sm'
+                            data-testid={`clone-btn-${ch.id}`}
+                            onClick={() => setCloning(ch)}
+                            title='create a new channel pre-filled from this one (key not copied)'
+                          >
+                            {t('克隆渠道')}
                           </button>
                           <button
                             type='button'
@@ -1400,6 +1645,16 @@ const HFChannel = () => {
         />
       )}
 
+      {/* Clone modal — create pre-filled from an existing channel */}
+      {cloning && (
+        <ChannelModal
+          tenantSlug={tenantSlug}
+          prefill={cloning}
+          onDone={handleModalDone}
+          onClose={() => setCloning(null)}
+        />
+      )}
+
       {/* Sync upstream models modal */}
       {syncTarget && (
         <SyncModelsModal
@@ -1408,7 +1663,7 @@ const HFChannel = () => {
           onClose={() => setSyncTarget(null)}
           onApply={async () => {
             setSyncTarget(null);
-            await fetchChannels();
+            await applyChannelFilters();
           }}
         />
       )}
