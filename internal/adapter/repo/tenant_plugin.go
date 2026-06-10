@@ -220,6 +220,10 @@ func WithoutTenantIsolation(db *gorm.DB) *gorm.DB {
 // caller's cancellation/deadline AND satisfies contextcheck — the implicit
 // variant reads ctx from db.Statement, which the linter cannot follow).
 func WithoutTenantIsolationCtx(ctx context.Context, db *gorm.DB) *gorm.DB {
+	// SkipTenantIsolationKey is a plain string by repo-wide convention — the
+	// tenant plugin reads the same untyped key everywhere (entity/tenant.go).
+	// Retyping it is a cross-cutting change out of scope here.
+	//nolint:staticcheck // SA1029: key type is a pre-existing convention shared with WithoutTenantIsolation
 	return db.WithContext(context.WithValue(ctx, SkipTenantIsolationKey, true))
 }
 
