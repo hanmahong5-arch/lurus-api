@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import HFShell from '../../../components/hifi/HFShell';
 import WIPBanner from '../../../components/hifi/WIPBanner';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
@@ -47,15 +48,24 @@ const fmtCNY = (v) =>
     : '—';
 
 // formatRelativeTime converts a Unix timestamp (seconds) to a human-readable
-// relative string (e.g. "just now", "3 minutes ago"). No external dependency —
-// avoids adding date-fns for a single call site.
-const formatRelativeTime = (unixSec) => {
+// relative string (e.g. "just now", "3m ago"). No external dependency —
+// avoids adding date-fns for a single call site. `tr` is passed in because
+// module scope has no i18n context.
+const formatRelativeTime = (unixSec, tr) => {
   if (!unixSec) return '—';
   const diffSec = Math.floor(Date.now() / 1000) - unixSec;
-  if (diffSec < 60) return '刚刚';
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} 分钟前`;
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} 小时前`;
-  return `${Math.floor(diffSec / 86400)} 天前`;
+  if (diffSec < 60) return tr('console.common.time_just_now', 'just now');
+  if (diffSec < 3600)
+    return tr('console.common.time_minutes_ago', {
+      count: Math.floor(diffSec / 60),
+    });
+  if (diffSec < 86400)
+    return tr('console.common.time_hours_ago', {
+      count: Math.floor(diffSec / 3600),
+    });
+  return tr('console.common.time_days_ago', {
+    count: Math.floor(diffSec / 86400),
+  });
 };
 
 const useTenantSlug = () => {
@@ -69,6 +79,8 @@ const useTenantSlug = () => {
   return slug;
 };
 
+// Labels/descriptions resolved at render via tr() — module scope has no i18n
+// context. Keys: console.settings.section_<id> / section_<id>_desc.
 const SECTIONS = [
   ['profile', 'Profile', 'name, email, avatar'],
   ['security', 'Security', 'password, mfa, sessions'],
@@ -85,55 +97,65 @@ const SECTIONS = [
 // derived locally from the existing /user/me `group` field — backend
 // entitlement registry not yet implemented. See caveats in commit body.
 // Order: [label, value]. Tooltip on the upgrade button explains scope.
+// Translatable values are [key, fallback] pairs resolved at render via tr()
+// (module scope has no i18n context); plain strings (e.g. "99.5%") render
+// verbatim.
 const ENTITLEMENT_BY_GROUP = {
   default: {
-    label: 'Free',
-    routing: 'shared pool',
-    sla: 'best effort',
+    label: ['tier_free', 'Free'],
+    routing: ['ent_routing_shared', 'shared pool'],
+    sla: ['ent_sla_best_effort', 'best effort'],
     auditDays: 7,
-    support: 'community',
+    support: ['ent_support_community', 'community'],
   },
   vip: {
-    label: 'Pro',
-    routing: 'priority routing',
+    label: ['tier_pro', 'Pro'],
+    routing: ['ent_routing_priority', 'priority routing'],
     sla: '99.5%',
     auditDays: 30,
-    support: 'business hours',
+    support: ['ent_support_business_hours', 'business hours'],
   },
   pro: {
-    label: 'Pro',
-    routing: 'priority routing',
+    label: ['tier_pro', 'Pro'],
+    routing: ['ent_routing_priority', 'priority routing'],
     sla: '99.5%',
     auditDays: 30,
-    support: 'business hours',
+    support: ['ent_support_business_hours', 'business hours'],
   },
   enterprise: {
-    label: 'Enterprise',
-    routing: 'dedicated pool',
+    label: ['tier_enterprise', 'Enterprise'],
+    routing: ['ent_routing_dedicated', 'dedicated pool'],
     sla: '99.95%',
     auditDays: 365,
-    support: '24/7 dedicated',
+    support: ['ent_support_dedicated', '24/7 dedicated'],
   },
 };
 
 // Wave A Squad 5A: 3 read-only notification channels with placeholder events.
 // Toggle switches are disabled — mutation flow lands in Wave B per
 // adr-2026-05-18-budget-alerts.md.
+// Labels/events are [key, fallback] pairs resolved at render via tr().
+const NOTIFICATION_EVENTS = [
+  ['event_quota_threshold', 'Quota threshold'],
+  ['event_plan_limit', 'Plan limit'],
+  ['event_security_event', 'Security event'],
+];
+
 const NOTIFICATION_CHANNELS = [
   {
     key: 'email',
-    label: 'Email notifications',
-    events: ['Quota threshold', 'Plan limit', 'Security event'],
+    label: ['channel_email', 'Email notifications'],
+    events: NOTIFICATION_EVENTS,
   },
   {
     key: 'webhook',
-    label: 'Webhook',
-    events: ['Quota threshold', 'Plan limit', 'Security event'],
+    label: ['channel_webhook', 'Webhook'],
+    events: NOTIFICATION_EVENTS,
   },
   {
     key: 'inapp',
-    label: 'In-app',
-    events: ['Quota threshold', 'Plan limit', 'Security event'],
+    label: ['channel_inapp', 'In-app'],
+    events: NOTIFICATION_EVENTS,
   },
 ];
 
@@ -141,13 +163,15 @@ const NOTIFICATION_CHANNELS = [
 // no live status to report. Every channel is honestly "not configured"; we do
 // NOT paint fake green "connected · ok" dots (§4.1 ①: a value you can't measure
 // is not a value you may show).
+// Names are product names (not translated); status text is translated at
+// render via console.settings.not_configured. Third item is the dot class.
 const INTEGRATIONS = [
-  ['Slack', 'not configured', 'idle'],
-  ['PagerDuty', 'not configured', 'idle'],
-  ['Datadog', 'not configured', 'idle'],
-  ['Webhook', 'not configured', 'idle'],
-  ['Sentry', 'not configured', 'idle'],
-  ['Discord', 'not configured', 'idle'],
+  ['Slack', 'idle'],
+  ['PagerDuty', 'idle'],
+  ['Datadog', 'idle'],
+  ['Webhook', 'idle'],
+  ['Sentry', 'idle'],
+  ['Discord', 'idle'],
 ];
 
 // Data-residency selection is not wired (no backend). No region is "current" —
@@ -202,18 +226,23 @@ const InlineEdit = ({ value, onSave, onCancel }) => {
 };
 
 // "Coming soon" note shown under non-profile section headers
-const ComingSoon = () => (
-  <p
-    className='faint mono'
-    style={{ fontSize: 10, marginTop: 6, marginBottom: 0 }}
-  >
-    available in next release
-  </p>
-);
+const ComingSoon = () => {
+  const { t: tr } = useTranslation();
+  return (
+    <p
+      className='faint mono'
+      style={{ fontSize: 10, marginTop: 6, marginBottom: 0 }}
+    >
+      {tr('console.settings.coming_soon', 'available in next release')}
+    </p>
+  );
+};
 
 const HFSettings = () => {
   const tenantSlug = useTenantSlug();
   const navigate = useNavigate();
+  // Aliased to `tr` per the v2 console convention (avoids shadowing).
+  const { t: tr } = useTranslation();
   const [section, setSection] = useState('profile');
 
   // Profile state
@@ -399,7 +428,10 @@ const HFSettings = () => {
         const redirect = res.data.data?.redirect ?? '/console/v2/login';
         navigate(redirect);
       } else {
-        showError(res?.data?.message || '撤销会话失败');
+        showError(
+          res?.data?.message ||
+            tr('console.settings.revoke_failed', 'Failed to revoke session'),
+        );
       }
     } catch (_) {
       // interceptor handles toast
@@ -417,11 +449,11 @@ const HFSettings = () => {
       const body = { [field]: value };
       const res = await API.put(`/api/v2/${tenantSlug}/user/me`, body);
       if (res?.data?.success) {
-        showSuccess('Saved');
+        showSuccess(tr('console.settings.toast_saved', 'Saved'));
         setProfile((prev) => ({ ...prev, ...res.data.data }));
       }
     } catch (_) {
-      showError('Save failed');
+      showError(tr('console.settings.toast_save_failed', 'Save failed'));
     } finally {
       setSaving(false);
     }
@@ -430,16 +462,47 @@ const HFSettings = () => {
   // Profile rows: [label, fieldKey | null (read-only), display value, editable]
   const profileRows = profile
     ? [
-        ['display name', 'display_name', profile.display_name ?? '—', true],
-        ['email', 'email', profile.email ?? '—', true],
-        ['username', null, profile.username ?? '—', false],
-        ['role', null, profile.role ?? '—', false],
-        ['tenant id', null, profile.tenant_id ?? '—', false],
+        [
+          tr('console.settings.field_display_name', 'display name'),
+          'display_name',
+          profile.display_name ?? '—',
+          true,
+        ],
+        [
+          tr('console.settings.field_email', 'email'),
+          'email',
+          profile.email ?? '—',
+          true,
+        ],
+        [
+          tr('console.settings.field_username', 'username'),
+          null,
+          profile.username ?? '—',
+          false,
+        ],
+        [
+          tr('console.settings.field_role', 'role'),
+          null,
+          profile.role ?? '—',
+          false,
+        ],
+        [
+          tr('console.settings.field_tenant_id', 'tenant id'),
+          null,
+          profile.tenant_id ?? '—',
+          false,
+        ],
       ]
     : [];
 
   return (
-    <HFShell active='settings' crumbs={['my account', 'settings']}>
+    <HFShell
+      active='settings'
+      crumbs={[
+        tr('console.nav.section_my_account', 'my account'),
+        tr('console.settings.crumb', 'settings'),
+      ]}
+    >
       <div
         style={{
           display: 'grid',
@@ -471,13 +534,13 @@ const HFSettings = () => {
               }}
             >
               <div className='strong' style={{ fontSize: 12 }}>
-                {l}
+                {tr(`console.settings.section_${k}`, l)}
               </div>
               <div
                 className='faint mono'
                 style={{ fontSize: 10, marginTop: 2 }}
               >
-                {d}
+                {tr(`console.settings.section_${k}_desc`, d)}
               </div>
             </div>
           ))}
@@ -486,13 +549,16 @@ const HFSettings = () => {
         {/* Right content */}
         <div style={{ overflow: 'auto', padding: 28, maxWidth: 720 }}>
           <div className='lbl' style={{ marginBottom: 4 }}>
-            settings · {section}
+            {tr('console.settings.crumb', 'settings')} · {section}
           </div>
           <h1
             className='display'
             style={{ fontSize: 32, margin: 0, letterSpacing: '-0.025em' }}
           >
-            {SECTIONS.find((s) => s[0] === section)[1]}
+            {tr(
+              `console.settings.section_${section}`,
+              SECTIONS.find((s) => s[0] === section)[1],
+            )}
           </h1>
 
           {/* ── Profile ── */}
@@ -500,13 +566,16 @@ const HFSettings = () => {
             <div style={{ marginTop: 22 }}>
               {loadingProfile && (
                 <div className='muted' style={{ fontSize: 12 }}>
-                  Loading…
+                  {tr('console.common.loading', 'Loading…')}
                 </div>
               )}
 
               {!loadingProfile && !profile && (
                 <div className='muted' style={{ fontSize: 12 }}>
-                  Failed to load profile.
+                  {tr(
+                    'console.settings.load_profile_failed',
+                    'Failed to load profile.',
+                  )}
                 </div>
               )}
 
@@ -551,7 +620,7 @@ const HFSettings = () => {
                               disabled={saving}
                               onClick={() => setEditField(fieldKey)}
                             >
-                              edit
+                              {tr('console.common.edit', 'edit')}
                             </button>
                           ) : (
                             /* Keep grid alignment for read-only rows */
@@ -574,7 +643,7 @@ const HFSettings = () => {
                   >
                     <div>
                       <div className='lbl' style={{ marginBottom: 4 }}>
-                        spent
+                        {tr('console.settings.spent', 'spent')}
                       </div>
                       <div className='display' style={{ fontSize: 22 }}>
                         ${(profile.used_quota / QUOTA_PER_USD).toFixed(2)}
@@ -582,7 +651,7 @@ const HFSettings = () => {
                     </div>
                     <div>
                       <div className='lbl' style={{ marginBottom: 4 }}>
-                        requests
+                        {tr('console.settings.requests', 'requests')}
                       </div>
                       <div className='display' style={{ fontSize: 22 }}>
                         {(profile.request_count ?? 0).toLocaleString()}
@@ -601,7 +670,9 @@ const HFSettings = () => {
                 className='panel'
                 style={{ padding: 18, marginBottom: 14, marginTop: 8 }}
               >
-                <div className='lbl'>multi-factor auth</div>
+                <div className='lbl'>
+                  {tr('console.settings.mfa_title', 'multi-factor auth')}
+                </div>
                 <div
                   style={{
                     display: 'flex',
@@ -611,15 +682,23 @@ const HFSettings = () => {
                   }}
                 >
                   <span className='dot ok' />{' '}
-                  <span className='strong'>authenticator app · enabled</span>
+                  <span className='strong'>
+                    {tr(
+                      'console.settings.mfa_status',
+                      'authenticator app · enabled',
+                    )}
+                  </span>
                   <span style={{ flex: 1 }} />
                   <button
                     type='button'
                     className='btn sm'
                     disabled
-                    title='MFA infra pending — totp_seed table not yet provisioned'
+                    title={tr(
+                      'console.settings.mfa_regenerate_title',
+                      'MFA infra pending — totp_seed table not yet provisioned',
+                    )}
                   >
-                    regenerate
+                    {tr('console.settings.mfa_regenerate', 'regenerate')}
                   </button>
                 </div>
               </div>
@@ -629,14 +708,14 @@ const HFSettings = () => {
                 style={{ padding: 18, marginTop: 14, marginBottom: 14 }}
               >
                 <div className='lbl' style={{ marginBottom: 12 }}>
-                  sessions
+                  {tr('console.settings.sessions_title', 'sessions')}
                 </div>
                 {sessionLoading && (
                   <div
                     className='muted'
                     style={{ fontSize: 12, marginTop: 10 }}
                   >
-                    Loading…
+                    {tr('console.common.loading', 'Loading…')}
                   </div>
                 )}
                 {!sessionLoading && !sessions && (
@@ -644,7 +723,10 @@ const HFSettings = () => {
                     className='muted'
                     style={{ fontSize: 12, marginTop: 10 }}
                   >
-                    Failed to load sessions.
+                    {tr(
+                      'console.settings.load_sessions_failed',
+                      'Failed to load sessions.',
+                    )}
                   </div>
                 )}
                 {!sessionLoading && sessions && sessions.length > 0 && (
@@ -666,7 +748,7 @@ const HFSettings = () => {
                             fontWeight: 500,
                           }}
                         >
-                          auth method
+                          {tr('console.settings.th_auth_method', 'auth method')}
                         </th>
                         <th
                           style={{
@@ -675,7 +757,7 @@ const HFSettings = () => {
                             fontWeight: 500,
                           }}
                         >
-                          current
+                          {tr('console.settings.th_current', 'current')}
                         </th>
                         <th
                           style={{
@@ -684,7 +766,10 @@ const HFSettings = () => {
                             fontWeight: 500,
                           }}
                         >
-                          active tokens
+                          {tr(
+                            'console.settings.th_active_tokens',
+                            'active tokens',
+                          )}
                         </th>
                         <th
                           style={{
@@ -693,7 +778,10 @@ const HFSettings = () => {
                             fontWeight: 500,
                           }}
                         >
-                          requests (30d)
+                          {tr(
+                            'console.settings.th_requests_30d',
+                            'requests (30d)',
+                          )}
                         </th>
                         <th
                           style={{
@@ -702,7 +790,7 @@ const HFSettings = () => {
                             fontWeight: 500,
                           }}
                         >
-                          last seen
+                          {tr('console.settings.th_last_seen', 'last seen')}
                         </th>
                         <th style={{ padding: '4px 8px' }} />
                       </tr>
@@ -715,12 +803,18 @@ const HFSettings = () => {
                         >
                           <td style={{ padding: '8px 8px' }}>
                             <span className='strong'>
-                              {s.auth_method || 'session'}
+                              {s.auth_method ||
+                                tr(
+                                  'console.settings.session_fallback',
+                                  'session',
+                                )}
                             </span>
                           </td>
                           <td style={{ padding: '8px 8px' }}>
                             {s.current && (
-                              <span className='tag ok'>current</span>
+                              <span className='tag ok'>
+                                {tr('console.settings.tag_current', 'current')}
+                              </span>
                             )}
                           </td>
                           <td
@@ -737,7 +831,7 @@ const HFSettings = () => {
                             className='faint'
                             style={{ padding: '8px 8px', textAlign: 'right' }}
                           >
-                            {formatRelativeTime(s.last_seen)}
+                            {formatRelativeTime(s.last_seen, tr)}
                           </td>
                           <td
                             style={{ padding: '8px 8px', textAlign: 'right' }}
@@ -748,7 +842,7 @@ const HFSettings = () => {
                               data-testid='revoke-session-btn'
                               onClick={() => setRevokeVisible(true)}
                             >
-                              revoke
+                              {tr('console.settings.revoke', 'revoke')}
                             </button>
                           </td>
                         </tr>
@@ -761,13 +855,25 @@ const HFSettings = () => {
               {/* Revoke current session confirm dialog */}
               <ConfirmDialog
                 visible={revokeVisible}
-                title='撤销当前会话'
+                title={tr(
+                  'console.settings.confirm_revoke_title',
+                  'Revoke current session',
+                )}
                 consequenceList={[
-                  '当前浏览器会话将立即失效。',
-                  '你将被重定向到登录页，需要重新登录。',
+                  tr(
+                    'console.settings.confirm_revoke_c1',
+                    'This browser session will be invalidated immediately.',
+                  ),
+                  tr(
+                    'console.settings.confirm_revoke_c2',
+                    'You will be redirected to the login page and must sign in again.',
+                  ),
                 ]}
                 confirmText='revoke'
-                confirmButtonText='撤销会话'
+                confirmButtonText={tr(
+                  'console.settings.revoke_session_btn',
+                  'revoke session',
+                )}
                 confirmButtonType='danger'
                 onConfirm={handleRevokeSession}
                 onCancel={() => setRevokeVisible(false)}
@@ -780,7 +886,7 @@ const HFSettings = () => {
             <div style={{ marginTop: 22 }} data-testid='subscription-section'>
               {subLoading && (
                 <div className='muted' style={{ fontSize: 12 }}>
-                  Loading…
+                  {tr('console.common.loading', 'Loading…')}
                 </div>
               )}
 
@@ -790,7 +896,10 @@ const HFSettings = () => {
                   style={{ fontSize: 12 }}
                   data-testid='subscription-error'
                 >
-                  Failed to load subscription.
+                  {tr(
+                    'console.settings.load_subscription_failed',
+                    'Failed to load subscription.',
+                  )}
                 </div>
               )}
 
@@ -800,7 +909,13 @@ const HFSettings = () => {
                     const ent =
                       ENTITLEMENT_BY_GROUP[subData.group] ??
                       ENTITLEMENT_BY_GROUP.default;
-                    const tierName = subData.planHint || ent.label;
+                    // Resolve [key, fallback] pairs via tr(); plain strings
+                    // (e.g. "99.5%") pass through verbatim.
+                    const tx = (v) =>
+                      Array.isArray(v)
+                        ? tr(`console.settings.${v[0]}`, v[1])
+                        : v;
+                    const tierName = subData.planHint || tx(ent.label);
                     const isPlaceholder = subData.source === 'placeholder';
 
                     return (
@@ -809,7 +924,12 @@ const HFSettings = () => {
                           className='panel'
                           style={{ padding: 18, marginBottom: 14 }}
                         >
-                          <div className='lbl'>current plan</div>
+                          <div className='lbl'>
+                            {tr(
+                              'console.settings.current_plan',
+                              'current plan',
+                            )}
+                          </div>
                           <div
                             style={{
                               display: 'flex',
@@ -834,7 +954,10 @@ const HFSettings = () => {
                                 className='faint mono'
                                 style={{ fontSize: 11 }}
                               >
-                                Free tier — entitlement API not yet wired
+                                {tr(
+                                  'console.settings.free_tier_note',
+                                  'Free tier — entitlement API not yet wired',
+                                )}
                               </span>
                             )}
                             <span style={{ flex: 1 }} />
@@ -843,19 +966,48 @@ const HFSettings = () => {
                               className='btn sm'
                               disabled
                               data-testid='subscription-upgrade-btn'
-                              title='Plan upgrades available in Wave B'
+                              title={tr(
+                                'console.settings.upgrade_plan_title',
+                                'Plan upgrades available in Wave B',
+                              )}
                             >
-                              Upgrade plan
+                              {tr(
+                                'console.settings.upgrade_plan',
+                                'Upgrade plan',
+                              )}
                             </button>
                           </div>
                         </div>
 
                         <div className='panel'>
                           {[
-                            ['routing modes', ent.routing],
-                            ['SLA tier', ent.sla],
-                            ['audit retention', `${ent.auditDays} days`],
-                            ['support tier', ent.support],
+                            [
+                              tr(
+                                'console.settings.ent_routing_modes',
+                                'routing modes',
+                              ),
+                              tx(ent.routing),
+                            ],
+                            [
+                              tr('console.settings.ent_sla_tier', 'SLA tier'),
+                              tx(ent.sla),
+                            ],
+                            [
+                              tr(
+                                'console.settings.ent_audit_retention',
+                                'audit retention',
+                              ),
+                              tr('console.settings.audit_days', {
+                                count: ent.auditDays,
+                              }),
+                            ],
+                            [
+                              tr(
+                                'console.settings.ent_support_tier',
+                                'support tier',
+                              ),
+                              tx(ent.support),
+                            ],
                           ].map(([k, v], i, a) => (
                             <div
                               key={k}
@@ -890,7 +1042,7 @@ const HFSettings = () => {
             <div style={{ marginTop: 22 }} data-testid='billing-section'>
               {billLoading && (
                 <div className='muted' style={{ fontSize: 12 }}>
-                  Loading…
+                  {tr('console.common.loading', 'Loading…')}
                 </div>
               )}
 
@@ -900,7 +1052,10 @@ const HFSettings = () => {
                   style={{ fontSize: 12 }}
                   data-testid='billing-error'
                 >
-                  Billing data — backend wiring pending Wave B
+                  {tr(
+                    'console.settings.billing_error',
+                    'Billing data — backend wiring pending Wave B',
+                  )}
                 </div>
               )}
 
@@ -917,7 +1072,10 @@ const HFSettings = () => {
                   >
                     <div>
                       <div className='lbl' style={{ marginBottom: 4 }}>
-                        wallet balance
+                        {tr(
+                          'console.settings.wallet_balance',
+                          'wallet balance',
+                        )}
                       </div>
                       <div
                         className='display'
@@ -933,7 +1091,10 @@ const HFSettings = () => {
                     </div>
                     <div>
                       <div className='lbl' style={{ marginBottom: 4 }}>
-                        last 30d consumption
+                        {tr(
+                          'console.settings.last_30d',
+                          'last 30d consumption',
+                        )}
                       </div>
                       <div
                         className='display'
@@ -958,16 +1119,27 @@ const HFSettings = () => {
                         alignItems: 'center',
                       }}
                     >
-                      <div className='lbl'>recent transactions</div>
+                      <div className='lbl'>
+                        {tr(
+                          'console.settings.recent_txns',
+                          'recent transactions',
+                        )}
+                      </div>
                       <span style={{ flex: 1 }} />
                       <button
                         type='button'
                         className='btn ghost sm'
                         disabled
                         data-testid='billing-view-full-btn'
-                        title='Full billing history available in Wave C (ClickHouse insights)'
+                        title={tr(
+                          'console.settings.view_full_history_title',
+                          'Full billing history available in Wave C (ClickHouse insights)',
+                        )}
                       >
-                        View full history
+                        {tr(
+                          'console.settings.view_full_history',
+                          'View full history',
+                        )}
                       </button>
                     </div>
 
@@ -982,7 +1154,10 @@ const HFSettings = () => {
                         }}
                         data-testid='billing-empty-state'
                       >
-                        No recent transactions.
+                        {tr(
+                          'console.settings.no_txns',
+                          'No recent transactions.',
+                        )}
                       </div>
                     ) : (
                       <table
@@ -1003,7 +1178,7 @@ const HFSettings = () => {
                                 fontWeight: 500,
                               }}
                             >
-                              date
+                              {tr('console.settings.th_date', 'date')}
                             </th>
                             <th
                               style={{
@@ -1012,7 +1187,7 @@ const HFSettings = () => {
                                 fontWeight: 500,
                               }}
                             >
-                              type
+                              {tr('console.settings.th_type', 'type')}
                             </th>
                             <th
                               style={{
@@ -1021,7 +1196,7 @@ const HFSettings = () => {
                                 fontWeight: 500,
                               }}
                             >
-                              amount
+                              {tr('console.settings.th_amount', 'amount')}
                             </th>
                             <th
                               style={{
@@ -1030,7 +1205,7 @@ const HFSettings = () => {
                                 fontWeight: 500,
                               }}
                             >
-                              status
+                              {tr('console.settings.th_status', 'status')}
                             </th>
                           </tr>
                         </thead>
@@ -1042,14 +1217,18 @@ const HFSettings = () => {
                             >
                               <td style={{ padding: '8px 12px' }}>
                                 {t.created_at
-                                  ? formatRelativeTime(t.created_at)
+                                  ? formatRelativeTime(t.created_at, tr)
                                   : '—'}
                               </td>
                               {/* Type derived from the row; this list is the
                                   topups ledger, so 'topup' is the accurate
                                   fallback (not a fabricated label). */}
                               <td style={{ padding: '8px 12px' }}>
-                                {t.type || 'topup'}
+                                {t.type ||
+                                  tr(
+                                    'console.settings.txn_type_topup',
+                                    'topup',
+                                  )}
                               </td>
                               <td
                                 style={{
@@ -1058,7 +1237,7 @@ const HFSettings = () => {
                                 }}
                               >
                                 {typeof t.quota === 'number'
-                                  ? `${(t.quota / QUOTA_PER_USD).toFixed(2)} USD eq.`
+                                  ? `${(t.quota / QUOTA_PER_USD).toFixed(2)} ${tr('console.settings.usd_eq', 'USD eq.')}`
                                   : '—'}
                               </td>
                               {/* Status derived from the row — no unconditional
@@ -1091,8 +1270,14 @@ const HFSettings = () => {
           {section === 'notifications' && (
             <div style={{ marginTop: 22 }} data-testid='notifications-section'>
               <WIPBanner
-                reason='Notification subscription store, dispatch path, and threshold rules not yet implemented. Designed in adr-2026-05-18-budget-alerts.md.'
-                todo='Backend: notification_subscription table + /api/v2/{slug}/notifications/subscriptions + Prometheus rule pack.'
+                reason={tr(
+                  'console.settings.notif_wip_reason',
+                  'Notification subscription store, dispatch path, and threshold rules not yet implemented. Designed in adr-2026-05-18-budget-alerts.md.',
+                )}
+                todo={tr(
+                  'console.settings.notif_wip_todo',
+                  'Backend: notification_subscription table + /api/v2/{slug}/notifications/subscriptions + Prometheus rule pack.',
+                )}
               />
               <div className='panel' style={{ marginTop: 14 }}>
                 {NOTIFICATION_CHANNELS.map((ch, i, a) => (
@@ -1110,13 +1295,15 @@ const HFSettings = () => {
                   >
                     <div>
                       <div className='strong' style={{ fontSize: 13 }}>
-                        {ch.label}
+                        {tr(`console.settings.${ch.label[0]}`, ch.label[1])}
                       </div>
                       <div
                         className='faint mono'
                         style={{ fontSize: 10, marginTop: 4 }}
                       >
-                        {ch.events.join(' · ')}
+                        {ch.events
+                          .map(([k, f]) => tr(`console.settings.${k}`, f))
+                          .join(' · ')}
                       </div>
                     </div>
                     <button
@@ -1124,9 +1311,12 @@ const HFSettings = () => {
                       className='btn sm'
                       disabled
                       data-testid={`notif-toggle-${ch.key}`}
-                      title='Notification preferences editable in Wave B'
+                      title={tr(
+                        'console.settings.notif_toggle_title',
+                        'Notification preferences editable in Wave B',
+                      )}
                     >
-                      off
+                      {tr('console.settings.toggle_off', 'off')}
                     </button>
                   </div>
                 ))}
@@ -1138,8 +1328,14 @@ const HFSettings = () => {
           {section === 'team' && (
             <div style={{ marginTop: 22 }}>
               <WIPBanner
-                reason='Team / role management requires tenant membership store + role-permission matrix + invite flow. Not yet implemented.'
-                todo='Backend: tenant_member table + role enum + POST /api/v2/{slug}/team/invite; cascade-revoke on member removal.'
+                reason={tr(
+                  'console.settings.team_wip_reason',
+                  'Team / role management requires tenant membership store + role-permission matrix + invite flow. Not yet implemented.',
+                )}
+                todo={tr(
+                  'console.settings.team_wip_todo',
+                  'Backend: tenant_member table + role enum + POST /api/v2/{slug}/team/invite; cascade-revoke on member removal.',
+                )}
               />
               <div
                 className='panel'
@@ -1152,7 +1348,10 @@ const HFSettings = () => {
                   fontSize: 12,
                 }}
               >
-                No team members — endpoint not implemented.
+                {tr(
+                  'console.settings.team_empty',
+                  'No team members — endpoint not implemented.',
+                )}
               </div>
             </div>
           )}
@@ -1174,7 +1373,7 @@ const HFSettings = () => {
                     <div
                       style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                     >
-                      <span className={'dot ' + r[2]} />
+                      <span className={'dot ' + r[1]} />
                       <span className='display' style={{ fontSize: 16 }}>
                         {r[0]}
                       </span>
@@ -1183,16 +1382,21 @@ const HFSettings = () => {
                         type='button'
                         className='btn sm'
                         disabled
-                        title='integration registry deferred to v3'
+                        title={tr(
+                          'console.settings.integrations_deferred',
+                          'integration registry deferred to v3',
+                        )}
                       >
-                        {r[2] === 'ok' ? 'configure' : 'connect'}
+                        {r[1] === 'ok'
+                          ? tr('console.settings.configure', 'configure')
+                          : tr('console.settings.connect', 'connect')}
                       </button>
                     </div>
                     <div
                       className='faint mono'
                       style={{ fontSize: 10, marginTop: 6 }}
                     >
-                      {r[1]}
+                      {tr('console.settings.not_configured', 'not configured')}
                     </div>
                   </div>
                 ))}
@@ -1205,7 +1409,9 @@ const HFSettings = () => {
             <div style={{ marginTop: 22 }}>
               <ComingSoon />
               <div className='panel' style={{ padding: 18, marginTop: 16 }}>
-                <div className='lbl'>data residency</div>
+                <div className='lbl'>
+                  {tr('console.settings.data_residency', 'data residency')}
+                </div>
                 <div
                   style={{
                     display: 'grid',
@@ -1232,7 +1438,12 @@ const HFSettings = () => {
                         className='faint mono'
                         style={{ fontSize: 10, marginTop: 4 }}
                       >
-                        {sel ? 'current' : 'available'}
+                        {sel
+                          ? tr('console.settings.region_current', 'current')
+                          : tr(
+                              'console.settings.region_available',
+                              'available',
+                            )}
                       </div>
                     </div>
                   ))}
@@ -1257,28 +1468,36 @@ const HFSettings = () => {
                   className='display'
                   style={{ fontSize: 16, color: 'var(--hf-err)' }}
                 >
-                  Delete account
+                  {tr('console.settings.delete_account', 'Delete account')}
                 </div>
                 <div
                   className='muted'
                   style={{ fontSize: 12, marginTop: 6, lineHeight: 1.6 }}
                 >
-                  permanently deletes all data: tokens, logs, channels,
-                  invoices. cannot be undone.
+                  {tr(
+                    'console.settings.delete_account_desc',
+                    'permanently deletes all data: tokens, logs, channels, invoices. cannot be undone.',
+                  )}
                 </div>
                 <button
                   type='button'
                   className='btn'
                   disabled
                   data-testid='danger-delete-btn'
-                  title='account deletion requires data-export + cascade-purge design — deferred to v3'
+                  title={tr(
+                    'console.settings.delete_account_title',
+                    'account deletion requires data-export + cascade-purge design — deferred to v3',
+                  )}
                   style={{
                     marginTop: 12,
                     color: 'var(--hf-err)',
                     borderColor: 'var(--hf-err)',
                   }}
                 >
-                  I understand · delete
+                  {tr(
+                    'console.settings.delete_account_btn',
+                    'I understand · delete',
+                  )}
                 </button>
               </div>
             </div>

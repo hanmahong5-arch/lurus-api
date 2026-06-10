@@ -49,6 +49,24 @@ vi.mock('../../../components/hifi/WIPBanner', () => ({
     ),
 }));
 
+// Mirror i18next's en behaviour: return the English defaultValue (2nd arg)
+// with {{var}} interpolation, falling back to the key when no default given.
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key, fallback, opts) => {
+      const vars =
+        typeof fallback === 'object' && fallback !== null ? fallback : opts;
+      let out = typeof fallback === 'string' ? fallback : key;
+      if (vars) {
+        for (const [k, v] of Object.entries(vars)) {
+          out = out.split(`{{${k}}}`).join(String(v));
+        }
+      }
+      return out;
+    },
+  }),
+}));
+
 import HFBilling from './index';
 import { API, showError } from '../../../helpers';
 

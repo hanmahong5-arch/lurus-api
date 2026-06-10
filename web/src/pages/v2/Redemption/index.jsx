@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import HFShell from '../../../components/hifi/HFShell';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { API, showError, showSuccess } from '../../../helpers';
@@ -38,10 +39,12 @@ const fmtTime = (ts) => {
   return new Date(ts * 1000).toLocaleString();
 };
 
-const statusLabel = (status) => {
-  if (status === 1) return '可用';
-  if (status === 3) return '已使用';
-  return '禁用';
+// Labels resolved at render via tr() — module scope has no i18n context.
+const statusLabel = (status, tr) => {
+  if (status === 1)
+    return tr('console.redemption.status_available', 'available');
+  if (status === 3) return tr('console.redemption.status_used', 'used');
+  return tr('console.redemption.status_disabled', 'disabled');
 };
 
 const statusClass = (status) => {
@@ -53,6 +56,7 @@ const statusClass = (status) => {
 // ─── Create modal ─────────────────────────────────────────────────────────────
 
 const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
+  const { t: tr } = useTranslation();
   const [form, setForm] = useState({ name: '', count: 1, quota: 500000 });
   const [saving, setSaving] = useState(false);
   const nameRef = useRef(null);
@@ -73,7 +77,9 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
       });
       if (res?.data?.success) {
         const codes = res.data.data.codes ?? [];
-        showSuccess('兑换码生成成功');
+        showSuccess(
+          tr('console.redemption.toast_created', 'Redemption codes generated'),
+        );
         onCreated(codes);
       }
     } catch (_) {
@@ -110,11 +116,13 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
         }}
       >
         <div className='strong' style={{ fontSize: 15 }}>
-          新建兑换码
+          {tr('console.redemption.modal_title', 'New redemption code')}
         </div>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <span className='lbl'>兑换码名称 *</span>
+          <span className='lbl'>
+            {tr('console.redemption.field_name', 'name *')}
+          </span>
           <input
             ref={nameRef}
             style={{
@@ -128,7 +136,7 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
               outline: 'none',
               width: '100%',
             }}
-            placeholder='例如：促销活动2025'
+            placeholder={tr('console.redemption.ph_name', 'e.g. promo-2025')}
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             required
@@ -137,7 +145,9 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
         </label>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <span className='lbl'>生成数量（最多100）</span>
+          <span className='lbl'>
+            {tr('console.redemption.field_count', 'count (max 100)')}
+          </span>
           <input
             style={{
               fontFamily: 'var(--hf-mono)',
@@ -160,7 +170,9 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
         </label>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <span className='lbl'>额度（quota 单位）</span>
+          <span className='lbl'>
+            {tr('console.redemption.field_quota', 'quota (quota units)')}
+          </span>
           <input
             style={{
               fontFamily: 'var(--hf-mono)',
@@ -190,7 +202,7 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
           }}
         >
           <button type='button' className='btn ghost' onClick={onClose}>
-            取消
+            {tr('console.common.cancel', 'cancel')}
           </button>
           <button
             type='submit'
@@ -198,7 +210,9 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
             disabled={saving}
             data-testid='redemption-create-submit'
           >
-            {saving ? '生成中…' : '生成兑换码'}
+            {saving
+              ? tr('console.redemption.creating', 'generating…')
+              : tr('console.redemption.create_submit', 'generate codes')}
           </button>
         </div>
       </form>
@@ -209,6 +223,8 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
 // ─── Newly created keys banner ─────────────────────────────────────────────────
 
 const CreatedKeysBanner = ({ codes, onClose }) => {
+  // Hook must run unconditionally (rules-of-hooks) — before the early return.
+  const { t: tr } = useTranslation();
   if (!codes || codes.length === 0) return null;
   return (
     <div
@@ -232,7 +248,10 @@ const CreatedKeysBanner = ({ codes, onClose }) => {
           className='strong'
           style={{ fontSize: 12, color: 'var(--hf-ok)' }}
         >
-          生成成功 — 请立即复制，关闭后将无法再查看原始密钥
+          {tr(
+            'console.redemption.created_banner',
+            'Generated — copy now; original keys cannot be viewed again after closing',
+          )}
         </span>
         <button
           type='button'
@@ -272,6 +291,8 @@ const CreatedKeysBanner = ({ codes, onClose }) => {
 
 const HFRedemption = () => {
   const tenantSlug = useTenantSlug();
+  // Aliased to `tr` per the v2 console convention (avoids shadowing).
+  const { t: tr } = useTranslation();
 
   const [redemptions, setRedemptions] = useState([]);
   const [total, setTotal] = useState(0);
@@ -316,7 +337,9 @@ const HFRedemption = () => {
         `/api/v2/${tenantSlug}/redemptions/${deleteTarget.id}`,
       );
       if (res?.data?.success) {
-        showSuccess('兑换码已删除');
+        showSuccess(
+          tr('console.redemption.toast_deleted', 'Redemption code deleted'),
+        );
         setDeleteTarget(null);
         await fetchRedemptions();
       }
@@ -328,16 +351,19 @@ const HFRedemption = () => {
   return (
     <HFShell
       active='redemption'
-      crumbs={['管理', '兑换码']}
+      crumbs={[
+        tr('console.redemption.crumb_section', 'admin'),
+        tr('console.redemption.crumb', 'redemption codes'),
+      ]}
       actions={
         <>
           {loading ? (
             <span className='muted mono' style={{ fontSize: 11 }}>
-              加载中…
+              {tr('console.common.loading', 'loading…')}
             </span>
           ) : (
             <span className='muted mono' style={{ fontSize: 11 }}>
-              共 {total} 条
+              {tr('console.redemption.total_count', { count: total })}
             </span>
           )}
           <button
@@ -346,7 +372,7 @@ const HFRedemption = () => {
             onClick={() => setCreating(true)}
             data-testid='redemption-create-btn'
           >
-            + 新建兑换码
+            {tr('console.redemption.new_btn', '+ new code')}
           </button>
         </>
       }
@@ -360,7 +386,10 @@ const HFRedemption = () => {
             style={{ fontSize: 13, padding: '40px 0' }}
             data-testid='redemption-empty'
           >
-            暂无兑换码。点击「新建兑换码」生成。
+            {tr(
+              'console.redemption.empty',
+              'No redemption codes yet. Click "+ new code" to generate.',
+            )}
           </div>
         )}
 
@@ -371,14 +400,14 @@ const HFRedemption = () => {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--hf-rule)' }}>
                 {[
-                  'key',
-                  '名称',
-                  '额度',
-                  '状态',
-                  '创建时间',
-                  '到期时间',
-                  '使用者',
-                  '操作',
+                  tr('console.redemption.th_key', 'key'),
+                  tr('console.redemption.th_name', 'name'),
+                  tr('console.redemption.th_quota', 'quota'),
+                  tr('console.redemption.th_status', 'status'),
+                  tr('console.redemption.th_created', 'created'),
+                  tr('console.redemption.th_expires', 'expires'),
+                  tr('console.redemption.th_used_by', 'used by'),
+                  tr('console.redemption.th_actions', 'actions'),
                 ].map((h) => (
                   <th
                     key={h}
@@ -409,14 +438,16 @@ const HFRedemption = () => {
                   </td>
                   <td style={{ padding: '8px 10px' }}>
                     <span className={statusClass(r.status)}>
-                      {statusLabel(r.status)}
+                      {statusLabel(r.status, tr)}
                     </span>
                   </td>
                   <td className='mono' style={{ padding: '8px 10px' }}>
                     {fmtTime(r.created_time)}
                   </td>
                   <td className='mono' style={{ padding: '8px 10px' }}>
-                    {r.expired_time ? fmtTime(r.expired_time) : '永不'}
+                    {r.expired_time
+                      ? fmtTime(r.expired_time)
+                      : tr('console.redemption.never', 'never')}
                   </td>
                   <td className='mono' style={{ padding: '8px 10px' }}>
                     {r.used_user_id ? `#${r.used_user_id}` : '—'}
@@ -434,7 +465,7 @@ const HFRedemption = () => {
                       }
                       data-testid={`redemption-delete-btn-${r.id}`}
                     >
-                      删除
+                      {tr('console.common.delete', 'delete')}
                     </button>
                   </td>
                 </tr>
@@ -454,10 +485,19 @@ const HFRedemption = () => {
 
       <ConfirmDialog
         visible={!!deleteTarget}
-        title={`删除兑换码 "${deleteTarget?.name ?? ''}"?`}
-        consequenceList={['兑换码将永久删除，此操作无法撤销']}
+        title={tr(
+          'console.redemption.confirm_delete_title',
+          'Delete redemption code "{{name}}"?',
+          { name: deleteTarget?.name ?? '' },
+        )}
+        consequenceList={[
+          tr(
+            'console.redemption.confirm_delete_consequence',
+            'The code will be permanently deleted — this cannot be undone',
+          ),
+        ]}
         confirmText={deleteTarget?.name ?? ''}
-        confirmButtonText='删除'
+        confirmButtonText={tr('console.common.delete', 'delete')}
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
       />
