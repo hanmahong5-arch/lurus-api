@@ -510,6 +510,17 @@ func PreConsumeTokenQuota(relayInfo *relaycommon.RelayInfo, quota int) error {
 	return nil
 }
 
+// sourceProductOf returns the resolved cross-product attribution tag for a
+// relay (Workstream 0), or the default product id when unset. Used as the
+// wallet productId so spend is attributable per product instead of the old
+// hardcoded "lurus-api".
+func sourceProductOf(relayInfo *relaycommon.RelayInfo) string {
+	if relayInfo != nil && relayInfo.SourceProduct != "" {
+		return relayInfo.SourceProduct
+	}
+	return ratio_setting.DefaultSourceProduct
+}
+
 func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int, sendEmail bool) (err error) {
 	// Phase 1: Update local user quota
 	if quota > 0 {
@@ -631,7 +642,7 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 				debitCtx, debitCancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer debitCancel()
 				if _, debitErr := common.DebitWalletGRPC(debitCtx, accountID, amountLB, "llm_usage",
-					fmt.Sprintf("relay userId=%d", relayInfo.UserId), "lurus-api"); debitErr != nil {
+					fmt.Sprintf("relay userId=%d", relayInfo.UserId), sourceProductOf(relayInfo)); debitErr != nil {
 					common.SysLog(fmt.Sprintf("legacy wallet debit failed: accountID=%d, amount=%.4f LB, err=%s",
 						accountID, amountLB, debitErr.Error()))
 				}

@@ -149,7 +149,7 @@ func platformPreAuthorize(c *gin.Context, estimatedQuota int, relayInfo *relayco
 
 	preAuthStart := time.Now()
 	result, err := common.PreAuthorizeWithBreaker(ctx, accountID, estimatedLB,
-		"lurus-api", "", fmt.Sprintf("relay userId=%d model=%s", relayInfo.UserId, relayInfo.OriginModelName), 300)
+		sourceProductOf(relayInfo), "", fmt.Sprintf("relay userId=%d model=%s", relayInfo.UserId, relayInfo.OriginModelName), 300)
 	metrics.BillingPreAuthDuration.Observe(time.Since(preAuthStart).Seconds())
 
 	if err != nil {

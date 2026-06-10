@@ -29,6 +29,7 @@ import (
 	"github.com/LurusTech/lurus-hub/internal/app/hub"
 	"github.com/LurusTech/lurus-hub/internal/app/openrouter_pool"
 	"github.com/LurusTech/lurus-hub/internal/pkg/setting"
+	"github.com/LurusTech/lurus-hub/internal/pkg/setting/ratio_setting"
 	"github.com/LurusTech/lurus-hub/internal/pkg/types"
 
 	"github.com/bytedance/gopkg/util/gopool"
@@ -194,6 +195,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 
 	governance.EnrichContext(c, relayInfo.TokenId, relayInfo.OriginModelName)
+
+	// Workstream 0: resolve the cross-product attribution tag once, here, so it
+	// reaches both the wallet (PostConsumeQuota, which has no gin.Context) and
+	// the log row (EnrichLogParams). Unknown/absent header → default product.
+	relayInfo.SourceProduct = ratio_setting.ResolveSourceProduct(c.GetHeader(ratio_setting.SourceProductHeader))
 
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
 	needCountToken := constant.CountToken

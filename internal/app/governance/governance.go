@@ -9,6 +9,7 @@ import (
 	"github.com/LurusTech/lurus-hub/internal/domain/entity"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/pkg/constant"
+	"github.com/LurusTech/lurus-hub/internal/pkg/setting/ratio_setting"
 	relaycommon "github.com/LurusTech/lurus-hub/internal/adapter/provider/common"
 
 	"github.com/gin-gonic/gin"
@@ -82,6 +83,14 @@ func EnrichLogParams(c *gin.Context, info *relaycommon.RelayInfo, params *entity
 	}
 	params.Other["data_flow_source"] = params.TokenName
 	params.Other["data_flow_dest"] = constant.GetChannelTypeName(params.ChannelType)
+	// Workstream 0: cross-product attribution. Resolved on the relay path; paths
+	// that don't set it (MJ/Task/WS) fall back to the default product id so the
+	// field is always present and queryable.
+	sourceProduct := info.SourceProduct
+	if sourceProduct == "" {
+		sourceProduct = ratio_setting.DefaultSourceProduct
+	}
+	params.Other["source_product"] = sourceProduct
 	// NOTE: client_ip is NOT written here — it is controlled by the user's
 	// RecordIpLog setting and handled in RecordConsumeLog / RecordErrorLog.
 }
