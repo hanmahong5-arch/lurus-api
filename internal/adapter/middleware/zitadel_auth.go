@@ -87,7 +87,12 @@ var zitadelHTTPClient = &http.Client{
 var (
 	jwksManager        *JWKSManager
 	jwksManagerOnce    sync.Once
-	zitadelIssuer      string
+	// zitadelIssuers holds the parsed set of accepted issuer values.
+	// ZITADEL_ISSUER supports comma-separated values so that a rebrand
+	// (e.g. auth.lurus.cn → identity.lurus.cn) can be rolled out without
+	// a hard cutover: add the new issuer first, flip the IdP, then remove
+	// the old entry after the alias window expires (≥90 days per contract).
+	zitadelIssuers      []string
 	zitadelJwksURI     string
 	zitadelClientID    string
 	zitadelEnabled     bool
@@ -104,12 +109,20 @@ func InitZitadelAuth() error {
 		return nil
 	}
 
-	zitadelIssuer = os.Getenv("ZITADEL_ISSUER")
+	// ZITADEL_ISSUER accepts a comma-separated list so that two issuers
+	// can be valid concurrently during a domain rebrand window.
+	// Each value is trimmed; an all-whitespace entry is silently dropped.
+	rawIssuer := os.Getenv("ZITADEL_ISSUER")
+	for _, part := range strings.Split(rawIssuer, ",") {
+		if v := strings.TrimSpace(part); v != "" {
+			zitadelIssuers = append(zitadelIssuers, v)
+		}
+	}
 	zitadelJwksURI = os.Getenv("ZITADEL_JWKS_URI")
 	zitadelClientID = os.Getenv("ZITADEL_CLIENT_ID")
 
 	// Validate required environment variables
-	if zitadelIssuer == "" {
+	if len(zitadelIssuers) == 0 {
 		return errors.New("ZITADEL_ISSUER is not set")
 	}
 	if zitadelJwksURI == "" {
@@ -125,7 +138,7 @@ func InitZitadelAuth() error {
 	})
 
 	common.SysLog("Zitadel authentication initialized successfully")
-	common.SysLog(fmt.Sprintf("Zitadel Issuer: %s", zitadelIssuer))
+	common.SysLog(fmt.Sprintf("Zitadel Issuers: %v", zitadelIssuers))
 	common.SysLog(fmt.Sprintf("Zitadel JWKS URI: %s", zitadelJwksURI))
 
 	return nil
@@ -564,11 +577,22 @@ func ZitadelAuth() gin.HandlerFunc {
 			return
 		}
 
-		// Verify issuer
-		if claims.Issuer != zitadelIssuer {
+		// Verify issuer against the accepted set.
+		// ZITADEL_JWKS_URI is an independent env — it does not derive from
+		// the issuer domain — so accepting multiple issuers does not require
+		// fetching from multiple JWKS endpoints; the signing keys are the same
+		// regardless of which domain the IdP advertises as its issuer.
+		issuerOK := false
+		for _, accepted := range zitadelIssuers {
+			if claims.Issuer == accepted {
+				issuerOK = true
+				break
+			}
+		}
+		if !issuerOK {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
-				"message": fmt.Sprintf("Invalid issuer, expected: %s, got: %s", zitadelIssuer, claims.Issuer),
+				"message": fmt.Sprintf("Invalid issuer: got %s", claims.Issuer),
 			})
 			c.Abort()
 			return

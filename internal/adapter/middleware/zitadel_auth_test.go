@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -549,6 +550,120 @@ func TestJWT_NotYetValid(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for token not yet valid")
+	}
+}
+
+// ============================================================================
+// Multi-issuer acceptance tests
+//
+// These tests exercise the issuer-set logic directly (parseZitadelIssuers +
+// issuerInSet) without spinning up a full Gin stack or a DB, so they stay
+// in the -short tier.
+// ============================================================================
+
+// parseZitadelIssuers mirrors the production parsing logic so that the test
+// does not reach into package-level state or call InitZitadelAuth.
+func parseZitadelIssuers(raw string) []string {
+	var result []string
+	for _, part := range strings.Split(raw, ",") {
+		if v := strings.TrimSpace(part); v != "" {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+// issuerInSet returns true when iss is present in the accepted list.
+func issuerInSet(iss string, accepted []string) bool {
+	for _, a := range accepted {
+		if iss == a {
+			return true
+		}
+	}
+	return false
+}
+
+func TestZitadelIssuer_MultiIssuer(t *testing.T) {
+	const (
+		oldIssuer = "https://auth.lurus.cn"
+		newIssuer = "https://identity.lurus.cn"
+		badIssuer = "https://evil.example.com"
+	)
+
+	tests := []struct {
+		name       string
+		envValue   string // raw ZITADEL_ISSUER env string
+		tokenIssuer string
+		wantOK     bool
+	}{
+		{
+			name:        "single_issuer_match",
+			envValue:    oldIssuer,
+			tokenIssuer: oldIssuer,
+			wantOK:      true,
+		},
+		{
+			name:        "second_issuer_accepted_during_rebrand_window",
+			envValue:    oldIssuer + "," + newIssuer,
+			tokenIssuer: newIssuer,
+			wantOK:      true,
+		},
+		{
+			name:        "first_issuer_still_accepted_during_rebrand_window",
+			envValue:    oldIssuer + "," + newIssuer,
+			tokenIssuer: oldIssuer,
+			wantOK:      true,
+		},
+		{
+			name:        "unknown_issuer_rejected",
+			envValue:    oldIssuer + "," + newIssuer,
+			tokenIssuer: badIssuer,
+			wantOK:      false,
+		},
+		{
+			name:        "whitespace_tolerance_around_comma",
+			envValue:    "  " + oldIssuer + " , " + newIssuer + "  ",
+			tokenIssuer: newIssuer,
+			wantOK:      true,
+		},
+		{
+			name:        "empty_entry_between_commas_ignored",
+			envValue:    oldIssuer + ",," + newIssuer,
+			tokenIssuer: newIssuer,
+			wantOK:      true,
+		},
+		{
+			name:        "single_issuer_no_match",
+			envValue:    oldIssuer,
+			tokenIssuer: newIssuer,
+			wantOK:      false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			issuers := parseZitadelIssuers(tc.envValue)
+			got := issuerInSet(tc.tokenIssuer, issuers)
+			if got != tc.wantOK {
+				t.Errorf("issuerInSet(%q, parsed(%q)) = %v, want %v",
+					tc.tokenIssuer, tc.envValue, got, tc.wantOK)
+			}
+		})
+	}
+}
+
+func TestZitadelIssuer_ParseEmptyEnv(t *testing.T) {
+	// Empty env must yield zero issuers — preserves fast-fail semantics.
+	issuers := parseZitadelIssuers("")
+	if len(issuers) != 0 {
+		t.Errorf("expected 0 issuers from empty string, got %d: %v", len(issuers), issuers)
+	}
+}
+
+func TestZitadelIssuer_ParseWhitespaceOnlyEnv(t *testing.T) {
+	issuers := parseZitadelIssuers("   ,  ,  ")
+	if len(issuers) != 0 {
+		t.Errorf("expected 0 issuers from whitespace-only string, got %d: %v", len(issuers), issuers)
 	}
 }
 

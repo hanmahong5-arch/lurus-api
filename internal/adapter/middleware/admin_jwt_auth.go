@@ -138,8 +138,17 @@ func validateJWT(c *gin.Context) (*ZitadelClaims, error) {
 		return nil, errors.New("invalid or expired token")
 	}
 
-	if claims.Issuer != zitadelIssuer {
-		common.SysLog(fmt.Sprintf("admin JWT issuer mismatch: got %s, want %s", claims.Issuer, zitadelIssuer))
+	// Use the same multi-issuer set as the main ZitadelAuth middleware so that
+	// a domain rebrand does not selectively break the admin path.
+	adminIssuerOK := false
+	for _, accepted := range zitadelIssuers {
+		if claims.Issuer == accepted {
+			adminIssuerOK = true
+			break
+		}
+	}
+	if !adminIssuerOK {
+		common.SysLog(fmt.Sprintf("admin JWT issuer mismatch: got %s, accepted %v", claims.Issuer, zitadelIssuers))
 		return nil, errors.New("invalid or expired token")
 	}
 

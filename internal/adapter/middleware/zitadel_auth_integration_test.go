@@ -139,7 +139,7 @@ func setupIntegrationTest(t *testing.T) *integrationTestContext {
 
 	// Initialize Zitadel auth
 	zitadelEnabled = true
-	zitadelIssuer = issuer
+	zitadelIssuers = []string{issuer}
 	zitadelJwksURI = jwksServer.URL
 	zitadelClientID = clientID
 
