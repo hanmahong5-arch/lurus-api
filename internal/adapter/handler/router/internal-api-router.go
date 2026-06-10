@@ -149,4 +149,19 @@ func SetInternalApiRouter(router *gin.Engine) {
 	{
 		poolFundGroup.POST("/tenants/:slug/credit-pool/fund", handler.InternalFundCreditPool)
 	}
+
+	// PIPL §47 account erasure — platform calls POST after the deletion
+	// cooling-off period expires (newhub has no NATS consumer; trigger is
+	// internal HTTP, SEAM S1 pattern). Idempotent via UNIQUE(event_id) in
+	// privacy_erasure_requests (migration 020).
+	privacyEraseGroup := internalGroup.Group("/v1/privacy")
+	privacyEraseGroup.Use(middleware.RequireScope(repo.ScopeUserDelete))
+	{
+		privacyEraseGroup.POST("/erase", handler.InternalPrivacyErase)
+	}
+	privacyReadGroup := internalGroup.Group("/v1/privacy")
+	privacyReadGroup.Use(middleware.RequireScope(repo.ScopeUserRead))
+	{
+		privacyReadGroup.GET("/erase/:event_id", handler.InternalGetPrivacyErasure)
+	}
 }

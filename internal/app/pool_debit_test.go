@@ -7,8 +7,8 @@ package app
 import (
 	"testing"
 
-	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
 	relaycommon "github.com/LurusTech/lurus-hub/internal/adapter/provider/common"
+	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
 	"github.com/LurusTech/lurus-hub/internal/domain/entity"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"gorm.io/gorm"

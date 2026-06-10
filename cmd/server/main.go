@@ -266,6 +266,9 @@ func run(ctx context.Context, startTime time.Time) error {
 		// Phase H1.4: automatic token rotation. Leader-gated internally so only
 		// one replica rotates each due token; started on master-capable nodes.
 		lifecycle.StartSecretRotationWithContext(ctx)
+		// PIPL §47 erasure cascade executor. Leader-gated internally; the
+		// cascade is idempotent + crash-resumable via the per-request step cursor.
+		lifecycle.StartPrivacyErasureWithContext(ctx)
 	}
 
 	// pprof server

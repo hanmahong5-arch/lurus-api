@@ -325,6 +325,8 @@ func migrateDB() error {
 		&PlaygroundPreset{},
 		// HA leader-election lease (H1.3)
 		&entity.LeaderElection{},
+		// PIPL §47 erasure intent / progress / evidence (migration 020)
+		&entity.PrivacyErasureRequest{},
 	)
 	if err != nil {
 		return err

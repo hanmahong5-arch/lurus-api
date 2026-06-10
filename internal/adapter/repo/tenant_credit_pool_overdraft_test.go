@@ -133,10 +133,10 @@ func TestPoolConservation_OverdraftFallbackRace(t *testing.T) {
 		seed      = int64(53)
 		debit     = int64(10)
 		workers   = 20
-		wantOK    = 5                                  // floor(53/10) via DebitPool
-		wantOvd   = workers - wantOK                   // 15 via overdraft fallback
-		wantFinal = seed - int64(workers)*debit        // 53 - 200 = -147
-		wantSum   = int64(workers) * debit             // every debit recorded
+		wantOK    = 5                           // floor(53/10) via DebitPool
+		wantOvd   = workers - wantOK            // 15 via overdraft fallback
+		wantFinal = seed - int64(workers)*debit // 53 - 200 = -147
+		wantSum   = int64(workers) * debit      // every debit recorded
 	)
 
 	pool, err := CreateTenantCreditPool("t-ovd-race", 1, 1000, PoolResetMonthly, 80)
