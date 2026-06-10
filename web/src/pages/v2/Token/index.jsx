@@ -210,7 +210,9 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
         </div>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <span className='lbl'>{tr('console.token.field_name', 'name *')}</span>
+          <span className='lbl'>
+            {tr('console.token.field_name', 'name *')}
+          </span>
           <input
             ref={nameRef}
             style={{
@@ -287,7 +289,10 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
         {form.limitModels && (
           <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             <span className='lbl'>
-              {tr('console.token.allowed_models', 'allowed models (comma-separated)')}
+              {tr(
+                'console.token.allowed_models',
+                'allowed models (comma-separated)',
+              )}
             </span>
             <input
               style={{
@@ -301,7 +306,10 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
                 outline: 'none',
                 width: '100%',
               }}
-              placeholder={tr('console.token.ph_models', 'gpt-4o, claude-3.5-sonnet')}
+              placeholder={tr(
+                'console.token.ph_models',
+                'gpt-4o, claude-3.5-sonnet',
+              )}
               value={form.models}
               onChange={(e) =>
                 setForm((f) => ({ ...f, models: e.target.value }))
@@ -521,7 +529,10 @@ const HFToken = () => {
         setRotatedKeys((prev) => ({ ...prev, [token.id]: newKey }));
         setRevealed((prev) => new Set([...prev, token.id]));
         showSuccess(
-          tr('console.token.toast_rotated', 'Key rotated — copy the new key now.'),
+          tr(
+            'console.token.toast_rotated',
+            'Key rotated — copy the new key now.',
+          ),
         );
         setConfirmIntent(null);
       }
@@ -614,7 +625,11 @@ const HFToken = () => {
 
   const settingsRows = token
     ? [
-        [tr('console.token.model_scope', 'model scope'), fmtModels(token), 'models'],
+        [
+          tr('console.token.model_scope', 'model scope'),
+          fmtModels(token),
+          'models',
+        ],
         [
           tr('console.token.monthly_cap', 'monthly cap'),
           token.unlimited_quota
@@ -622,8 +637,16 @@ const HFToken = () => {
             : `$${quotaToUSD(token.used_quota + token.remain_quota)}`,
           'cap',
         ],
-        [tr('console.token.expires', 'expires'), fmtExpiry(token.expired_time), 'expires'],
-        [tr('console.token.allowed_ips', 'allowed ips'), fmtIPs(token.allow_ips), 'ips'],
+        [
+          tr('console.token.expires', 'expires'),
+          fmtExpiry(token.expired_time),
+          'expires',
+        ],
+        [
+          tr('console.token.allowed_ips', 'allowed ips'),
+          fmtIPs(token.allow_ips),
+          'ips',
+        ],
       ]
     : [];
 
@@ -777,7 +800,10 @@ const HFToken = () => {
               className='muted'
               style={{ padding: '20px 22px', fontSize: 12 }}
             >
-              {tr('console.token.empty', 'No tokens yet. Create one to get started.')}
+              {tr(
+                'console.token.empty',
+                'No tokens yet. Create one to get started.',
+              )}
             </div>
           )}
 
@@ -900,7 +926,10 @@ const HFToken = () => {
         <div style={{ overflow: 'auto', padding: 28 }}>
           {!token && !loading && (
             <div className='muted' style={{ fontSize: 13 }}>
-              {tr('console.token.detail_empty', 'Create a token to get started.')}
+              {tr(
+                'console.token.detail_empty',
+                'Create a token to get started.',
+              )}
             </div>
           )}
 
@@ -924,7 +953,10 @@ const HFToken = () => {
                       color: 'var(--hf-ok)',
                     }}
                   >
-                    {tr('console.token.created_banner', 'Token created — copy your key now')}
+                    {tr(
+                      'console.token.created_banner',
+                      'Token created — copy your key now',
+                    )}
                   </div>
                   <div
                     style={{ display: 'flex', alignItems: 'center', gap: 10 }}
@@ -978,7 +1010,9 @@ const HFToken = () => {
                     alignItems: 'center',
                   }}
                 >
-                  <span className='lbl'>{tr('console.token.base_url', 'base url')}</span>
+                  <span className='lbl'>
+                    {tr('console.token.base_url', 'base url')}
+                  </span>
                   <span className='mono strong' style={{ fontSize: 13 }}>
                     {BASE_URL}
                   </span>
@@ -1005,7 +1039,9 @@ const HFToken = () => {
                     alignItems: 'center',
                   }}
                 >
-                  <span className='lbl'>{tr('console.token.api_key', 'api key')}</span>
+                  <span className='lbl'>
+                    {tr('console.token.api_key', 'api key')}
+                  </span>
                   <span
                     className='mono strong'
                     style={{ fontSize: 13, wordBreak: 'break-all' }}
