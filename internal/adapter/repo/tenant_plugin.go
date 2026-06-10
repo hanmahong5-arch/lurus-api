@@ -215,6 +215,14 @@ func WithoutTenantIsolation(db *gorm.DB) *gorm.DB {
 	return db.WithContext(context.WithValue(ctx, SkipTenantIsolationKey, true))
 }
 
+// WithoutTenantIsolationCtx is the context-explicit variant of
+// WithoutTenantIsolation for callers that already hold a ctx (keeps the
+// caller's cancellation/deadline AND satisfies contextcheck — the implicit
+// variant reads ctx from db.Statement, which the linter cannot follow).
+func WithoutTenantIsolationCtx(ctx context.Context, db *gorm.DB) *gorm.DB {
+	return db.WithContext(context.WithValue(ctx, SkipTenantIsolationKey, true))
+}
+
 // GetTenantIDFromDB retrieves tenant ID from DB context
 func GetTenantIDFromDB(db *gorm.DB) string {
 	return getTenantIDFromContext(db)

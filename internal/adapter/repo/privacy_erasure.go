@@ -153,7 +153,7 @@ func RecordErasureError(ctx context.Context, id int64, msg string) error {
 // the synchronous "stop the bleeding" action at erasure intake, before the
 // background cascade hard-deletes them.
 func DisableTokensByUserID(ctx context.Context, userID int) (int64, error) {
-	result := WithoutTenantIsolation(DB.WithContext(ctx)).Model(&Token{}).
+	result := WithoutTenantIsolationCtx(ctx, DB).Model(&Token{}).
 		Where("user_id = ?", userID).
 		Update("status", common.TokenStatusDisabled)
 	return result.RowsAffected, result.Error
@@ -162,7 +162,7 @@ func DisableTokensByUserID(ctx context.Context, userID int) (int64, error) {
 // HardDeleteUserTokens removes ALL tokens of the user, including soft-deleted
 // rows (Unscoped) — token keys and names are personal-adjacent data.
 func HardDeleteUserTokens(ctx context.Context, userID int) (int64, error) {
-	result := WithoutTenantIsolation(DB.WithContext(ctx)).Unscoped().
+	result := WithoutTenantIsolationCtx(ctx, DB).Unscoped().
 		Where("user_id = ?", userID).
 		Delete(&Token{})
 	if result.Error != nil {
@@ -174,7 +174,7 @@ func HardDeleteUserTokens(ctx context.Context, userID int) (int64, error) {
 // HardDeleteUserIdentityMappings removes the Zitadel identity binding rows
 // (email / display name / preferred username), including soft-deleted rows.
 func HardDeleteUserIdentityMappings(ctx context.Context, userID int) (int64, error) {
-	result := WithoutTenantIsolation(DB.WithContext(ctx)).Unscoped().
+	result := WithoutTenantIsolationCtx(ctx, DB).Unscoped().
 		Where("lurus_user_id = ?", userID).
 		Delete(&UserIdentityMapping{})
 	if result.Error != nil {
@@ -198,7 +198,7 @@ func AnonymizeLogsBatch(ctx context.Context, userID int, batchSize int) ([]int, 
 	}
 
 	var ids []int
-	err := WithoutTenantIsolation(LOG_DB.WithContext(ctx)).Model(&Log{}).
+	err := WithoutTenantIsolationCtx(ctx, LOG_DB).Model(&Log{}).
 		Where("user_id = ? AND username <> ?", userID, ErasedMarker).
 		Order("id ASC").
 		Limit(batchSize).
@@ -210,7 +210,7 @@ func AnonymizeLogsBatch(ctx context.Context, userID int, batchSize int) ([]int, 
 		return nil, nil
 	}
 
-	err = WithoutTenantIsolation(LOG_DB.WithContext(ctx)).Model(&Log{}).
+	err = WithoutTenantIsolationCtx(ctx, LOG_DB).Model(&Log{}).
 		Where("id IN ?", ids).
 		Updates(map[string]interface{}{
 			"username":   ErasedMarker,
@@ -270,7 +270,7 @@ func AnonymizeUserRow(ctx context.Context, userID int) error {
 		return errors.New("user id is required")
 	}
 	now := time.Now()
-	err := WithoutTenantIsolation(DB.WithContext(ctx)).Model(&User{}).
+	err := WithoutTenantIsolationCtx(ctx, DB).Model(&User{}).
 		Where("id = ?", userID).
 		Updates(map[string]interface{}{
 			"username":         fmt.Sprintf("erased_%d", userID), // unique index needs a distinct value
