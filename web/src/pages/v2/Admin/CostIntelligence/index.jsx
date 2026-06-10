@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import HFShell from '../../../../components/hifi/HFShell';
 import NotAvailable from '../../../../components/hifi/NotAvailable';
 import { API } from '../../../../helpers';
@@ -35,12 +36,27 @@ const usd = (quota, perUsd) => {
   return `$${d.toFixed(2)}`;
 };
 
+// Labels/hints are i18n [key, fallback] pairs resolved at render via tr() —
+// module scope has no i18n context.
 const SCENARIOS = [
-  { id: 'conservative', label: 'Conservative', hint: 'same-family substitute' },
-  { id: 'aggressive', label: 'Aggressive', hint: 'same-tier cross-vendor' },
+  {
+    id: 'conservative',
+    lk: 'scenario_conservative',
+    lf: 'Conservative',
+    hk: 'scenario_conservative_hint',
+    hf: 'same-family substitute',
+  },
+  {
+    id: 'aggressive',
+    lk: 'scenario_aggressive',
+    lf: 'Aggressive',
+    hk: 'scenario_aggressive_hint',
+    hf: 'same-tier cross-vendor',
+  },
 ];
 
 const HFCostIntelligence = () => {
+  const { t: tr } = useTranslation();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
@@ -74,23 +90,38 @@ const HFCostIntelligence = () => {
   const hasSavings = savingsQuota > 0;
 
   const headline = useMemo(() => {
-    if (!hasSavings) return '$0.00 — no eligible savings';
+    if (!hasSavings)
+      return tr(
+        'console.admin.cost.headline_none',
+        '$0.00 — no eligible savings',
+      );
     return usd(savingsQuota, perUsd);
-  }, [hasSavings, savingsQuota, perUsd]);
+  }, [hasSavings, savingsQuota, perUsd, tr]);
+
+  const activeScenario = SCENARIOS.find((s) => s.id === scenario);
+  const scenarioLabel = activeScenario
+    ? tr(`console.admin.cost.${activeScenario.lk}`, activeScenario.lf)
+    : scenario;
 
   return (
     <HFShell
       active='admin-cost'
-      crumbs={['platform · admin', 'cost intelligence']}
+      crumbs={[
+        tr('console.admin.cost.crumb_admin', 'platform · admin'),
+        tr('console.admin.cost.crumb', 'cost intelligence'),
+      ]}
     >
       <div className='hf-page-head'>
         <div>
           <div className='lbl' style={{ marginBottom: 6 }}>
-            cost intelligence
+            {tr('console.admin.cost.heading_lbl', 'cost intelligence')}
           </div>
-          <h1>Savings analyzer</h1>
+          <h1>{tr('console.admin.cost.title', 'Savings analyzer')}</h1>
           <div className='sub'>
-            what cost-aware routing would have saved · last 7 days
+            {tr(
+              'console.admin.cost.sub',
+              'what cost-aware routing would have saved · last 7 days',
+            )}
           </div>
         </div>
       </div>
@@ -99,20 +130,31 @@ const HFCostIntelligence = () => {
         <div style={{ padding: 24 }}>
           <div className='panel' style={{ padding: '20px 24px' }}>
             <div className='strong' style={{ marginBottom: 6 }}>
-              Admin access required
+              {tr(
+                'console.admin.cost.forbidden_title',
+                'Admin access required',
+              )}
             </div>
             <div className='muted' style={{ fontSize: 12 }}>
-              You do not have permission to view platform cost intelligence.
+              {tr(
+                'console.admin.cost.forbidden_body',
+                'You do not have permission to view platform cost intelligence.',
+              )}
             </div>
           </div>
         </div>
       ) : loading ? (
         <div style={{ padding: 28 }} className='muted'>
-          Loading…
+          {tr('console.common.loading', 'loading…')}
         </div>
       ) : !data ? (
         <div style={{ padding: 28 }}>
-          <NotAvailable reason='savings endpoint returned no data' />
+          <NotAvailable
+            reason={tr(
+              'console.admin.cost.no_data_reason',
+              'savings endpoint returned no data',
+            )}
+          />
         </div>
       ) : (
         <div style={{ padding: 28, overflow: 'auto' }}>
@@ -140,9 +182,9 @@ const HFCostIntelligence = () => {
                 data-testid={`scenario-${s.id}`}
                 className={'btn sm' + (scenario === s.id ? ' primary' : '')}
                 onClick={() => setScenario(s.id)}
-                title={s.hint}
+                title={tr(`console.admin.cost.${s.hk}`, s.hf)}
               >
-                {s.label}
+                {tr(`console.admin.cost.${s.lk}`, s.lf)}
               </button>
             ))}
           </div>
@@ -153,7 +195,11 @@ const HFCostIntelligence = () => {
             style={{ padding: '20px 24px', marginBottom: 24 }}
           >
             <div className='lbl' style={{ marginBottom: 6 }}>
-              estimated savings · {scenario}
+              {tr(
+                'console.admin.cost.est_savings',
+                'estimated savings · {{scenario}}',
+                { scenario: scenarioLabel },
+              )}
             </div>
             <div
               data-testid='savings-headline'
@@ -163,8 +209,14 @@ const HFCostIntelligence = () => {
               {headline}
             </div>
             <div className='muted' style={{ fontSize: 12, marginTop: 6 }}>
-              of {usd(data.total_spend_quota, perUsd)} total spend ·{' '}
-              {((active?.savings_pct || 0) * 100).toFixed(1)}% potential
+              {tr(
+                'console.admin.cost.of_total',
+                'of {{total}} total spend · {{pct}}% potential',
+                {
+                  total: usd(data.total_spend_quota, perUsd),
+                  pct: ((active?.savings_pct || 0) * 100).toFixed(1),
+                },
+              )}
             </div>
           </div>
 
@@ -178,8 +230,12 @@ const HFCostIntelligence = () => {
           >
             <Table
               testid='spend-by-model'
-              title='spend by model'
-              cols={['model', 'requests', 'spend']}
+              title={tr('console.admin.cost.spend_by_model', 'spend by model')}
+              cols={[
+                tr('console.admin.cost.col_model', 'model'),
+                tr('console.admin.cost.col_requests', 'requests'),
+                tr('console.admin.cost.col_spend', 'spend'),
+              ]}
               rows={(data.spend_by_model || []).map((m) => [
                 m.model_name,
                 String(m.count),
@@ -188,8 +244,15 @@ const HFCostIntelligence = () => {
             />
             <Table
               testid='spend-by-product'
-              title='spend by product'
-              cols={['product', 'requests', 'spend']}
+              title={tr(
+                'console.admin.cost.spend_by_product',
+                'spend by product',
+              )}
+              cols={[
+                tr('console.admin.cost.col_product', 'product'),
+                tr('console.admin.cost.col_requests', 'requests'),
+                tr('console.admin.cost.col_spend', 'spend'),
+              ]}
               rows={(data.spend_by_product || []).map((p) => [
                 p.product,
                 String(p.count),
@@ -200,21 +263,36 @@ const HFCostIntelligence = () => {
 
           <Table
             testid='top-opportunities'
-            title={`top opportunities · ${scenario}`}
-            cols={['model', '→ alternative', 'est. savings', '%']}
+            title={tr(
+              'console.admin.cost.top_opportunities',
+              'top opportunities · {{scenario}}',
+              { scenario: scenarioLabel },
+            )}
+            cols={[
+              tr('console.admin.cost.col_model', 'model'),
+              tr('console.admin.cost.col_alternative', '→ alternative'),
+              tr('console.admin.cost.col_est_savings', 'est. savings'),
+              '%',
+            ]}
             rows={(active?.top_opportunities || []).map((o) => [
               o.model,
               o.alt_model,
               usd(o.savings_quota, perUsd),
               `${(o.savings_pct * 100).toFixed(0)}%`,
             ])}
-            empty='no eligible savings opportunities in this window'
+            empty={tr(
+              'console.admin.cost.opportunities_empty',
+              'no eligible savings opportunities in this window',
+            )}
           />
 
           {data.excluded && data.excluded.length > 0 && (
             <div style={{ marginTop: 20 }}>
               <div className='lbl' style={{ marginBottom: 8 }}>
-                excluded from re-pricing (honest gaps)
+                {tr(
+                  'console.admin.cost.excluded_lbl',
+                  'excluded from re-pricing (honest gaps)',
+                )}
               </div>
               <div
                 className='muted'
@@ -241,47 +319,54 @@ const cellStyle = {
   textAlign: 'left',
 };
 
-const Table = ({ testid, title, cols, rows, empty }) => (
-  <div className='panel' style={{ padding: '14px 16px' }} data-testid={testid}>
-    <div className='lbl' style={{ marginBottom: 10 }}>
-      {title}
-    </div>
-    {rows.length === 0 ? (
-      <div className='muted' style={{ fontSize: 12 }}>
-        {empty || 'no data'}
+const Table = ({ testid, title, cols, rows, empty }) => {
+  const { t: tr } = useTranslation();
+  return (
+    <div
+      className='panel'
+      style={{ padding: '14px 16px' }}
+      data-testid={testid}
+    >
+      <div className='lbl' style={{ marginBottom: 10 }}>
+        {title}
       </div>
-    ) : (
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            {cols.map((c) => (
-              <th
-                key={c}
-                style={{
-                  ...cellStyle,
-                  color: 'var(--hf-ink-3)',
-                  fontWeight: 600,
-                }}
-              >
-                {c}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i}>
-              {r.map((cell, j) => (
-                <td key={j} style={cellStyle}>
-                  {cell}
-                </td>
+      {rows.length === 0 ? (
+        <div className='muted' style={{ fontSize: 12 }}>
+          {empty || tr('console.common.no_data', 'no data')}
+        </div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              {cols.map((c) => (
+                <th
+                  key={c}
+                  style={{
+                    ...cellStyle,
+                    color: 'var(--hf-ink-3)',
+                    fontWeight: 600,
+                  }}
+                >
+                  {c}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    )}
-  </div>
-);
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i}>
+                {r.map((cell, j) => (
+                  <td key={j} style={cellStyle}>
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+};
 
 export default HFCostIntelligence;

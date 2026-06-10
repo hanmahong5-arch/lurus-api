@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import HFShell from '../../../../components/hifi/HFShell';
 import NotAvailable from '../../../../components/hifi/NotAvailable';
 import { API, showSuccess } from '../../../../helpers';
@@ -30,89 +31,155 @@ import { API, showSuccess } from '../../../../helpers';
  */
 
 // Field types: text | textarea | number | toggle. Each panel curates a subset.
+// Labels are i18n [key, fallback] pairs (lk/lf) resolved at render via tr() —
+// module scope has no i18n context.
 const PANELS = [
   {
     id: 'general',
-    label: 'General',
+    lk: 'panel_general',
+    lf: 'General',
     fields: [
-      { key: 'SystemName', label: 'System name', type: 'text' },
-      { key: 'Footer', label: 'Footer', type: 'text' },
-      { key: 'Notice', label: 'Notice', type: 'textarea' },
-      { key: 'About', label: 'About', type: 'textarea' },
+      {
+        key: 'SystemName',
+        lk: 'f_system_name',
+        lf: 'System name',
+        type: 'text',
+      },
+      { key: 'Footer', lk: 'f_footer', lf: 'Footer', type: 'text' },
+      { key: 'Notice', lk: 'f_notice', lf: 'Notice', type: 'textarea' },
+      { key: 'About', lk: 'f_about', lf: 'About', type: 'textarea' },
     ],
   },
   {
     id: 'branding',
-    label: 'Branding',
+    lk: 'panel_branding',
+    lf: 'Branding',
     fields: [
-      { key: 'Logo', label: 'Logo URL', type: 'text' },
-      { key: 'HomePageContent', label: 'Home page content', type: 'textarea' },
+      { key: 'Logo', lk: 'f_logo', lf: 'Logo URL', type: 'text' },
+      {
+        key: 'HomePageContent',
+        lk: 'f_home_page_content',
+        lf: 'Home page content',
+        type: 'textarea',
+      },
       {
         key: 'console_setting.announcements',
-        label: 'Announcements (JSON — validated)',
+        lk: 'f_announcements',
+        lf: 'Announcements (JSON — validated)',
         type: 'textarea',
       },
       {
         key: 'console_setting.faq',
-        label: 'FAQ (JSON — validated)',
+        lk: 'f_faq',
+        lf: 'FAQ (JSON — validated)',
         type: 'textarea',
       },
     ],
   },
   {
     id: 'auth',
-    label: 'Auth',
+    lk: 'panel_auth',
+    lf: 'Auth',
     fields: [
-      { key: 'PasswordLoginEnabled', label: 'Password login', type: 'toggle' },
       {
-        key: 'PasswordRegisterEnabled',
-        label: 'Password registration',
+        key: 'PasswordLoginEnabled',
+        lk: 'f_password_login',
+        lf: 'Password login',
         type: 'toggle',
       },
-      { key: 'GitHubOAuthEnabled', label: 'GitHub OAuth', type: 'toggle' },
-      { key: 'TelegramOAuthEnabled', label: 'Telegram OAuth', type: 'toggle' },
-      { key: 'WeChatAuthEnabled', label: 'WeChat login', type: 'toggle' },
+      {
+        key: 'PasswordRegisterEnabled',
+        lk: 'f_password_register',
+        lf: 'Password registration',
+        type: 'toggle',
+      },
+      {
+        key: 'GitHubOAuthEnabled',
+        lk: 'f_github_oauth',
+        lf: 'GitHub OAuth',
+        type: 'toggle',
+      },
+      {
+        key: 'TelegramOAuthEnabled',
+        lk: 'f_telegram_oauth',
+        lf: 'Telegram OAuth',
+        type: 'toggle',
+      },
+      {
+        key: 'WeChatAuthEnabled',
+        lk: 'f_wechat_login',
+        lf: 'WeChat login',
+        type: 'toggle',
+      },
       {
         key: 'TurnstileCheckEnabled',
-        label: 'Turnstile check',
+        lk: 'f_turnstile',
+        lf: 'Turnstile check',
         type: 'toggle',
       },
     ],
   },
   {
     id: 'security',
-    label: 'Security',
+    lk: 'panel_security',
+    lf: 'Security',
     fields: [
       {
         key: 'SensitiveActionRequire2FA',
-        label: 'Require 2FA for sensitive actions',
+        lk: 'f_require_2fa',
+        lf: 'Require 2FA for sensitive actions',
         type: 'toggle',
       },
       {
         key: 'SessionTimeoutMinutes',
-        label: 'Session timeout (minutes)',
+        lk: 'f_session_timeout',
+        lf: 'Session timeout (minutes)',
         type: 'number',
       },
       {
         key: 'EmailDomainRestrictionEnabled',
-        label: 'Email domain restriction',
+        lk: 'f_email_domain_restriction',
+        lf: 'Email domain restriction',
         type: 'toggle',
       },
     ],
   },
   {
     id: 'quota',
-    label: 'Quota',
+    lk: 'panel_quota',
+    lf: 'Quota',
     fields: [
-      { key: 'QuotaForNewUser', label: 'Quota for new user', type: 'number' },
-      { key: 'QuotaForInviter', label: 'Quota for inviter', type: 'number' },
-      { key: 'USDExchangeRate', label: 'USD exchange rate', type: 'number' },
+      {
+        key: 'QuotaForNewUser',
+        lk: 'f_quota_new_user',
+        lf: 'Quota for new user',
+        type: 'number',
+      },
+      {
+        key: 'QuotaForInviter',
+        lk: 'f_quota_inviter',
+        lf: 'Quota for inviter',
+        type: 'number',
+      },
+      {
+        key: 'USDExchangeRate',
+        lk: 'f_usd_exchange_rate',
+        lf: 'USD exchange rate',
+        type: 'number',
+      },
     ],
     // Ratio JSON editors (ModelRatio/GroupRatio) are large and validated
     // server-side — deferred here with an honest note rather than half-built.
-    note: 'Model/Group ratio JSON editors are large and live in v1 / advanced — not surfaced here. Validation lives server-side.',
+    noteKey: 'note_quota',
+    noteFallback:
+      'Model/Group ratio JSON editors are large and live in v1 / advanced — not surfaced here. Validation lives server-side.',
   },
-  { id: 'monitoring', label: 'Monitoring', readOnly: true },
+  {
+    id: 'monitoring',
+    lk: 'panel_monitoring',
+    lf: 'Monitoring',
+    readOnly: true,
+  },
 ];
 
 const inputStyle = {
@@ -128,6 +195,7 @@ const inputStyle = {
 };
 
 const HFAdminSettings = () => {
+  const { t: tr } = useTranslation();
   const [options, setOptions] = useState({});
   const [drafts, setDrafts] = useState({});
   const [loading, setLoading] = useState(true);
@@ -184,35 +252,42 @@ const HFAdminSettings = () => {
 
   // Persist one key per call. Surfaces the backend's honest validation-failure
   // message inline (UpdateOption returns 200 + success:false for those).
-  const putOption = useCallback(async (key, value) => {
-    setSavingKey(key);
-    setErrors((prev) => ({ ...prev, [key]: undefined }));
-    try {
-      const res = await API.put(
-        '/api/v2/admin/options',
-        { key, value },
-        { skipErrorHandler: true },
-      );
-      if (res?.data?.success) {
-        setOptions((prev) => ({ ...prev, [key]: String(value) }));
-        showSuccess('Saved');
-        return true;
+  const putOption = useCallback(
+    async (key, value) => {
+      setSavingKey(key);
+      setErrors((prev) => ({ ...prev, [key]: undefined }));
+      try {
+        const res = await API.put(
+          '/api/v2/admin/options',
+          { key, value },
+          { skipErrorHandler: true },
+        );
+        if (res?.data?.success) {
+          setOptions((prev) => ({ ...prev, [key]: String(value) }));
+          showSuccess(tr('console.admin.settings.toast_saved', 'Saved'));
+          return true;
+        }
+        setErrors((prev) => ({
+          ...prev,
+          [key]:
+            res?.data?.message ||
+            tr('console.admin.settings.err_rejected', 'Update rejected'),
+        }));
+        return false;
+      } catch (err) {
+        setErrors((prev) => ({
+          ...prev,
+          [key]:
+            err?.response?.data?.message ||
+            tr('console.admin.settings.err_failed', 'Update failed'),
+        }));
+        return false;
+      } finally {
+        setSavingKey(null);
       }
-      setErrors((prev) => ({
-        ...prev,
-        [key]: res?.data?.message || 'Update rejected',
-      }));
-      return false;
-    } catch (err) {
-      setErrors((prev) => ({
-        ...prev,
-        [key]: err?.response?.data?.message || 'Update failed',
-      }));
-      return false;
-    } finally {
-      setSavingKey(null);
-    }
-  }, []);
+    },
+    [tr],
+  );
 
   const isOn = (key) => options[key] === 'true';
   const dirty = (key) => (drafts[key] ?? '') !== (options[key] ?? '');
@@ -244,7 +319,7 @@ const HFAdminSettings = () => {
               onChange={() => putOption(f.key, !isOn(f.key))}
             />
             <span className='strong' style={{ fontSize: 13 }}>
-              {f.label}
+              {tr(`console.admin.settings.${f.lk}`, f.lf)}
             </span>
           </label>
           {err && (
@@ -270,7 +345,7 @@ const HFAdminSettings = () => {
     return (
       <div key={f.key} style={{ marginBottom: 18 }}>
         <div className='lbl' style={{ marginBottom: 5 }}>
-          {f.label}
+          {tr(`console.admin.settings.${f.lk}`, f.lf)}
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
           {f.type === 'textarea' ? (
@@ -292,7 +367,9 @@ const HFAdminSettings = () => {
             disabled={saving || !dirty(f.key)}
             onClick={() => putOption(f.key, drafts[f.key] ?? '')}
           >
-            {saving ? 'saving…' : 'save'}
+            {saving
+              ? tr('console.admin.settings.saving', 'saving…')
+              : tr('console.common.save', 'save')}
           </button>
         </div>
         {err && (
@@ -310,15 +387,31 @@ const HFAdminSettings = () => {
   const activePanel = PANELS.find((p) => p.id === panel) || PANELS[0];
 
   return (
-    <HFShell active='admin-settings' crumbs={['platform · admin', 'settings']}>
+    <HFShell
+      active='admin-settings'
+      crumbs={[
+        tr('console.admin.settings.crumb_admin', 'platform · admin'),
+        tr('console.admin.settings.crumb', 'settings'),
+      ]}
+    >
       <div className='hf-page-head'>
         <div>
           <div className='lbl' style={{ marginBottom: 6 }}>
-            admin settings
+            {tr('console.admin.settings.heading_lbl', 'admin settings')}
           </div>
-          <h1>{forbidden ? 'Admin access required' : 'System settings'}</h1>
+          <h1>
+            {forbidden
+              ? tr(
+                  'console.admin.settings.forbidden_title',
+                  'Admin access required',
+                )
+              : tr('console.admin.settings.title', 'System settings')}
+          </h1>
           <div className='sub'>
-            curated, high-value subset · one key per save
+            {tr(
+              'console.admin.settings.sub',
+              'curated, high-value subset · one key per save',
+            )}
           </div>
         </div>
       </div>
@@ -327,11 +420,16 @@ const HFAdminSettings = () => {
         <div style={{ padding: 24 }}>
           <div className='panel' style={{ padding: '20px 24px' }}>
             <div className='strong' style={{ marginBottom: 6 }}>
-              Admin access required
+              {tr(
+                'console.admin.settings.forbidden_title',
+                'Admin access required',
+              )}
             </div>
             <div className='muted' style={{ fontSize: 12 }}>
-              You do not have permission to manage system settings. Contact a
-              platform administrator.
+              {tr(
+                'console.admin.settings.forbidden_body',
+                'You do not have permission to manage system settings. Contact a platform administrator.',
+              )}
             </div>
           </div>
         </div>
@@ -375,7 +473,7 @@ const HFAdminSettings = () => {
                   fontSize: 12,
                 }}
               >
-                {p.label}
+                {tr(`console.admin.settings.${p.lk}`, p.lf)}
               </button>
             ))}
           </div>
@@ -384,16 +482,19 @@ const HFAdminSettings = () => {
           <div style={{ overflow: 'auto', padding: 28 }}>
             {loading ? (
               <div className='muted' style={{ fontSize: 12 }}>
-                Loading…
+                {tr('console.common.loading', 'loading…')}
               </div>
             ) : activePanel.readOnly ? (
               <div>
                 <div className='lbl' style={{ marginBottom: 10 }}>
-                  system stats · read-only
+                  {tr(
+                    'console.admin.settings.stats_lbl',
+                    'system stats · read-only',
+                  )}
                 </div>
                 {statsLoading ? (
                   <div className='muted' style={{ fontSize: 12 }}>
-                    Loading…
+                    {tr('console.common.loading', 'loading…')}
                   </div>
                 ) : stats ? (
                   <pre
@@ -412,16 +513,24 @@ const HFAdminSettings = () => {
                     {JSON.stringify(stats, null, 2)}
                   </pre>
                 ) : (
-                  <NotAvailable reason='stats endpoint returned no data' />
+                  <NotAvailable
+                    reason={tr(
+                      'console.admin.settings.stats_no_data',
+                      'stats endpoint returned no data',
+                    )}
+                  />
                 )}
               </div>
             ) : (
               <div style={{ maxWidth: 560 }}>
                 <div className='lbl' style={{ marginBottom: 16 }}>
-                  {activePanel.label.toLowerCase()}
+                  {tr(
+                    `console.admin.settings.${activePanel.lk}`,
+                    activePanel.lf,
+                  ).toLowerCase()}
                 </div>
                 {activePanel.fields.map(renderField)}
-                {activePanel.note && (
+                {activePanel.noteKey && (
                   <div
                     className='muted'
                     style={{
@@ -431,7 +540,10 @@ const HFAdminSettings = () => {
                       borderTop: '1px dashed var(--hf-rule)',
                     }}
                   >
-                    {activePanel.note}
+                    {tr(
+                      `console.admin.settings.${activePanel.noteKey}`,
+                      activePanel.noteFallback,
+                    )}
                   </div>
                 )}
               </div>

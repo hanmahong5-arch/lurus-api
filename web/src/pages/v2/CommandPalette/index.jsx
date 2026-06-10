@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import HFShell from '../../../components/hifi/HFShell';
 
 /*
@@ -24,78 +25,129 @@ import HFShell from '../../../components/hifi/HFShell';
  * Ported from design canvas hifi/hf6-cmdk.jsx (2026-05-07).
  */
 
+// Translatable strings are [key, fallback] pairs resolved at render via tr()
+// (module scope has no i18n context). Raw strings (channel/model/request ids,
+// prices, paths) stay untranslated by design.
 const GROUPS = [
   {
-    g: 'navigate',
+    g: ['group_navigate', 'navigate'],
     items: [
-      ['Dashboard', '/console/v2/dashboard', 'g d'],
-      ['Logs · last 1h', '/console/v2/log', 'g l'],
-      ['Channels', '/console/v2/channel', 'g c'],
-      ['Tokens', '/console/v2/token', 'g t'],
-      ['Playground', '/console/v2/playground', 'g p'],
+      [['nav_dashboard', 'Dashboard'], '/console/v2/dashboard', 'g d'],
+      [['nav_logs', 'Logs · last 1h'], '/console/v2/log', 'g l'],
+      [['nav_channels', 'Channels'], '/console/v2/channel', 'g c'],
+      [['nav_tokens', 'Tokens'], '/console/v2/token', 'g t'],
+      [['nav_playground', 'Playground'], '/console/v2/playground', 'g p'],
     ],
   },
   {
-    g: 'channels',
+    g: ['group_channels', 'channels'],
     items: [
-      ['openai/main', '$412.80 / 1h · 99.4% healthy', null],
-      ['anthropic/eu', '$281.10 / 1h · 98.1% healthy', null],
-      ['vertex/asia', '$88.60 / 1h · 87.2% degraded', null],
+      ['openai/main', ['demo_ch_openai', '$412.80 / 1h · 99.4% healthy'], null],
+      [
+        'anthropic/eu',
+        ['demo_ch_anthropic', '$281.10 / 1h · 98.1% healthy'],
+        null,
+      ],
+      ['vertex/asia', ['demo_ch_vertex', '$88.60 / 1h · 87.2% degraded'], null],
     ],
   },
   {
-    g: 'models',
+    g: ['group_models', 'models'],
     items: [
-      ['gpt-4o', '$2.50 / $10 · 128k ctx', null],
-      ['claude-3.5-sonnet', '$3.00 / $15 · 200k ctx', null],
-      ['gemini-1.5-pro', '$1.25 / $5 · 2M ctx', null],
+      ['gpt-4o', ['demo_model_gpt4o', '$2.50 / $10 · 128k ctx'], null],
+      [
+        'claude-3.5-sonnet',
+        ['demo_model_claude', '$3.00 / $15 · 200k ctx'],
+        null,
+      ],
+      ['gemini-1.5-pro', ['demo_model_gemini', '$1.25 / $5 · 2M ctx'], null],
     ],
   },
   {
-    g: 'recent',
+    g: ['group_recent', 'recent'],
     items: [
       ['req_1f4a...e90c · 504', 'gpt-4o · 4.8s · acme', null],
       ['req_8b03...77ef · 200', 'claude-3.5 · 1.1s · contoso', null],
     ],
   },
   {
-    g: 'actions',
+    g: ['group_actions', 'actions'],
     items: [
-      ['Create token…', 'opens wizard', '⌘N'],
-      ['Rotate api key…', '', null],
-      ['Set monthly budget…', '', null],
-      ['Toggle theme', 'light · dark', '⌘.'],
+      [
+        ['action_create_token', 'Create token…'],
+        ['action_create_token_hint', 'opens wizard'],
+        '⌘N',
+      ],
+      [['action_rotate_key', 'Rotate api key…'], '', null],
+      [['action_set_budget', 'Set monthly budget…'], '', null],
+      [
+        ['action_toggle_theme', 'Toggle theme'],
+        ['action_toggle_theme_hint', 'light · dark'],
+        '⌘.',
+      ],
     ],
   },
 ];
 
 const KBD_REF = [
-  [['⌘', 'K'], 'open palette · search anything'],
-  [['g', 'd'], 'go to dashboard'],
-  [['g', 'l'], 'go to logs'],
-  [['g', 'c'], 'go to channels'],
-  [['g', 't'], 'go to tokens'],
-  [['g', 'p'], 'go to playground'],
-  [['⌘', 'N'], 'new token'],
-  [['⌘', '.'], 'toggle theme'],
+  [
+    ['⌘', 'K'],
+    ['kbd_open_palette', 'open palette · search anything'],
+  ],
+  [
+    ['g', 'd'],
+    ['kbd_go_dashboard', 'go to dashboard'],
+  ],
+  [
+    ['g', 'l'],
+    ['kbd_go_logs', 'go to logs'],
+  ],
+  [
+    ['g', 'c'],
+    ['kbd_go_channels', 'go to channels'],
+  ],
+  [
+    ['g', 't'],
+    ['kbd_go_tokens', 'go to tokens'],
+  ],
+  [
+    ['g', 'p'],
+    ['kbd_go_playground', 'go to playground'],
+  ],
+  [
+    ['⌘', 'N'],
+    ['kbd_new_token', 'new token'],
+  ],
+  [
+    ['⌘', '.'],
+    ['kbd_toggle_theme', 'toggle theme'],
+  ],
 ];
 
 const HFCmdK = () => {
+  const { t: tr } = useTranslation();
   const [open, setOpen] = useState(true);
   const [q, setQ] = useState('');
   const [hover, setHover] = useState(0);
 
+  // Resolve a [key, fallback] pair via i18n; pass raw strings through.
+  const tx = (v) =>
+    Array.isArray(v) ? tr(`console.palette.${v[0]}`, v[1]) : v;
+
   return (
     <HFShell
       active='tokens'
-      crumbs={['my account', 'tokens']}
+      crumbs={[
+        tr('console.palette.crumb_account', 'my account'),
+        tr('console.palette.crumb_tokens', 'tokens'),
+      ]}
       actions={
         <>
           <button type='button' className='btn'>
-            last 30d ▾
+            {tr('console.palette.btn_last_30d', 'last 30d ▾')}
           </button>
           <button type='button' className='btn primary'>
-            + new token
+            {tr('console.palette.btn_new_token', '+ new token')}
           </button>
         </>
       }
@@ -104,17 +156,22 @@ const HFCmdK = () => {
         <div className='hf-page-head'>
           <div>
             <div className='lbl' style={{ marginBottom: 6 }}>
-              tokens
+              {tr('console.palette.heading_lbl', 'tokens')}
             </div>
-            <h1>5 active tokens</h1>
+            <h1>{tr('console.palette.heading', { count: 5 })}</h1>
             <div className='sub'>
-              try the global palette · ⌘K is the fastest path through Lurus Hub
+              {tr(
+                'console.palette.sub',
+                'try the global palette · ⌘K is the fastest path through Lurus Hub',
+              )}
             </div>
           </div>
         </div>
         <div style={{ padding: 28, color: 'var(--hf-ink-3)', fontSize: 13 }}>
           <div className='panel-paper' style={{ padding: 22 }}>
-            <div className='lbl'>keyboard reference</div>
+            <div className='lbl'>
+              {tr('console.palette.kbd_reference', 'keyboard reference')}
+            </div>
             <div
               style={{
                 display: 'grid',
@@ -134,7 +191,7 @@ const HFCmdK = () => {
                       {x}
                     </span>
                   ))}
-                  <span className='muted'>{d}</span>
+                  <span className='muted'>{tx(d)}</span>
                 </div>
               ))}
             </div>
@@ -184,7 +241,10 @@ const HFCmdK = () => {
                   autoFocus
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder='go to · run · search logs models tokens channels…'
+                  placeholder={tr(
+                    'console.palette.ph_search',
+                    'go to · run · search logs models tokens channels…',
+                  )}
                   style={{
                     flex: 1,
                     border: 0,
@@ -201,7 +261,7 @@ const HFCmdK = () => {
                 {GROUPS.map((gr, gi) => (
                   <div key={gi}>
                     <div className='lbl' style={{ padding: '10px 16px 4px' }}>
-                      {gr.g}
+                      {tx(gr.g)}
                     </div>
                     {gr.items.map((it, i) => {
                       const idx = gi * 100 + i;
@@ -228,13 +288,13 @@ const HFCmdK = () => {
                             className='strong'
                             style={{ minWidth: 230, fontSize: 13 }}
                           >
-                            {it[0]}
+                            {tx(it[0])}
                           </span>
                           <span
                             className='muted mono'
                             style={{ flex: 1, fontSize: 11 }}
                           >
-                            {it[1]}
+                            {tx(it[1])}
                           </span>
                           {it[2] && <span className='kbd'>{it[2]}</span>}
                         </div>
@@ -255,16 +315,21 @@ const HFCmdK = () => {
                 }}
               >
                 <span>
-                  <span className='kbd'>↑↓</span> navigate
+                  <span className='kbd'>↑↓</span>{' '}
+                  {tr('console.palette.footer_navigate', 'navigate')}
                 </span>
                 <span>
-                  <span className='kbd'>↵</span> open
+                  <span className='kbd'>↵</span>{' '}
+                  {tr('console.palette.footer_open', 'open')}
                 </span>
                 <span>
-                  <span className='kbd'>⌘↵</span> new tab
+                  <span className='kbd'>⌘↵</span>{' '}
+                  {tr('console.palette.footer_new_tab', 'new tab')}
                 </span>
                 <span style={{ flex: 1 }} />
-                <span>72 results</span>
+                <span>
+                  {tr('console.palette.footer_results', { count: 72 })}
+                </span>
               </div>
             </div>
           </div>
@@ -283,7 +348,7 @@ const HFCmdK = () => {
               padding: '0 16px',
             }}
           >
-            ⌘K open palette
+            {tr('console.palette.open_palette_btn', '⌘K open palette')}
           </button>
         )}
       </div>

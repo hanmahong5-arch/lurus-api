@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useCallback, useRef, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 /*
  * TweaksPanel — adapted from design canvas tweaks-panel.jsx (2026-05-07).
@@ -116,11 +117,8 @@ export const useTweaks = (defaults) => {
   return [values, setTweak];
 };
 
-export const TweaksPanel = ({
-  title = 'Tweaks',
-  children,
-  defaultOpen = true,
-}) => {
+export const TweaksPanel = ({ title, children, defaultOpen = true }) => {
+  const { t: tr } = useTranslation();
   const [open, setOpen] = useState(defaultOpen);
   const dragRef = useRef(null);
   const offsetRef = useRef({ x: 16, y: 16 });
@@ -128,6 +126,8 @@ export const TweaksPanel = ({
   useEffect(() => {
     injectStyle();
   }, []);
+
+  const shownTitle = title ?? tr('console.component.tweaks.title', 'Tweaks');
 
   if (!open) {
     return (
@@ -152,7 +152,7 @@ export const TweaksPanel = ({
           boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
         }}
       >
-        ⚙ {title}
+        ⚙ {shownTitle}
       </button>
     );
   }
@@ -188,10 +188,10 @@ export const TweaksPanel = ({
       style={{ right: offsetRef.current.x, bottom: offsetRef.current.y }}
     >
       <div className='twk-hd' onMouseDown={onDragStart}>
-        <b>{title}</b>
+        <b>{shownTitle}</b>
         <button
           className='twk-x'
-          aria-label='Close tweaks'
+          aria-label={tr('console.component.tweaks.close_aria', 'Close tweaks')}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={() => setOpen(false)}
         >
