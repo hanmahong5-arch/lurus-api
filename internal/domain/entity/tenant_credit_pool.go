@@ -24,11 +24,19 @@ const (
 )
 
 // Draw reason enum for TenantCreditPoolDraw.Reason.
+//
+// "relay_overdraft" marks a post-consume debit that landed after the pool was
+// already exhausted: the upstream tokens were burned and the user quota was
+// charged, so the correct action is to record the debt (balance goes
+// negative) rather than drop the debit. Conservation law
+// `seed − Σdraws == balance` holds unconditionally; the relay gate
+// (IsExhausted ⇒ balance <= 0) keeps rejecting until a topup repays the debt.
 const (
 	PoolDrawReasonRelayDebit = "relay_debit"
 	PoolDrawReasonTopup      = "topup"
 	PoolDrawReasonReset      = "reset"
 	PoolDrawReasonAdjustment = "adjustment"
+	PoolDrawReasonOverdraft  = "relay_overdraft"
 )
 
 // TenantCreditPool holds per-tenant pre-paid balance plus optional ceiling and

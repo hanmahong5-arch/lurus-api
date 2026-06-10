@@ -31,6 +31,7 @@ const (
 	PoolDrawReasonTopup      = entity.PoolDrawReasonTopup
 	PoolDrawReasonReset      = entity.PoolDrawReasonReset
 	PoolDrawReasonAdjustment = entity.PoolDrawReasonAdjustment
+	PoolDrawReasonOverdraft  = entity.PoolDrawReasonOverdraft
 )
 
 // Direction constants (int16, separate const block to preserve type).
@@ -113,9 +114,11 @@ func CreateTenantCreditPool(tenantID string, createdByUserID int, maxBalance int
 // PostgreSQL READ COMMITTED is sufficient — the implicit row-level lock
 // during UPDATE serializes concurrent debits. SERIALIZABLE not needed.
 //
-// Use DebitPoolInTx when the caller already owns a transaction (e.g. the
-// post-consume quota path joins this debit with the quota_consume write
-// so a single rollback covers both).
+// Use DebitPoolInTx when the caller already owns a transaction. Note the
+// post-consume quota path does NOT share a transaction with quota_consume —
+// the user quota write may go through Redis/batch paths that have no DB tx.
+// When this returns ErrPoolExhausted the post-consume caller falls back to
+// OverdraftDebitPool so the debit is recorded as debt instead of dropped.
 func DebitPool(poolID int64, tenantID string, amount int64, tokenID int, logID int64) error {
 	if amount <= 0 {
 		return fmt.Errorf("debit amount must be positive, got %d", amount)
@@ -127,12 +130,13 @@ func DebitPool(poolID int64, tenantID string, amount int64, tokenID int, logID i
 }
 
 // DebitPoolInTx is the transactional variant of DebitPool — it does the same
-// conditional-UPDATE-plus-draw-insert but reuses the caller's transaction.
-// This lets the post-consume quota path bind pool debit and quota_consume
-// into a single atomic unit (ADR §7 risk #1: rollback covers both halves so
-// the audit ledger never drifts from the pool balance).
+// conditional-UPDATE-plus-draw-insert but reuses the caller's transaction so
+// the balance update and the draw ledger row commit or roll back together.
+// It does NOT join the user quota_consume write into the same transaction
+// (that write may be Redis-buffered or batched and has no DB tx to share).
 //
 // Callers MUST handle ErrPoolExhausted explicitly — there is no auto-retry.
+// The post-consume path handles it via OverdraftDebitPool.
 func DebitPoolInTx(tx *gorm.DB, poolID int64, tenantID string, amount int64, tokenID int, logID int64) error {
 	if amount <= 0 {
 		return fmt.Errorf("debit amount must be positive, got %d", amount)
@@ -165,6 +169,61 @@ func DebitPoolInTx(tx *gorm.DB, poolID int64, tenantID string, amount int64, tok
 		return fmt.Errorf("debit pool draw insert: %w", err)
 	}
 	return nil
+}
+
+// OverdraftDebitPool unconditionally deducts amount from the pool — the
+// balance is allowed to go negative — and records a `relay_overdraft` draw
+// row in the same transaction. Returns the post-debit balance.
+//
+// This is the P0-3 fix for the post-consume path: when DebitPool returns
+// ErrPoolExhausted the upstream tokens are already burned and the user quota
+// already charged, so dropping the pool debit (the old log-only behaviour)
+// silently breaks `seed − Σdraws == balance`. Recording the debt keeps the
+// conservation law unconditional: the negative balance keeps the relay gate
+// closed (IsExhausted ⇒ balance <= 0) and the next topup repays it — no
+// reconciliation job needed.
+func OverdraftDebitPool(poolID int64, tenantID string, amount int64, tokenID int, logID int64) (int64, error) {
+	if amount <= 0 {
+		return 0, fmt.Errorf("overdraft debit amount must be positive, got %d", amount)
+	}
+
+	var newBalance int64
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&TenantCreditPool{}).
+			Where("id = ?", poolID).
+			Updates(map[string]interface{}{
+				"current_balance": gorm.Expr("current_balance - ?", amount),
+				"updated_at":      time.Now(),
+			})
+		if result.Error != nil {
+			return fmt.Errorf("overdraft debit pool update: %w", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return fmt.Errorf("overdraft debit: pool %d not found", poolID)
+		}
+
+		var pool TenantCreditPool
+		if err := tx.Select("current_balance").Where("id = ?", poolID).First(&pool).Error; err != nil {
+			return fmt.Errorf("overdraft debit readback: %w", err)
+		}
+		newBalance = pool.CurrentBalance
+
+		draw := &TenantCreditPoolDraw{
+			PoolID:    poolID,
+			TenantID:  tenantID,
+			TokenID:   tokenID,
+			LogID:     logID,
+			Direction: PoolDrawDirectionDebit,
+			Amount:    amount,
+			Reason:    PoolDrawReasonOverdraft,
+			CreatedAt: time.Now(),
+		}
+		if err := tx.Create(draw).Error; err != nil {
+			return fmt.Errorf("overdraft debit draw insert: %w", err)
+		}
+		return nil
+	})
+	return newBalance, err
 }
 
 // TopupPool atomically increments the pool balance and writes a credit draw
