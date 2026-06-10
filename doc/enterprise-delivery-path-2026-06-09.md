@@ -54,13 +54,13 @@ newhub 自身也只是 platform 的标准消费者——新产品接入成本 = 
 |----|------|------|------|
 | P0-1 | **SEAM S1**：platform 订阅/充值 ↛ newhub credit pool 供给（两套 entitlement 互不通信，客户付费后 gateway 仍 402）。D3 已拍板 model (b)：platform BillingOutbox 喂池 → newhub 需幂等 fund 接收端点 | newhub 侧端点 + platform 侧 outbox | newhub 侧 ✅ DONE（PR newhub#14 CI 14项全绿 2026-06-10：端点+UNIQUE(event_id) 幂等+migration 019 已 commit,contracts.md 已登记 IMPLEMENTED;剩 platform 侧 outbox 调用方 ❌ 未动） |
 | P0-2 | 钱包幂等键（ADR D4）：platform `/wallet/debit\|credit` 无 Idempotency-Key 服务端去重，重试可能双扣 | platform | ❌ 未动（platform session） |
-| P0-3 | `internal/app/quota.go:542` 池扣减与 quota 写非原子（2026-05-30 审计 HIGH） | newhub | ⏳ 等当前分支 i18n/WS 工作收口后修（live tree 同文件冲突） |
+| P0-3 | `internal/app/quota.go:542` 池扣减与 quota 写非原子（2026-05-30 审计 HIGH） | newhub | ✅ DONE（batch 3 2026-06-10：overdraft 化非共享事务——ErrPoolExhausted→负余额+relay_overdraft 账行,守恒律无条件成立;DB 硬错误残留面=CRITICAL log+credit_pool_debit_lost_total;ADR doc/decisions/2026-06-10-pool-overdraft-semantics.md;race 守恒测试 20 并发全落账终值 −147） |
 | P0-4 | hub.lurus.cn DNS + R6 STAGE seed 数据（drill 全阻塞在 DB 0 行） | owner 动作 | 🔒 owner-gated |
 
 ### P1 — 企业成交关键（deal-breaker 级）
 
 - 双 issuer 支持（S3 地雷：rebrand 时全线 401）→ ✅ DONE（PR newhub#14 CI 全绿 2026-06-10：`ZITADEL_ISSUER` 逗号分隔,zitadel_auth/admin_jwt_auth/release_gate 三校验点共用 issuer set;oauth.go 回调有意不改——rebrand 前实例 issuer 未变;aud allow-list 仍未做）
-- PIPL §47 级联删除：platform 注销 30d 冷静期后 newhub token/log/pool 数据未随删（合规风险，contracts.md 已记）
+- PIPL §47 级联删除 → ✅ newhub 侧 DONE（batch 3 2026-06-10：`POST /internal/v1/privacy/erase` 幂等端点 migration 020 + leader-only crash-resumable executor,处置表+诚实边界已登记 contracts.md;剩 platform 侧冷静期到期调用 worker ❌ 未动——newhub 不消费 NATS）
 - Org↔tenant 桥（消费 platform Organization API，替代自建）
 - 专票状态机（申请→审核→已开→邮寄）+ 对公转账核销 API —— **platform 职责**，newhub 不做
 - SCIM/SAML（H1.1）—— 🔒 blocked on Okta trial（owner）
@@ -84,6 +84,7 @@ newhub 自身也只是 platform 的标准消费者——新产品接入成本 = 
 - **节奏**：每 batch = 侦察（只读 agent）→ 修缝（写 agent，避开外部并发区/worktree 隔离）→ 独立 oracle 验证（build/test/grep，不信 agent 自报）→ 勾选本文档
 - **2026-06-09 batch 1**：P0-1 newhub 侧 fund 端点 + P1 双 issuer（已启动）；P0-3 等分支收口；P0-2/专票升级到 platform session
 - **2026-06-10 batch 2**：工作树收口 ✅ — CRLF 去噪+.gitattributes、三股工作拆 10 commit、merge main、PR newhub#14 CI 14 项全绿（race+pg-integration 含 FundPoolIdempotent）、coord 四件登记。batch 3 待办：P0-3 quota.go 池扣减原子化、PIPL 级联删除、~16 页 i18n sweep、platform session（P0-2 幂等键+BillingOutbox 调用方+专票）
+- **2026-06-10 batch 3**：✅ — P0-3 overdraft 化 + PIPL §47 erase 端点/executor（migration 020）+ v2 console 全量 i18n（16 页+3 hifi 组件,console 树 938 keys en/zh parity,DesignSystem/States/Variants dev 页除外）。剩余皆 platform session / owner-gated：P0-2 幂等键、S1 outbox 调用方、PIPL 调用 worker、专票、P0-4 DNS/seed
 
 ## 附：遗留补丁处置
 
