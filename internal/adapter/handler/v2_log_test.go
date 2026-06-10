@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"testing"
@@ -279,6 +280,33 @@ func TestGetLogsV2_ForbiddenFields(t *testing.T) {
 	}
 	if _, ok := lg["model_name"]; !ok {
 		t.Error("expected model_name field in logView")
+	}
+}
+
+// TestGetLogsV2_AfterIDCursor guards the live-tail cursor: requesting
+// ?after_id=<id> returns only rows strictly newer than that id.
+func TestGetLogsV2_AfterIDCursor(t *testing.T) {
+	ctx := SetupV2TestRouter(t)
+	defer ctx.Cleanup()
+
+	// Seed three logs; ids are monotonic in insertion order.
+	SeedV2Log(t, ctx, ctx.NormalUser.Id, repo.LogTypeConsume)
+	l2 := SeedV2Log(t, ctx, ctx.NormalUser.Id, repo.LogTypeConsume)
+	l3 := SeedV2Log(t, ctx, ctx.NormalUser.Id, repo.LogTypeConsume)
+
+	path := fmt.Sprintf("/api/v2/test-tenant/logs?after_id=%d", l2.Id)
+	w := V2RequestAsUser(ctx, ctx.NormalUser, http.MethodGet, path, nil, nil)
+	AssertV2Status(t, w, http.StatusOK)
+	resp := AssertV2Success(t, w)
+
+	data := resp["data"].(map[string]interface{})
+	logs := data["logs"].([]interface{})
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 log after id=%d, got %d", l2.Id, len(logs))
+	}
+	got := logs[0].(map[string]interface{})
+	if int(got["id"].(float64)) != l3.Id {
+		t.Errorf("expected newest log id=%d, got %v", l3.Id, got["id"])
 	}
 }
 
