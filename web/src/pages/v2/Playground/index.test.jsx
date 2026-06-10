@@ -53,6 +53,25 @@ vi.mock('../../../components/hifi/HFShell', () => ({
     ),
 }));
 
+// Mirror i18next's en behaviour: return the English defaultValue (2nd arg)
+// with {{var}} interpolation, falling back to the key when no default given.
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key, fallback, opts) => {
+      const vars =
+        typeof fallback === 'object' && fallback !== null ? fallback : opts;
+      let out = typeof fallback === 'string' ? fallback : key;
+      if (vars) {
+        for (const [k, v] of Object.entries(vars)) {
+          out = out.split('{{' + k + '}}').join(String(v));
+        }
+      }
+      return out;
+    },
+  }),
+  initReactI18next: { type: '3rdParty', init: () => {} },
+}));
+
 import HFPlayground from './index';
 import { API, showError, showSuccess } from '../../../helpers';
 
@@ -296,7 +315,7 @@ describe('Playground page', () => {
     expect(url).toBe('/api/v2/acme/playground/presets');
     expect(body.name).toBe('my-save');
     await waitFor(() => {
-      expect(showSuccess).toHaveBeenCalledWith('预设已保存');
+      expect(showSuccess).toHaveBeenCalledWith('Preset saved');
     });
   });
 
@@ -351,7 +370,7 @@ describe('Playground page', () => {
     expect(copiedURL).toContain('prompt=');
     expect(copiedURL).toContain(encodeURIComponent('share-me'));
     expect(copiedURL).toContain('models=');
-    expect(showSuccess).toHaveBeenCalledWith('分享链接已复制');
+    expect(showSuccess).toHaveBeenCalledWith('Share link copied');
   });
 
   // 11. swap▾ — opens model dropdown, clicking a model toggles it in/out of

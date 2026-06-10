@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import HFShell from '../../../components/hifi/HFShell';
 import NotAvailable from '../../../components/hifi/NotAvailable';
 import { API, showError } from '../../../helpers';
@@ -38,7 +39,8 @@ const LOG_TYPE_ERROR = 5;
 
 // Outcome derived from the log type — error logs (type 5) must not render as a
 // green "200". We do not store the upstream HTTP status, so this reports the
-// recorded outcome class, not a fabricated status code.
+// recorded outcome class, not a fabricated status code. `label` doubles as the
+// i18n key suffix (console.log.outcome_<label>).
 const outcomeTag = (r) =>
   Number(r?.type) === LOG_TYPE_ERROR
     ? { cls: 'tag error', label: 'error' }
@@ -87,6 +89,9 @@ const LIVE_CAP = 200;
 
 const HFLog = () => {
   const tenantSlug = useTenantSlug();
+  // Aliased to `tr` to match the v2 console convention (avoids shadowing by
+  // local loop variables named `t`).
+  const { t: tr } = useTranslation();
 
   const [tab, setTab] = useState('trace');
   const [selRow, setSelRow] = useState(0);
@@ -150,7 +155,10 @@ const HFLog = () => {
           setTotal(d.total ?? 0);
           setSelRow(0);
         } else {
-          showError(res?.data?.message || 'Failed to load logs');
+          showError(
+            res?.data?.message ||
+              tr('console.log.load_failed', 'Failed to load logs'),
+          );
         }
       } catch (_) {
         // error toast shown by API interceptor
@@ -158,7 +166,7 @@ const HFLog = () => {
         setLoading(false);
       }
     },
-    [tenantSlug],
+    [tenantSlug, tr],
   );
 
   const fetchStat = useCallback(
@@ -214,7 +222,13 @@ const HFLog = () => {
           items.sort((a, b) => b.count - a.count);
           setClusterItems(items);
         } else {
-          showError(res?.data?.message || 'Failed to load cluster data');
+          showError(
+            res?.data?.message ||
+              tr(
+                'console.log.cluster_load_failed',
+                'Failed to load cluster data',
+              ),
+          );
         }
       } catch (_) {
         // error toast shown by API interceptor
@@ -222,7 +236,7 @@ const HFLog = () => {
         setClusterLoading(false);
       }
     },
-    [tenantSlug],
+    [tenantSlug, tr],
   );
 
   // Fetch cluster when switching to cluster tab or bucket changes
@@ -319,11 +333,18 @@ const HFLog = () => {
   return (
     <HFShell
       active='logs'
-      crumbs={['my account', 'usage & logs']}
+      crumbs={[
+        tr('console.nav.section_my_account', 'my account'),
+        tr('console.log.crumb', 'usage & logs'),
+      ]}
       actions={
         <>
           <span className='muted mono' style={{ fontSize: 11 }}>
-            {loading ? 'loading…' : `${total} requests`}
+            {loading
+              ? tr('console.common.loading', 'loading…')
+              : tr('console.log.requests_count', '{{count}} requests', {
+                  count: total,
+                })}
           </span>
         </>
       }
@@ -342,14 +363,14 @@ const HFLog = () => {
       >
         <input
           style={{ ...inputStyle, width: 160 }}
-          placeholder='model name…'
+          placeholder={tr('console.log.ph_model', 'model name…')}
           value={filterModel}
           onChange={(e) => setFilterModel(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
         />
         <input
           style={{ ...inputStyle, width: 140 }}
-          placeholder='token name…'
+          placeholder={tr('console.log.ph_token', 'token name…')}
           value={filterToken}
           onChange={(e) => setFilterToken(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
@@ -357,7 +378,7 @@ const HFLog = () => {
         <input
           style={{ ...inputStyle, width: 160 }}
           type='datetime-local'
-          title='start time'
+          title={tr('console.log.start_time', 'start time')}
           value={filterStart}
           onChange={(e) => setFilterStart(e.target.value)}
         />
@@ -367,12 +388,12 @@ const HFLog = () => {
         <input
           style={{ ...inputStyle, width: 160 }}
           type='datetime-local'
-          title='end time'
+          title={tr('console.log.end_time', 'end time')}
           value={filterEnd}
           onChange={(e) => setFilterEnd(e.target.value)}
         />
         <button type='button' className='btn primary' onClick={applyFilters}>
-          search
+          {tr('console.common.search', 'search')}
         </button>
         <button
           type='button'
@@ -387,7 +408,7 @@ const HFLog = () => {
             fetchStat('', '', '', '');
           }}
         >
-          clear
+          {tr('console.log.clear', 'clear')}
         </button>
         {tab === 'trace' && (
           <button
@@ -413,7 +434,7 @@ const HFLog = () => {
                 `/api/v2/${tenantSlug}/logs/export` + (qs ? `?${qs}` : '');
             }}
           >
-            📥 导出 CSV
+            📥 {tr('console.log.export_csv', 'export CSV')}
           </button>
         )}
       </div>
@@ -434,26 +455,26 @@ const HFLog = () => {
       >
         {[
           [
-            'requests',
+            tr('console.log.stat_requests', 'requests'),
             stat ? Number(stat.total_requests ?? 0).toLocaleString() : '—',
-            'in window',
+            tr('console.log.in_window', 'in window'),
           ],
           [
-            'quota',
+            tr('console.log.stat_quota', 'quota'),
             stat
               ? `$${(Number(stat.total_quota ?? 0) / QUOTA_PER_USD).toFixed(4)}`
               : '—',
-            'in window',
+            tr('console.log.in_window', 'in window'),
           ],
           [
-            'rpm',
+            tr('console.log.stat_rpm', 'rpm'),
             stat ? Number(stat.rpm ?? 0).toLocaleString() : '—',
-            'last 60s',
+            tr('console.log.last_60s', 'last 60s'),
           ],
           [
-            'tpm',
+            tr('console.log.stat_tpm', 'tpm'),
             stat ? Number(stat.tpm ?? 0).toLocaleString() : '—',
-            'last 60s',
+            tr('console.log.last_60s', 'last 60s'),
           ],
         ].map(([l, v, sub]) => (
           <div key={l}>
@@ -480,9 +501,9 @@ const HFLog = () => {
         }}
       >
         {[
-          ['trace', 'Requests', total || ''],
-          ['cluster', 'Error clusters', '—'],
-          ['live', 'Live tail', '—'],
+          ['trace', tr('console.log.tab_requests', 'Requests'), total || ''],
+          ['cluster', tr('console.log.tab_clusters', 'Error clusters'), '—'],
+          ['live', tr('console.log.tab_live', 'Live tail'), '—'],
         ].map(([k, l, c]) => (
           <button
             key={k}
@@ -541,7 +562,7 @@ const HFLog = () => {
                   className='muted'
                   style={{ padding: '20px 22px', fontSize: 12 }}
                 >
-                  Loading…
+                  {tr('console.common.loading', 'Loading…')}
                 </div>
               )}
 
@@ -550,7 +571,7 @@ const HFLog = () => {
                   className='muted'
                   style={{ padding: '20px 22px', fontSize: 12 }}
                 >
-                  No logs found.
+                  {tr('console.log.empty', 'No logs found.')}
                 </div>
               )}
 
@@ -558,15 +579,15 @@ const HFLog = () => {
                 <table className='t'>
                   <thead>
                     <tr>
-                      <th>timestamp</th>
-                      <th>dur</th>
-                      <th>ttft</th>
-                      <th>model</th>
-                      <th>upstream</th>
-                      <th>token</th>
-                      <th>tok</th>
+                      <th>{tr('console.log.th_timestamp', 'timestamp')}</th>
+                      <th>{tr('console.log.th_dur', 'dur')}</th>
+                      <th>{tr('console.log.th_ttft', 'ttft')}</th>
+                      <th>{tr('console.log.th_model', 'model')}</th>
+                      <th>{tr('console.log.th_upstream', 'upstream')}</th>
+                      <th>{tr('console.log.th_token', 'token')}</th>
+                      <th>{tr('console.log.th_tok', 'tok')}</th>
                       <th>$</th>
-                      <th>code</th>
+                      <th>{tr('console.log.th_code', 'code')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -592,7 +613,12 @@ const HFLog = () => {
                           )}
                         </td>
                         <td className='mono'>
-                          <NotAvailable reason='TTFT not stored: the log schema has no time-to-first-token column' />
+                          <NotAvailable
+                            reason={tr(
+                              'console.log.ttft_na_reason',
+                              'TTFT not stored: the log schema has no time-to-first-token column',
+                            )}
+                          />
                         </td>
                         <td className='strong'>{r.model_name || '—'}</td>
                         <td className='mono muted'>
@@ -601,7 +627,12 @@ const HFLog = () => {
                           ) : r.channel ? (
                             `#${r.channel}`
                           ) : (
-                            <NotAvailable reason='upstream channel id not recorded on this log row' />
+                            <NotAvailable
+                              reason={tr(
+                                'console.log.upstream_na_reason',
+                                'upstream channel id not recorded on this log row',
+                              )}
+                            />
                           )}
                         </td>
                         <td className='mono muted'>{r.token_name || '—'}</td>
@@ -612,7 +643,11 @@ const HFLog = () => {
                         <td>
                           {(() => {
                             const o = outcomeTag(r);
-                            return <span className={o.cls}>{o.label}</span>;
+                            return (
+                              <span className={o.cls}>
+                                {tr(`console.log.outcome_${o.label}`, o.label)}
+                              </span>
+                            );
                           })()}
                         </td>
                       </tr>
@@ -633,7 +668,8 @@ const HFLog = () => {
                     }}
                   >
                     <div className='lbl' style={{ marginBottom: 4 }}>
-                      request · {fmtTime(selectedLog.created_at)}
+                      {tr('console.log.detail_request', 'request')} ·{' '}
+                      {fmtTime(selectedLog.created_at)}
                     </div>
                     <div className='display' style={{ fontSize: 19 }}>
                       {selectedLog.model_name || '—'}
@@ -649,7 +685,11 @@ const HFLog = () => {
                     >
                       {(() => {
                         const o = outcomeTag(selectedLog);
-                        return <span className={o.cls}>{o.label}</span>;
+                        return (
+                          <span className={o.cls}>
+                            {tr(`console.log.outcome_${o.label}`, o.label)}
+                          </span>
+                        );
                       })()}
                       {selectedLog.model_name && (
                         <span className='pill'>{selectedLog.model_name}</span>
@@ -660,14 +700,16 @@ const HFLog = () => {
                         </span>
                       )}
                       {selectedLog.is_stream && (
-                        <span className='pill'>stream</span>
+                        <span className='pill'>
+                          {tr('console.log.stream', 'stream')}
+                        </span>
                       )}
                     </div>
                   </div>
 
                   <div style={{ padding: 20 }}>
                     <div className='lbl' style={{ marginBottom: 8 }}>
-                      details
+                      {tr('console.log.details', 'details')}
                     </div>
                     <div
                       className='panel-paper'
@@ -679,38 +721,64 @@ const HFLog = () => {
                       }}
                     >
                       <div>
-                        <span className='muted'>model:</span>{' '}
+                        <span className='muted'>
+                          {tr('console.log.detail_model', 'model')}:
+                        </span>{' '}
                         {selectedLog.model_name || '—'}
                       </div>
                       <div>
-                        <span className='muted'>token name:</span>{' '}
+                        <span className='muted'>
+                          {tr('console.log.detail_token_name', 'token name')}:
+                        </span>{' '}
                         {selectedLog.token_name || '—'}
                       </div>
                       <div>
-                        <span className='muted'>prompt tokens:</span>{' '}
+                        <span className='muted'>
+                          {tr(
+                            'console.log.detail_prompt_tokens',
+                            'prompt tokens',
+                          )}
+                          :
+                        </span>{' '}
                         {selectedLog.prompt_tokens ?? '—'}
                       </div>
                       <div>
-                        <span className='muted'>completion tokens:</span>{' '}
+                        <span className='muted'>
+                          {tr(
+                            'console.log.detail_completion_tokens',
+                            'completion tokens',
+                          )}
+                          :
+                        </span>{' '}
                         {selectedLog.completion_tokens ?? '—'}
                       </div>
                       <div>
-                        <span className='muted'>cost:</span>{' '}
+                        <span className='muted'>
+                          {tr('console.log.detail_cost', 'cost')}:
+                        </span>{' '}
                         {fmtCost(selectedLog.quota)}
                       </div>
                       <div>
-                        <span className='muted'>duration:</span>{' '}
+                        <span className='muted'>
+                          {tr('console.log.detail_duration', 'duration')}:
+                        </span>{' '}
                         {selectedLog.total_latency_ms != null
                           ? `${selectedLog.total_latency_ms}ms`
                           : '—'}
                       </div>
                       <div>
-                        <span className='muted'>streaming:</span>{' '}
-                        {selectedLog.is_stream ? 'yes' : 'no'}
+                        <span className='muted'>
+                          {tr('console.log.detail_streaming', 'streaming')}:
+                        </span>{' '}
+                        {selectedLog.is_stream
+                          ? tr('console.log.yes', 'yes')
+                          : tr('console.log.no', 'no')}
                       </div>
                       {selectedLog.content && (
                         <div>
-                          <span className='muted'>note:</span>{' '}
+                          <span className='muted'>
+                            {tr('console.log.detail_note', 'note')}:
+                          </span>{' '}
                           {selectedLog.content}
                         </div>
                       )}
@@ -723,7 +791,10 @@ const HFLog = () => {
                     className='muted'
                     style={{ padding: '20px 22px', fontSize: 12 }}
                   >
-                    Select a row to view details.
+                    {tr(
+                      'console.log.select_row',
+                      'Select a row to view details.',
+                    )}
                   </div>
                 )
               )}
@@ -748,10 +819,13 @@ const HFLog = () => {
               disabled={page <= 1 || loading}
               onClick={() => goPage(page - 1)}
             >
-              ← prev
+              {tr('console.log.prev', '← prev')}
             </button>
             <span className='mono muted'>
-              page {page} of {totalPages}
+              {tr('console.log.page_of', 'page {{page}} of {{total}}', {
+                page,
+                total: totalPages,
+              })}
             </span>
             <button
               type='button'
@@ -759,10 +833,14 @@ const HFLog = () => {
               disabled={page >= totalPages || loading}
               onClick={() => goPage(page + 1)}
             >
-              next →
+              {tr('console.log.next', 'next →')}
             </button>
             <span className='muted' style={{ marginLeft: 'auto' }}>
-              {total} total · {PAGE_SIZE} per page
+              {tr(
+                'console.log.total_per_page',
+                '{{total}} total · {{size}} per page',
+                { total, size: PAGE_SIZE },
+              )}
             </span>
           </div>
         </div>
@@ -785,7 +863,7 @@ const HFLog = () => {
               className='muted'
               style={{ fontSize: 11, fontFamily: 'var(--hf-mono)' }}
             >
-              bucket:
+              {tr('console.log.bucket_label', 'bucket:')}
             </span>
             {['hour', 'day'].map((b) => (
               <button
@@ -795,7 +873,7 @@ const HFLog = () => {
                 style={{ fontSize: 11 }}
                 onClick={() => setClusterBucket(b)}
               >
-                {b}
+                {tr(`console.log.bucket_${b}`, b)}
               </button>
             ))}
             {clusterLoading && (
@@ -803,7 +881,7 @@ const HFLog = () => {
                 className='muted'
                 style={{ fontSize: 11, fontFamily: 'var(--hf-mono)' }}
               >
-                loading…
+                {tr('console.common.loading', 'loading…')}
               </span>
             )}
           </div>
@@ -811,7 +889,10 @@ const HFLog = () => {
           {/* Cluster table */}
           {!clusterLoading && clusterItems.length === 0 && (
             <div className='muted' style={{ padding: '20px 0', fontSize: 12 }}>
-              No cluster data for selected period.
+              {tr(
+                'console.log.cluster_empty',
+                'No cluster data for selected period.',
+              )}
             </div>
           )}
 
@@ -819,10 +900,10 @@ const HFLog = () => {
             <table className='t' data-testid='cluster-table'>
               <thead>
                 <tr>
-                  <th>model</th>
-                  <th>error code</th>
-                  <th>bucket</th>
-                  <th>count</th>
+                  <th>{tr('console.log.th_model', 'model')}</th>
+                  <th>{tr('console.log.th_error_code', 'error code')}</th>
+                  <th>{tr('console.log.th_bucket', 'bucket')}</th>
+                  <th>{tr('console.log.th_count', 'count')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -883,7 +964,9 @@ const HFLog = () => {
               data-testid='live-status'
               className={liveOn ? 'tag ok' : 'tag'}
             >
-              {liveOn ? '● live · polling 3s' : '⏸ paused'}
+              {liveOn
+                ? tr('console.log.live_polling', '● live · polling 3s')
+                : tr('console.log.live_paused', '⏸ paused')}
             </span>
             <button
               type='button'
@@ -891,11 +974,16 @@ const HFLog = () => {
               data-testid='live-pause-btn'
               onClick={() => setLiveOn((v) => !v)}
             >
-              {liveOn ? 'pause' : 'resume'}
+              {liveOn
+                ? tr('console.log.pause', 'pause')
+                : tr('console.log.resume', 'resume')}
             </button>
             <span className='muted mono' style={{ fontSize: 11 }}>
-              {liveRows.length} row{liveRows.length !== 1 ? 's' : ''} · newest
-              first · cap {LIVE_CAP}
+              {tr(
+                'console.log.live_rows',
+                '{{count}} rows · newest first · cap {{cap}}',
+                { count: liveRows.length, cap: LIVE_CAP },
+              )}
             </span>
           </div>
 
@@ -907,22 +995,25 @@ const HFLog = () => {
                 style={{ padding: '20px 22px', fontSize: 12 }}
               >
                 {liveOn
-                  ? 'Waiting for live requests…'
-                  : 'Paused — resume to continue tailing.'}
+                  ? tr('console.log.live_waiting', 'Waiting for live requests…')
+                  : tr(
+                      'console.log.live_paused_hint',
+                      'Paused — resume to continue tailing.',
+                    )}
               </div>
             ) : (
               <table className='t' data-testid='live-table'>
                 <thead>
                   <tr>
-                    <th>timestamp</th>
-                    <th>dur</th>
-                    <th>ttft</th>
-                    <th>model</th>
-                    <th>upstream</th>
-                    <th>token</th>
-                    <th>tok</th>
+                    <th>{tr('console.log.th_timestamp', 'timestamp')}</th>
+                    <th>{tr('console.log.th_dur', 'dur')}</th>
+                    <th>{tr('console.log.th_ttft', 'ttft')}</th>
+                    <th>{tr('console.log.th_model', 'model')}</th>
+                    <th>{tr('console.log.th_upstream', 'upstream')}</th>
+                    <th>{tr('console.log.th_token', 'token')}</th>
+                    <th>{tr('console.log.th_tok', 'tok')}</th>
                     <th>$</th>
-                    <th>code</th>
+                    <th>{tr('console.log.th_code', 'code')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -938,7 +1029,12 @@ const HFLog = () => {
                           )}
                         </td>
                         <td className='mono'>
-                          <NotAvailable reason='TTFT not stored: the log schema has no time-to-first-token column' />
+                          <NotAvailable
+                            reason={tr(
+                              'console.log.ttft_na_reason',
+                              'TTFT not stored: the log schema has no time-to-first-token column',
+                            )}
+                          />
                         </td>
                         <td className='strong'>{r.model_name || '—'}</td>
                         <td className='mono muted'>
@@ -947,7 +1043,12 @@ const HFLog = () => {
                           ) : r.channel ? (
                             `#${r.channel}`
                           ) : (
-                            <NotAvailable reason='upstream channel id not recorded on this log row' />
+                            <NotAvailable
+                              reason={tr(
+                                'console.log.upstream_na_reason',
+                                'upstream channel id not recorded on this log row',
+                              )}
+                            />
                           )}
                         </td>
                         <td className='mono muted'>{r.token_name || '—'}</td>
@@ -956,7 +1057,9 @@ const HFLog = () => {
                         </td>
                         <td className='mono'>{fmtCost(r.quota)}</td>
                         <td>
-                          <span className={o.cls}>{o.label}</span>
+                          <span className={o.cls}>
+                            {tr(`console.log.outcome_${o.label}`, o.label)}
+                          </span>
                         </td>
                       </tr>
                     );

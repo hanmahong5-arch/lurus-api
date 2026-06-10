@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useCallback, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import HFShell from '../../../components/hifi/HFShell';
 import WIPBanner from '../../../components/hifi/WIPBanner';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
@@ -39,6 +40,8 @@ const formatPreview = (text) => {
 const HFChat = () => {
   const params = useParams();
   const tenantSlug = params.tenant_slug || params.tenantSlug || 'default';
+  // Aliased to `tr` per the v2 console convention.
+  const { t: tr } = useTranslation();
 
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -50,8 +53,10 @@ const HFChat = () => {
 
   const sessionTitle = useMemo(() => {
     const firstUser = messages.find((m) => m.role === 'user');
-    return firstUser ? formatPreview(firstUser.content) : 'new chat';
-  }, [messages]);
+    return firstUser
+      ? formatPreview(firstUser.content)
+      : tr('console.chat.new_chat', 'new chat');
+  }, [messages, tr]);
 
   const turnCount = useMemo(
     () => messages.filter((m) => m.role === 'assistant').length,
@@ -81,7 +86,10 @@ const HFChat = () => {
       });
       const data = res?.data?.data;
       if (!data?.message) {
-        throw new Error(res?.data?.message || 'invalid chat response');
+        throw new Error(
+          res?.data?.message ||
+            tr('console.chat.invalid_response', 'invalid chat response'),
+        );
       }
       setMessages((prev) => [
         ...prev,
@@ -96,14 +104,18 @@ const HFChat = () => {
         },
       ]);
     } catch (err) {
-      showError(err?.response?.data?.message || err?.message || '发送失败');
+      showError(
+        err?.response?.data?.message ||
+          err?.message ||
+          tr('console.chat.send_failed', 'Send failed'),
+      );
       // Roll back the optimistic user message on failure so the next
       // retry doesn't double-send.
       setMessages(messages);
     } finally {
       setSending(false);
     }
-  }, [input, messages, model, sending, tenantSlug]);
+  }, [input, messages, model, sending, tenantSlug, tr]);
 
   const onKeyDown = useCallback(
     (e) => {
@@ -118,7 +130,10 @@ const HFChat = () => {
   return (
     <HFShell
       active='chat'
-      crumbs={['workspace', 'chat']}
+      crumbs={[
+        tr('console.nav.section_workspace', 'workspace'),
+        tr('console.chat.crumb', 'chat'),
+      ]}
       actions={
         <>
           <button
@@ -129,10 +144,10 @@ const HFChat = () => {
               try {
                 navigator.clipboard?.writeText(window.location.href);
               } catch (_) {}
-              showSuccess('链接已复制');
+              showSuccess(tr('console.chat.link_copied', 'Link copied'));
             }}
           >
-            share ↗
+            {tr('console.chat.share', 'share ↗')}
           </button>
           <button
             type='button'
@@ -144,12 +159,18 @@ const HFChat = () => {
           </button>
           <ConfirmDialog
             visible={clearVisible}
-            title='清空当前对话'
+            title={tr('console.chat.clear_title', 'Clear current conversation')}
             consequenceList={[
-              '当前对话内容将被清除，不可恢复（仅限本地会话）。',
+              tr(
+                'console.chat.clear_consequence',
+                'The current conversation will be cleared and cannot be recovered (local session only).',
+              ),
             ]}
             confirmText='clear'
-            confirmButtonText='清空对话'
+            confirmButtonText={tr(
+              'console.chat.clear_confirm_btn',
+              'Clear conversation',
+            )}
             confirmButtonType='danger'
             onConfirm={() => {
               setMessages([]);
@@ -182,11 +203,11 @@ const HFChat = () => {
               style={{ width: '100%', justifyContent: 'center' }}
               onClick={() => setMessages([])}
             >
-              + new chat
+              {tr('console.chat.new_chat_btn', '+ new chat')}
             </button>
           </div>
           <div className='lbl' style={{ padding: '8px 16px' }}>
-            current session
+            {tr('console.chat.current_session', 'current session')}
           </div>
           <div
             data-testid='session-row'
@@ -209,14 +230,22 @@ const HFChat = () => {
               {sessionTitle}
             </div>
             <div className='faint mono' style={{ fontSize: 10, marginTop: 2 }}>
-              {sessionStartedAgo} ago · {turnCount} turn
-              {turnCount === 1 ? '' : 's'}
+              {tr('console.chat.ago', '{{ago}} ago', {
+                ago: sessionStartedAgo,
+              })}{' '}
+              ·{' '}
+              {tr('console.chat.turns', '{{count}} turns', {
+                count: turnCount,
+              })}
             </div>
           </div>
           <div style={{ padding: '14px 16px' }}>
             <WIPBanner
               mini
-              reason='persistence + streaming deferred to v3'
+              reason={tr(
+                'console.chat.wip_persistence',
+                'persistence + streaming deferred to v3',
+              )}
               todo='no chat_session table yet'
             />
           </div>
@@ -243,8 +272,13 @@ const HFChat = () => {
                 {sessionTitle}
               </div>
               <div className='muted mono' style={{ fontSize: 10 }}>
-                {turnCount} turn{turnCount === 1 ? '' : 's'} · started{' '}
-                {sessionStartedAgo} ago
+                {tr('console.chat.turns', '{{count}} turns', {
+                  count: turnCount,
+                })}{' '}
+                ·{' '}
+                {tr('console.chat.started_ago', 'started {{ago}} ago', {
+                  ago: sessionStartedAgo,
+                })}
               </div>
             </div>
             <span style={{ flex: 1 }} />
@@ -267,7 +301,7 @@ const HFChat = () => {
                 className='muted'
                 style={{ textAlign: 'center', padding: '60px 0' }}
               >
-                ask anything to begin
+                {tr('console.chat.empty_state', 'ask anything to begin')}
               </div>
             )}
             {messages.map((m, i) => (
@@ -282,7 +316,7 @@ const HFChat = () => {
                         : 'var(--hf-accent)',
                   }}
                 >
-                  {m.role === 'user' ? 'you' : model}
+                  {m.role === 'user' ? tr('console.chat.you', 'you') : model}
                 </div>
                 <div
                   style={{
@@ -317,16 +351,24 @@ const HFChat = () => {
                       className='btn ghost sm'
                       onClick={() => navigator.clipboard?.writeText(m.content)}
                     >
-                      copy
+                      {tr('console.common.copy', 'copy')}
                     </button>
-                    <WIPBanner mini reason='retry / branch deferred to v3' />
+                    <WIPBanner
+                      mini
+                      reason={tr(
+                        'console.chat.wip_retry',
+                        'retry / branch deferred to v3',
+                      )}
+                    />
                   </div>
                 )}
               </div>
             ))}
             {sending && (
               <div className='muted' data-testid='sending-indicator'>
-                {model} is thinking…
+                {tr('console.chat.thinking', '{{model}} is thinking…', {
+                  model,
+                })}
               </div>
             )}
           </div>
@@ -347,7 +389,7 @@ const HFChat = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
-                placeholder='ask anything…'
+                placeholder={tr('console.chat.ph_input', 'ask anything…')}
                 disabled={sending}
                 style={{
                   width: '100%',
@@ -379,7 +421,7 @@ const HFChat = () => {
                   onClick={send}
                   disabled={sending || !input.trim()}
                 >
-                  ▶ send{' '}
+                  {tr('console.chat.send_btn', '▶ send')}{' '}
                   <span className='kbd' style={{ marginLeft: 4 }}>
                     ↵
                   </span>

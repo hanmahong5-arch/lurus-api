@@ -81,8 +81,23 @@ vi.mock('@douyinfe/semi-ui', () => {
   return { Button, Input, Modal, Typography };
 });
 
+// Mirror i18next's en behaviour: return the English defaultValue (2nd arg)
+// with {{var}} interpolation, falling back to the key when no default given.
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (k) => k }),
+  useTranslation: () => ({
+    t: (key, fallback, opts) => {
+      const vars =
+        typeof fallback === 'object' && fallback !== null ? fallback : opts;
+      let out = typeof fallback === 'string' ? fallback : key;
+      if (vars) {
+        for (const [k, v] of Object.entries(vars)) {
+          out = out.split('{{' + k + '}}').join(String(v));
+        }
+      }
+      return out;
+    },
+  }),
+  initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
 vi.mock('react-router-dom', () => ({

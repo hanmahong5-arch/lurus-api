@@ -62,6 +62,25 @@ vi.mock('react-router-dom', () => ({
   useParams: () => ({ tenant_slug: 'acme' }),
 }));
 
+// Mirror i18next's en behaviour: return the English defaultValue (2nd arg)
+// with {{var}} interpolation, falling back to the key when no default given.
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key, fallback, opts) => {
+      const vars =
+        typeof fallback === 'object' && fallback !== null ? fallback : opts;
+      let out = typeof fallback === 'string' ? fallback : key;
+      if (vars) {
+        for (const [k, v] of Object.entries(vars)) {
+          out = out.split('{{' + k + '}}').join(String(v));
+        }
+      }
+      return out;
+    },
+  }),
+  initReactI18next: { type: '3rdParty', init: () => {} },
+}));
+
 import HFChat from './index';
 import { API, showError, showSuccess } from '../../../helpers';
 

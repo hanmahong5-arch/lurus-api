@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import React, { Fragment, useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import HFShell from '../../../components/hifi/HFShell';
 import WIPBanner from '../../../components/hifi/WIPBanner';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
@@ -25,6 +26,8 @@ import { API, showError } from '../../../helpers';
 
 /* HiFi 13 — Flows: multi-step wizards & incident response. Ported from hifi/hf13-flows.jsx. */
 
+// Second column is the English fallback; display labels resolve through
+// tr(`console.flows.flow_${key}`, fallback) at render time.
 const FLOWS = [
   ['newChannel', 'New Channel', 4],
   ['newToken', 'New Token', 3],
@@ -90,15 +93,25 @@ const Stepper = ({ steps, cur }) => (
 );
 
 const NewChannelStep = ({ step }) => {
+  // Sub-components defined in this file each own their useTranslation() hook.
+  const { t: tr } = useTranslation();
   if (step === 1) {
     return (
       <div>
-        <div className='lbl'>step 1 of 4</div>
+        <div className='lbl'>
+          {tr('console.flows.step_of', 'step {{step}} of {{total}}', {
+            step: 1,
+            total: 4,
+          })}
+        </div>
         <h1 className='display' style={{ fontSize: 28, margin: '4px 0 4px' }}>
-          Pick a vendor
+          {tr('console.flows.pick_vendor', 'Pick a vendor')}
         </h1>
         <div className='muted' style={{ marginBottom: 22 }}>
-          we'll handle the protocol differences for you
+          {tr(
+            'console.flows.pick_vendor_sub',
+            "we'll handle the protocol differences for you",
+          )}
         </div>
         <div
           style={{
@@ -115,7 +128,7 @@ const NewChannelStep = ({ step }) => {
             'AWS Bedrock',
             'Zhipu',
             'SiliconFlow',
-            'custom',
+            tr('console.flows.vendor_custom', 'custom'),
           ].map((v, i) => (
             <div
               key={i}
@@ -137,10 +150,16 @@ const NewChannelStep = ({ step }) => {
                 style={{ fontSize: 10, marginTop: 4 }}
               >
                 {i === 0
-                  ? '18 models · OAI-compatible'
+                  ? tr(
+                      'console.flows.vendor_hint_oai',
+                      '18 models · OAI-compatible',
+                    )
                   : i < 7
-                    ? 'native protocol'
-                    : 'OAI-compatible URL'}
+                    ? tr('console.flows.vendor_hint_native', 'native protocol')
+                    : tr(
+                        'console.flows.vendor_hint_custom',
+                        'OAI-compatible URL',
+                      )}
               </div>
             </div>
           ))}
@@ -150,24 +169,48 @@ const NewChannelStep = ({ step }) => {
   }
   if (step === 2) {
     const fields = [
-      ['channel name', 'openai/main-2', 'identifier · alphanumeric'],
-      ['base url', 'https://api.openai.com/v1', 'override for proxies'],
       [
-        'api keys',
-        'sk-•••••••• ••••••••  ⊕ add another',
-        '4 keys · round-robin',
+        tr('console.flows.field_channel_name', 'channel name'),
+        'openai/main-2',
+        tr('console.flows.hint_identifier', 'identifier · alphanumeric'),
       ],
-      ['organization id', 'org-acme-prod', 'optional'],
-      ['custom headers', '— none —', 'optional'],
+      [
+        tr('console.flows.field_base_url', 'base url'),
+        'https://api.openai.com/v1',
+        tr('console.flows.hint_override', 'override for proxies'),
+      ],
+      [
+        tr('console.flows.field_api_keys', 'api keys'),
+        'sk-•••••••• ••••••••  ⊕ add another',
+        tr('console.flows.hint_keys_rr', '4 keys · round-robin'),
+      ],
+      [
+        tr('console.flows.field_org_id', 'organization id'),
+        'org-acme-prod',
+        tr('console.flows.hint_optional', 'optional'),
+      ],
+      [
+        tr('console.flows.field_custom_headers', 'custom headers'),
+        tr('console.flows.none', '— none —'),
+        tr('console.flows.hint_optional', 'optional'),
+      ],
     ];
     return (
       <div>
-        <div className='lbl'>step 2 of 4</div>
+        <div className='lbl'>
+          {tr('console.flows.step_of', 'step {{step}} of {{total}}', {
+            step: 2,
+            total: 4,
+          })}
+        </div>
         <h1 className='display' style={{ fontSize: 28, margin: '4px 0 4px' }}>
-          Credentials & endpoint
+          {tr('console.flows.credentials_title', 'Credentials & endpoint')}
         </h1>
         <div className='muted' style={{ marginBottom: 22 }}>
-          encrypted at rest · never logged
+          {tr(
+            'console.flows.credentials_sub',
+            'encrypted at rest · never logged',
+          )}
         </div>
         <div className='panel' style={{ padding: 22 }}>
           {fields.map((r, i) => (
@@ -198,13 +241,19 @@ const NewChannelStep = ({ step }) => {
             type='button'
             className='btn ghost'
             disabled
-            title='Select a channel in the Channels page to test it'
+            title={tr(
+              'console.flows.test_connection_tip',
+              'Select a channel in the Channels page to test it',
+            )}
             data-testid='flow-test-connection-btn'
           >
-            ▶ test connection
+            {tr('console.flows.test_connection', '▶ test connection')}
           </button>
           <span className='muted' style={{ alignSelf: 'center', fontSize: 11 }}>
-            → Channels 页选择渠道后点击 &ldquo;测试渠道&rdquo;
+            {tr(
+              'console.flows.test_connection_hint',
+              '→ select a channel in the Channels page, then click "Test channel"',
+            )}
           </span>
         </div>
       </div>
@@ -217,26 +266,34 @@ const NewChannelStep = ({ step }) => {
       ['gpt-4o-realtime', 'gpt-4o-realtime', true],
       ['o1-preview', 'o1-preview', true],
       ['text-embedding-3-large', 'embedding', true],
-      ['dall-e-3', '— skip —', false],
+      ['dall-e-3', tr('console.flows.skip_value', '— skip —'), false],
     ];
     return (
       <div>
-        <div className='lbl'>step 3 of 4</div>
+        <div className='lbl'>
+          {tr('console.flows.step_of', 'step {{step}} of {{total}}', {
+            step: 3,
+            total: 4,
+          })}
+        </div>
         <h1 className='display' style={{ fontSize: 28, margin: '4px 0 4px' }}>
-          Map models
+          {tr('console.flows.map_models', 'Map models')}
         </h1>
         <div className='muted' style={{ marginBottom: 22 }}>
-          vendor model → your alias · we filled this in
+          {tr(
+            'console.flows.map_models_sub',
+            'vendor model → your alias · we filled this in',
+          )}
         </div>
         <div className='panel'>
           <table className='t'>
             <thead>
               <tr>
                 <th></th>
-                <th>vendor model</th>
+                <th>{tr('console.flows.th_vendor_model', 'vendor model')}</th>
                 <th></th>
-                <th>your alias</th>
-                <th>auto</th>
+                <th>{tr('console.flows.th_your_alias', 'your alias')}</th>
+                <th>{tr('console.flows.th_auto', 'auto')}</th>
               </tr>
             </thead>
             <tbody>
@@ -255,7 +312,13 @@ const NewChannelStep = ({ step }) => {
                       {r[1]}
                     </div>
                   </td>
-                  <td>{r[2] && <span className='tag info'>auto</span>}</td>
+                  <td>
+                    {r[2] && (
+                      <span className='tag info'>
+                        {tr('console.flows.tag_auto', 'auto')}
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -266,23 +329,40 @@ const NewChannelStep = ({ step }) => {
   }
   // step 4
   const summary = [
-    ['vendor', 'OpenAI'],
-    ['channel name', 'openai/main-2'],
-    ['base url', 'api.openai.com/v1'],
-    ['keys', '4 (round-robin)'],
-    ['models enabled', '5 of 18'],
-    ['routing weight', '1.0 · primary'],
-    ['groups', 'default, vip'],
-    ['fallback to', 'openai/main, openai/backup'],
+    [tr('console.flows.sum_vendor', 'vendor'), 'OpenAI'],
+    [tr('console.flows.field_channel_name', 'channel name'), 'openai/main-2'],
+    [tr('console.flows.field_base_url', 'base url'), 'api.openai.com/v1'],
+    [
+      tr('console.flows.sum_keys', 'keys'),
+      tr('console.flows.val_keys_rr', '4 (round-robin)'),
+    ],
+    [
+      tr('console.flows.sum_models_enabled', 'models enabled'),
+      tr('console.flows.val_models_enabled', '5 of 18'),
+    ],
+    [
+      tr('console.flows.sum_routing_weight', 'routing weight'),
+      tr('console.flows.val_weight_primary', '1.0 · primary'),
+    ],
+    [tr('console.flows.sum_groups', 'groups'), 'default, vip'],
+    [
+      tr('console.flows.sum_fallback_to', 'fallback to'),
+      'openai/main, openai/backup',
+    ],
   ];
   return (
     <div>
-      <div className='lbl'>step 4 of 4</div>
+      <div className='lbl'>
+        {tr('console.flows.step_of', 'step {{step}} of {{total}}', {
+          step: 4,
+          total: 4,
+        })}
+      </div>
       <h1 className='display' style={{ fontSize: 28, margin: '4px 0 4px' }}>
-        Review & enable
+        {tr('console.flows.review_title', 'Review & enable')}
       </h1>
       <div className='muted' style={{ marginBottom: 22 }}>
-        pre-flight summary
+        {tr('console.flows.review_sub', 'pre-flight summary')}
       </div>
       <div className='panel' style={{ padding: 22 }}>
         {summary.map((r, i) => (
@@ -312,9 +392,14 @@ const NewChannelStep = ({ step }) => {
           borderLeft: '2px solid var(--hf-ok)',
         }}
       >
-        <span className='strong'>Pre-flight passed.</span>{' '}
+        <span className='strong'>
+          {tr('console.flows.preflight_passed', 'Pre-flight passed.')}
+        </span>{' '}
         <span className='muted'>
-          42ms ttft · 18 models · keys all reachable
+          {tr(
+            'console.flows.preflight_detail',
+            '42ms ttft · 18 models · keys all reachable',
+          )}
         </span>
       </div>
     </div>
@@ -344,6 +429,8 @@ const NewTokenStep = ({
   onConfirmCancel,
   onSubmit,
 }) => {
+  // Own hook — sub-component defined in the same file.
+  const { t: tr } = useTranslation();
   if (step === 3 && createdKey) {
     return (
       <div
@@ -367,10 +454,13 @@ const NewTokenStep = ({
           ✓
         </div>
         <h1 className='display' style={{ fontSize: 28, margin: '0 0 8px' }}>
-          Token created
+          {tr('console.flows.token_created', 'Token created')}
         </h1>
         <div className='muted'>
-          copy this once · it won&apos;t be shown again
+          {tr(
+            'console.flows.copy_once',
+            "copy this once · it won't be shown again",
+          )}
         </div>
         <div
           className='panel-paper'
@@ -394,7 +484,7 @@ const NewTokenStep = ({
             style={{ marginLeft: 12 }}
             onClick={onCopyKey}
           >
-            copy
+            {tr('console.common.copy', 'copy')}
           </button>
         </div>
       </div>
@@ -405,19 +495,33 @@ const NewTokenStep = ({
     // Review + confirm step — shows summary and opens ConfirmDialog on submit.
     return (
       <>
-        <div className='lbl'>step 3 of 3 · review</div>
+        <div className='lbl'>
+          {tr('console.flows.step_of', 'step {{step}} of {{total}}', {
+            step: 3,
+            total: 3,
+          })}{' '}
+          · {tr('console.flows.step_review', 'review')}
+        </div>
         <h1 className='display' style={{ fontSize: 28, margin: '4px 0 22px' }}>
-          Review token
+          {tr('console.flows.review_token', 'Review token')}
         </h1>
         <div className='panel' style={{ padding: 22 }}>
           {[
-            ['name', draft.name || '—'],
-            ['group', draft.group || 'default'],
+            [tr('console.flows.label_name', 'name'), draft.name || '—'],
             [
-              'quota',
-              draft.unlimited_quota ? 'unlimited' : String(draft.remain_quota),
+              tr('console.flows.label_group', 'group'),
+              draft.group || 'default',
             ],
-            ['expires', draft.expires_at || 'never'],
+            [
+              tr('console.flows.label_quota', 'quota'),
+              draft.unlimited_quota
+                ? tr('console.flows.unlimited', 'unlimited')
+                : String(draft.remain_quota),
+            ],
+            [
+              tr('console.flows.label_expires', 'expires'),
+              draft.expires_at || tr('console.flows.never', 'never'),
+            ],
           ].map((r, i, arr) => (
             <div
               key={r[0]}
@@ -444,18 +548,30 @@ const NewTokenStep = ({
             data-testid='newtoken-open-confirm'
             onClick={onConfirmOpen}
           >
-            create token →
+            {tr('console.flows.create_token_btn', 'create token →')}
           </button>
         </div>
         <ConfirmDialog
           visible={confirmVisible}
-          title='Confirm token creation'
+          title={tr(
+            'console.flows.confirm_create_title',
+            'Confirm token creation',
+          )}
           consequenceList={[
-            'The token key is shown only once after creation.',
-            'Once created it counts against your quota immediately.',
+            tr(
+              'console.flows.confirm_create_c1',
+              'The token key is shown only once after creation.',
+            ),
+            tr(
+              'console.flows.confirm_create_c2',
+              'Once created it counts against your quota immediately.',
+            ),
           ]}
           confirmText={draft.name}
-          confirmButtonText='Create token'
+          confirmButtonText={tr(
+            'console.flows.confirm_create_btn',
+            'Create token',
+          )}
           confirmButtonType='primary'
           onConfirm={onSubmit}
           onCancel={onConfirmCancel}
@@ -467,16 +583,24 @@ const NewTokenStep = ({
   if (step === 1) {
     return (
       <>
-        <div className='lbl'>step 1 of 3 · name &amp; scope</div>
+        <div className='lbl'>
+          {tr('console.flows.step_of', 'step {{step}} of {{total}}', {
+            step: 1,
+            total: 3,
+          })}{' '}
+          · {tr('console.flows.step_scope', 'name & scope')}
+        </div>
         <h1 className='display' style={{ fontSize: 28, margin: '4px 0 22px' }}>
-          What is this token for?
+          {tr('console.flows.token_purpose', 'What is this token for?')}
         </h1>
         <div
           className='panel'
           style={{ padding: 22, display: 'grid', gap: 16 }}
         >
           <label style={{ display: 'grid', gap: 6 }}>
-            <span className='lbl'>token name</span>
+            <span className='lbl'>
+              {tr('console.flows.token_name', 'token name')}
+            </span>
             <input
               className='input'
               data-testid='newtoken-name'
@@ -484,11 +608,16 @@ const NewTokenStep = ({
               onChange={(e) =>
                 setDraft((d) => ({ ...d, name: e.target.value }))
               }
-              placeholder='e.g. lurus-edit · prod'
+              placeholder={tr(
+                'console.flows.ph_token_name',
+                'e.g. lurus-edit · prod',
+              )}
             />
           </label>
           <label style={{ display: 'grid', gap: 6 }}>
-            <span className='lbl'>group (optional)</span>
+            <span className='lbl'>
+              {tr('console.flows.group_optional', 'group (optional)')}
+            </span>
             <input
               className='input'
               data-testid='newtoken-group'
@@ -507,9 +636,15 @@ const NewTokenStep = ({
   // step === 2 — quota limits
   return (
     <>
-      <div className='lbl'>step 2 of 3 · limits</div>
+      <div className='lbl'>
+        {tr('console.flows.step_of', 'step {{step}} of {{total}}', {
+          step: 2,
+          total: 3,
+        })}{' '}
+        · {tr('console.flows.step_limits', 'limits')}
+      </div>
       <h1 className='display' style={{ fontSize: 28, margin: '4px 0 22px' }}>
-        Set limits
+        {tr('console.flows.set_limits', 'Set limits')}
       </h1>
       <div className='panel' style={{ padding: 22, display: 'grid', gap: 16 }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -521,11 +656,15 @@ const NewTokenStep = ({
               setDraft((d) => ({ ...d, unlimited_quota: e.target.checked }))
             }
           />
-          <span className='lbl'>unlimited quota</span>
+          <span className='lbl'>
+            {tr('console.flows.unlimited_quota', 'unlimited quota')}
+          </span>
         </label>
         {!draft.unlimited_quota && (
           <label style={{ display: 'grid', gap: 6 }}>
-            <span className='lbl'>remain quota (tokens)</span>
+            <span className='lbl'>
+              {tr('console.flows.remain_quota', 'remain quota (tokens)')}
+            </span>
             <input
               type='number'
               className='input'
@@ -542,7 +681,9 @@ const NewTokenStep = ({
           </label>
         )}
         <label style={{ display: 'grid', gap: 6 }}>
-          <span className='lbl'>expires at (leave blank = never)</span>
+          <span className='lbl'>
+            {tr('console.flows.expires_at', 'expires at (leave blank = never)')}
+          </span>
           <input
             type='date'
             className='input'
@@ -559,47 +700,74 @@ const NewTokenStep = ({
 };
 
 const IncidentScreen = () => {
+  // Own hook — sub-component defined in the same file.
+  const { t: tr } = useTranslation();
   const events = [
     [
       '14:01:55',
-      'detected',
-      'success rate dropped to 0% · auto-detected',
+      tr('console.flows.evt_detected', 'detected'),
+      tr(
+        'console.flows.evt_detected_desc',
+        'success rate dropped to 0% · auto-detected',
+      ),
       'err',
     ],
     [
       '14:02:11',
-      'failover engaged',
-      'traffic routed to openai/main · auto',
+      tr('console.flows.evt_failover', 'failover engaged'),
+      tr(
+        'console.flows.evt_failover_desc',
+        'traffic routed to openai/main · auto',
+      ),
       'info',
     ],
-    ['14:03:00', 'paged on-call', 'andy@ acknowledged · 14:03:42', 'info'],
+    [
+      '14:03:00',
+      tr('console.flows.evt_paged', 'paged on-call'),
+      tr('console.flows.evt_paged_desc', 'andy@ acknowledged · 14:03:42'),
+      'info',
+    ],
     [
       '14:05:18',
-      'investigation',
-      'Andy · checking upstream status page',
+      tr('console.flows.evt_investigation', 'investigation'),
+      tr(
+        'console.flows.evt_investigation_desc',
+        'Andy · checking upstream status page',
+      ),
       'ink',
     ],
     [
       '14:08:30',
-      'mitigation',
-      'rotated 2 stale keys · waiting for confirmation',
+      tr('console.flows.evt_mitigation', 'mitigation'),
+      tr(
+        'console.flows.evt_mitigation_desc',
+        'rotated 2 stale keys · waiting for confirmation',
+      ),
       'warn',
     ],
     [
       '14:13:45',
-      'monitoring',
-      'success rate climbing · 38% and rising',
+      tr('console.flows.evt_monitoring', 'monitoring'),
+      tr(
+        'console.flows.evt_monitoring_desc',
+        'success rate climbing · 38% and rising',
+      ),
       'warn',
     ],
   ];
   return (
     <div style={{ padding: '24px 32px' }}>
-      <div className='lbl'>incident · INC-2026-0512</div>
+      <div className='lbl'>
+        {tr('console.flows.incident_label', 'incident')} · INC-2026-0512
+      </div>
       <h1 className='display' style={{ fontSize: 28, margin: '4px 0 4px' }}>
-        openai/backup · totally down
+        {tr('console.flows.incident_title', 'openai/backup · totally down')}
       </h1>
       <div className='muted' style={{ marginBottom: 22 }}>
-        started 14:01:55 · 12m ago · sev1 · 6 tenants affected
+        {tr(
+          'console.flows.incident_sub',
+          'started 14:01:55 · 12m ago · sev1 · 6 tenants affected',
+        )}
       </div>
 
       <div
@@ -617,16 +785,21 @@ const IncidentScreen = () => {
               }}
             >
               <span className='dot err' />{' '}
-              <span className='strong'>timeline</span>
+              <span className='strong'>
+                {tr('console.flows.timeline', 'timeline')}
+              </span>
               <span style={{ flex: 1 }} />
               <button
                 type='button'
                 className='btn sm'
                 disabled
-                title='incident workflow requires alerting infra (alertmanager + on-call rotations) — deferred to v3'
+                title={tr(
+                  'console.flows.incident_deferred_tip',
+                  'incident workflow requires alerting infra (alertmanager + on-call rotations) — deferred to v3',
+                )}
                 data-testid='incident-post-update-btn'
               >
-                post update
+                {tr('console.flows.post_update', 'post update')}
               </button>
             </div>
             {events.map((e, i) => (
@@ -654,7 +827,12 @@ const IncidentScreen = () => {
           </div>
 
           <div className='panel' style={{ marginTop: 14, padding: 18 }}>
-            <div className='lbl'>success rate · last 15min</div>
+            <div className='lbl'>
+              {tr(
+                'console.flows.success_rate_label',
+                'success rate · last 15min',
+              )}
+            </div>
             <svg
               viewBox='0 0 600 100'
               style={{ width: '100%', height: 100, marginTop: 10 }}
@@ -713,7 +891,7 @@ const IncidentScreen = () => {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className='panel' style={{ padding: 16 }}>
-            <div className='lbl'>impact</div>
+            <div className='lbl'>{tr('console.flows.impact', 'impact')}</div>
             <div
               className='display'
               style={{ fontSize: 28, marginTop: 4, color: 'var(--hf-err)' }}
@@ -721,11 +899,16 @@ const IncidentScreen = () => {
               1,420
             </div>
             <div className='muted' style={{ fontSize: 11 }}>
-              requests rerouted · $42.80 est revenue saved
+              {tr(
+                'console.flows.impact_detail',
+                'requests rerouted · $42.80 est revenue saved',
+              )}
             </div>
           </div>
           <div className='panel' style={{ padding: 16 }}>
-            <div className='lbl'>tenants · 6</div>
+            <div className='lbl'>
+              {tr('console.flows.tenants_label', 'tenants')} · 6
+            </div>
             <div
               style={{
                 display: 'flex',
@@ -749,7 +932,7 @@ const IncidentScreen = () => {
             </div>
           </div>
           <div className='panel' style={{ padding: 16 }}>
-            <div className='lbl'>on-call</div>
+            <div className='lbl'>{tr('console.flows.on_call', 'on-call')}</div>
             <div
               style={{
                 display: 'flex',
@@ -778,13 +961,13 @@ const IncidentScreen = () => {
                   Andy Liu
                 </div>
                 <div className='faint mono' style={{ fontSize: 10 }}>
-                  ack 14:03:42
+                  {tr('console.flows.ack_time', 'ack 14:03:42')}
                 </div>
               </div>
             </div>
           </div>
           <div className='panel' style={{ padding: 16 }}>
-            <div className='lbl'>actions</div>
+            <div className='lbl'>{tr('console.flows.actions', 'actions')}</div>
             <div
               style={{
                 display: 'flex',
@@ -797,38 +980,50 @@ const IncidentScreen = () => {
                 type='button'
                 className='btn'
                 disabled
-                title='incident workflow requires alerting infra (alertmanager + on-call rotations) — deferred to v3'
+                title={tr(
+                  'console.flows.incident_deferred_tip',
+                  'incident workflow requires alerting infra (alertmanager + on-call rotations) — deferred to v3',
+                )}
                 data-testid='incident-silence-btn'
               >
-                silence alert · 30m
+                {tr('console.flows.silence_alert', 'silence alert · 30m')}
               </button>
               <button
                 type='button'
                 className='btn'
                 disabled
-                title='incident workflow requires alerting infra (alertmanager + on-call rotations) — deferred to v3'
+                title={tr(
+                  'console.flows.incident_deferred_tip',
+                  'incident workflow requires alerting infra (alertmanager + on-call rotations) — deferred to v3',
+                )}
                 data-testid='incident-status-update-btn'
               >
-                post status update
+                {tr('console.flows.post_status_update', 'post status update')}
               </button>
               {/* "disable channel" navigates to Channel page — no incident context available here */}
               <a
                 href='/console/v2/channel'
                 className='btn'
                 data-testid='incident-disable-channel-btn'
-                title='go to Channels to disable'
+                title={tr(
+                  'console.flows.goto_channels_tip',
+                  'go to Channels to disable',
+                )}
                 style={{ textDecoration: 'none', textAlign: 'center' }}
               >
-                disable channel ↗
+                {tr('console.flows.disable_channel', 'disable channel ↗')}
               </a>
               <button
                 type='button'
                 className='btn primary'
                 disabled
-                title='incident workflow requires alerting infra (alertmanager + on-call rotations) — deferred to v3'
+                title={tr(
+                  'console.flows.incident_deferred_tip',
+                  'incident workflow requires alerting infra (alertmanager + on-call rotations) — deferred to v3',
+                )}
                 data-testid='incident-resolve-btn'
               >
-                resolve incident
+                {tr('console.flows.resolve_incident', 'resolve incident')}
               </button>
             </div>
           </div>
@@ -838,304 +1033,321 @@ const IncidentScreen = () => {
   );
 };
 
-const RetryScreen = () => (
-  <div style={{ padding: '32px 40px' }}>
-    <div className='lbl'>request flow visualizer</div>
-    <h1 className='display' style={{ fontSize: 28, margin: '4px 0 4px' }}>
-      req_1f4a...e90c
-    </h1>
-    <div className='muted' style={{ marginBottom: 28 }}>
-      3 attempts · ended successfully · 4.2s total
-    </div>
+const RetryScreen = () => {
+  // Own hook — sub-component defined in the same file.
+  const { t: tr } = useTranslation();
+  return (
+    <div style={{ padding: '32px 40px' }}>
+      <div className='lbl'>
+        {tr('console.flows.retry_label', 'request flow visualizer')}
+      </div>
+      <h1 className='display' style={{ fontSize: 28, margin: '4px 0 4px' }}>
+        req_1f4a...e90c
+      </h1>
+      <div className='muted' style={{ marginBottom: 28 }}>
+        {tr(
+          'console.flows.retry_sub',
+          '3 attempts · ended successfully · 4.2s total',
+        )}
+      </div>
 
-    <div className='panel' style={{ padding: 28 }}>
-      <svg viewBox='0 0 800 280' style={{ width: '100%', height: 320 }}>
-        <defs>
-          <marker
-            id='arr'
-            viewBox='0 0 8 8'
-            refX='6'
-            refY='4'
-            markerWidth='6'
-            markerHeight='6'
-            orient='auto'
-          >
-            <path d='M0,0 L8,4 L0,8 Z' fill='var(--hf-ink-3)' />
-          </marker>
-        </defs>
-        <g fontFamily='var(--hf-mono)' fontSize='11'>
-          <rect
-            x='20'
-            y='120'
-            width='100'
-            height='40'
-            fill='var(--hf-paper)'
-            stroke='var(--hf-rule-strong)'
-          />
-          <text
-            x='70'
-            y='138'
-            textAnchor='middle'
-            fill='var(--hf-ink)'
-            fontWeight='500'
-          >
-            client
-          </text>
-          <text
-            x='70'
-            y='152'
-            textAnchor='middle'
-            fill='var(--hf-ink-3)'
-            fontSize='9'
-          >
-            acme · prod
-          </text>
+      <div className='panel' style={{ padding: 28 }}>
+        <svg viewBox='0 0 800 280' style={{ width: '100%', height: 320 }}>
+          <defs>
+            <marker
+              id='arr'
+              viewBox='0 0 8 8'
+              refX='6'
+              refY='4'
+              markerWidth='6'
+              markerHeight='6'
+              orient='auto'
+            >
+              <path d='M0,0 L8,4 L0,8 Z' fill='var(--hf-ink-3)' />
+            </marker>
+          </defs>
+          <g fontFamily='var(--hf-mono)' fontSize='11'>
+            <rect
+              x='20'
+              y='120'
+              width='100'
+              height='40'
+              fill='var(--hf-paper)'
+              stroke='var(--hf-rule-strong)'
+            />
+            <text
+              x='70'
+              y='138'
+              textAnchor='middle'
+              fill='var(--hf-ink)'
+              fontWeight='500'
+            >
+              {tr('console.flows.svg_client', 'client')}
+            </text>
+            <text
+              x='70'
+              y='152'
+              textAnchor='middle'
+              fill='var(--hf-ink-3)'
+              fontSize='9'
+            >
+              acme · prod
+            </text>
 
-          <rect
-            x='180'
-            y='120'
-            width='100'
-            height='40'
-            fill='var(--hf-paper)'
-            stroke='var(--hf-rule-strong)'
-          />
-          <text
-            x='230'
-            y='138'
-            textAnchor='middle'
-            fill='var(--hf-ink)'
-            fontWeight='500'
-          >
-            lurus gateway
-          </text>
-          <text
-            x='230'
-            y='152'
-            textAnchor='middle'
-            fill='var(--hf-ink-3)'
-            fontSize='9'
-          >
-            router
-          </text>
+            <rect
+              x='180'
+              y='120'
+              width='100'
+              height='40'
+              fill='var(--hf-paper)'
+              stroke='var(--hf-rule-strong)'
+            />
+            <text
+              x='230'
+              y='138'
+              textAnchor='middle'
+              fill='var(--hf-ink)'
+              fontWeight='500'
+            >
+              {tr('console.flows.svg_gateway', 'lurus gateway')}
+            </text>
+            <text
+              x='230'
+              y='152'
+              textAnchor='middle'
+              fill='var(--hf-ink-3)'
+              fontSize='9'
+            >
+              {tr('console.flows.svg_router', 'router')}
+            </text>
 
-          <rect
-            x='360'
-            y='20'
-            width='160'
-            height='60'
-            fill='rgba(238,111,94,0.1)'
-            stroke='var(--hf-err)'
-          />
-          <text
-            x='440'
-            y='40'
-            textAnchor='middle'
-            fill='var(--hf-err)'
-            fontWeight='500'
-          >
-            attempt 1 · 504
-          </text>
-          <text
-            x='440'
-            y='58'
-            textAnchor='middle'
-            fill='var(--hf-ink-3)'
-            fontSize='9'
-          >
-            openai/main · 2.1s
-          </text>
-          <text
-            x='440'
-            y='72'
-            textAnchor='middle'
-            fill='var(--hf-ink-3)'
-            fontSize='9'
-          >
-            upstream_timeout
-          </text>
+            <rect
+              x='360'
+              y='20'
+              width='160'
+              height='60'
+              fill='rgba(238,111,94,0.1)'
+              stroke='var(--hf-err)'
+            />
+            <text
+              x='440'
+              y='40'
+              textAnchor='middle'
+              fill='var(--hf-err)'
+              fontWeight='500'
+            >
+              {tr('console.flows.attempt', 'attempt')} 1 · 504
+            </text>
+            <text
+              x='440'
+              y='58'
+              textAnchor='middle'
+              fill='var(--hf-ink-3)'
+              fontSize='9'
+            >
+              openai/main · 2.1s
+            </text>
+            <text
+              x='440'
+              y='72'
+              textAnchor='middle'
+              fill='var(--hf-ink-3)'
+              fontSize='9'
+            >
+              upstream_timeout
+            </text>
 
-          <rect
-            x='360'
-            y='120'
-            width='160'
-            height='60'
-            fill='rgba(224,160,64,0.1)'
-            stroke='var(--hf-warn)'
-          />
-          <text
-            x='440'
-            y='140'
-            textAnchor='middle'
-            fill='var(--hf-warn)'
-            fontWeight='500'
-          >
-            attempt 2 · 429
-          </text>
-          <text
-            x='440'
-            y='158'
-            textAnchor='middle'
-            fill='var(--hf-ink-3)'
-            fontSize='9'
-          >
-            openai/backup · 0.4s
-          </text>
-          <text
-            x='440'
-            y='172'
-            textAnchor='middle'
-            fill='var(--hf-ink-3)'
-            fontSize='9'
-          >
-            rate_limit · backoff 1s
-          </text>
+            <rect
+              x='360'
+              y='120'
+              width='160'
+              height='60'
+              fill='rgba(224,160,64,0.1)'
+              stroke='var(--hf-warn)'
+            />
+            <text
+              x='440'
+              y='140'
+              textAnchor='middle'
+              fill='var(--hf-warn)'
+              fontWeight='500'
+            >
+              {tr('console.flows.attempt', 'attempt')} 2 · 429
+            </text>
+            <text
+              x='440'
+              y='158'
+              textAnchor='middle'
+              fill='var(--hf-ink-3)'
+              fontSize='9'
+            >
+              openai/backup · 0.4s
+            </text>
+            <text
+              x='440'
+              y='172'
+              textAnchor='middle'
+              fill='var(--hf-ink-3)'
+              fontSize='9'
+            >
+              {tr('console.flows.backoff', 'rate_limit · backoff 1s')}
+            </text>
 
-          <rect
-            x='360'
-            y='220'
-            width='160'
-            height='60'
-            fill='rgba(90,204,146,0.1)'
-            stroke='var(--hf-ok)'
-          />
-          <text
-            x='440'
-            y='240'
-            textAnchor='middle'
-            fill='var(--hf-ok)'
-            fontWeight='500'
-          >
-            attempt 3 · 200
-          </text>
-          <text
-            x='440'
-            y='258'
-            textAnchor='middle'
-            fill='var(--hf-ink-3)'
-            fontSize='9'
-          >
-            azure/eu · 1.6s
-          </text>
-          <text
-            x='440'
-            y='272'
-            textAnchor='middle'
-            fill='var(--hf-ink-3)'
-            fontSize='9'
-          >
-            847 tokens · $0.0042
-          </text>
+            <rect
+              x='360'
+              y='220'
+              width='160'
+              height='60'
+              fill='rgba(90,204,146,0.1)'
+              stroke='var(--hf-ok)'
+            />
+            <text
+              x='440'
+              y='240'
+              textAnchor='middle'
+              fill='var(--hf-ok)'
+              fontWeight='500'
+            >
+              {tr('console.flows.attempt', 'attempt')} 3 · 200
+            </text>
+            <text
+              x='440'
+              y='258'
+              textAnchor='middle'
+              fill='var(--hf-ink-3)'
+              fontSize='9'
+            >
+              azure/eu · 1.6s
+            </text>
+            <text
+              x='440'
+              y='272'
+              textAnchor='middle'
+              fill='var(--hf-ink-3)'
+              fontSize='9'
+            >
+              {tr('console.flows.tokens_cost', '847 tokens · $0.0042')}
+            </text>
 
-          <rect
-            x='600'
-            y='220'
-            width='120'
-            height='60'
-            fill='rgba(90,204,146,0.1)'
-            stroke='var(--hf-ok)'
-          />
-          <text
-            x='660'
-            y='240'
-            textAnchor='middle'
-            fill='var(--hf-ok)'
-            fontWeight='500'
-          >
-            delivered
-          </text>
-          <text
-            x='660'
-            y='258'
-            textAnchor='middle'
-            fill='var(--hf-ink-3)'
-            fontSize='9'
-          >
-            to client
-          </text>
-          <text
-            x='660'
-            y='272'
-            textAnchor='middle'
-            fill='var(--hf-ink-3)'
-            fontSize='9'
-          >
-            total 4.2s
-          </text>
-        </g>
+            <rect
+              x='600'
+              y='220'
+              width='120'
+              height='60'
+              fill='rgba(90,204,146,0.1)'
+              stroke='var(--hf-ok)'
+            />
+            <text
+              x='660'
+              y='240'
+              textAnchor='middle'
+              fill='var(--hf-ok)'
+              fontWeight='500'
+            >
+              {tr('console.flows.delivered', 'delivered')}
+            </text>
+            <text
+              x='660'
+              y='258'
+              textAnchor='middle'
+              fill='var(--hf-ink-3)'
+              fontSize='9'
+            >
+              {tr('console.flows.to_client', 'to client')}
+            </text>
+            <text
+              x='660'
+              y='272'
+              textAnchor='middle'
+              fill='var(--hf-ink-3)'
+              fontSize='9'
+            >
+              {tr('console.flows.total_time', 'total 4.2s')}
+            </text>
+          </g>
 
-        <g
-          stroke='var(--hf-ink-3)'
-          strokeWidth='1.2'
-          fill='none'
-          markerEnd='url(#arr)'
-        >
-          <line x1='120' y1='140' x2='180' y2='140' />
-          <line x1='280' y1='135' x2='360' y2='50' />
-          <line
-            x1='280'
-            y1='140'
-            x2='360'
-            y2='150'
-            stroke='var(--hf-rule-strong)'
-            strokeDasharray='3 3'
-          />
-          <line
-            x1='280'
-            y1='145'
-            x2='360'
-            y2='250'
-            stroke='var(--hf-rule-strong)'
-            strokeDasharray='3 3'
-          />
-          <line
-            x1='520'
-            y1='50'
-            x2='280'
-            y2='142'
-            stroke='var(--hf-err)'
-            strokeDasharray='2 3'
-          />
-          <line
-            x1='520'
-            y1='150'
-            x2='280'
-            y2='148'
-            stroke='var(--hf-warn)'
-            strokeDasharray='2 3'
-          />
-          <line x1='520' y1='250' x2='600' y2='250' stroke='var(--hf-ok)' />
-          <line x1='600' y1='245' x2='120' y2='160' stroke='var(--hf-ok)' />
-        </g>
-      </svg>
-    </div>
-
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
-        gap: 14,
-        marginTop: 18,
-      }}
-    >
-      {[
-        ['attempts', '3', 'var(--hf-accent)'],
-        ['retries', '2', 'var(--hf-warn)'],
-        ['final', '200 ok', 'var(--hf-ok)'],
-        ['cost', '$0.0042', 'var(--hf-ink)'],
-      ].map(([l, v, c], i) => (
-        <div key={i} className='panel' style={{ padding: 14 }}>
-          <div className='lbl'>{l}</div>
-          <div
-            className='display'
-            style={{ fontSize: 22, color: c, marginTop: 2 }}
+          <g
+            stroke='var(--hf-ink-3)'
+            strokeWidth='1.2'
+            fill='none'
+            markerEnd='url(#arr)'
           >
-            {v}
+            <line x1='120' y1='140' x2='180' y2='140' />
+            <line x1='280' y1='135' x2='360' y2='50' />
+            <line
+              x1='280'
+              y1='140'
+              x2='360'
+              y2='150'
+              stroke='var(--hf-rule-strong)'
+              strokeDasharray='3 3'
+            />
+            <line
+              x1='280'
+              y1='145'
+              x2='360'
+              y2='250'
+              stroke='var(--hf-rule-strong)'
+              strokeDasharray='3 3'
+            />
+            <line
+              x1='520'
+              y1='50'
+              x2='280'
+              y2='142'
+              stroke='var(--hf-err)'
+              strokeDasharray='2 3'
+            />
+            <line
+              x1='520'
+              y1='150'
+              x2='280'
+              y2='148'
+              stroke='var(--hf-warn)'
+              strokeDasharray='2 3'
+            />
+            <line x1='520' y1='250' x2='600' y2='250' stroke='var(--hf-ok)' />
+            <line x1='600' y1='245' x2='120' y2='160' stroke='var(--hf-ok)' />
+          </g>
+        </svg>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 14,
+          marginTop: 18,
+        }}
+      >
+        {[
+          [
+            tr('console.flows.stat_attempts', 'attempts'),
+            '3',
+            'var(--hf-accent)',
+          ],
+          [tr('console.flows.stat_retries', 'retries'), '2', 'var(--hf-warn)'],
+          [
+            tr('console.flows.stat_final', 'final'),
+            tr('console.flows.final_ok', '200 ok'),
+            'var(--hf-ok)',
+          ],
+          [tr('console.flows.stat_cost', 'cost'), '$0.0042', 'var(--hf-ink)'],
+        ].map(([l, v, c], i) => (
+          <div key={i} className='panel' style={{ padding: 14 }}>
+            <div className='lbl'>{l}</div>
+            <div
+              className='display'
+              style={{ fontSize: 22, color: c, marginTop: 2 }}
+            >
+              {v}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // useTenantSlug mirrors the pattern from Playground — read from localStorage
 // so the Flows page does not need a router param prop.
@@ -1149,6 +1361,8 @@ function useTenantSlug() {
 }
 
 const HFFlows = () => {
+  // Aliased to `tr` per the v2 console convention.
+  const { t: tr } = useTranslation();
   const [flow, setFlow] = useState('newChannel');
   const [step, setStep] = useState(1);
   const meta = FLOWS.find((f) => f[0] === flow);
@@ -1185,12 +1399,12 @@ const HFFlows = () => {
       const msg =
         err?.response?.data?.message ??
         err?.message ??
-        'Failed to create token';
+        tr('console.flows.create_failed', 'Failed to create token');
       showError(msg);
     } finally {
       setSubmitting(false);
     }
-  }, [draft, tenantSlug, submitting, clearDraft]);
+  }, [draft, tenantSlug, submitting, clearDraft, tr]);
 
   // When user switches flow or step, keep step in bounds.
   const maxStep = meta[2];
@@ -1204,7 +1418,10 @@ const HFFlows = () => {
   return (
     <HFShell
       active='channels'
-      crumbs={['flows', meta[1]]}
+      crumbs={[
+        tr('console.flows.crumb', 'flows'),
+        tr(`console.flows.flow_${meta[0]}`, meta[1]),
+      ]}
       actions={
         showNav ? (
           <>
@@ -1214,7 +1431,7 @@ const HFFlows = () => {
               data-testid='flows-back'
               onClick={() => setStep(Math.max(1, step - 1))}
             >
-              ← back
+              {tr('console.flows.back', '← back')}
             </button>
             <button
               type='button'
@@ -1222,7 +1439,9 @@ const HFFlows = () => {
               data-testid='flows-next'
               onClick={() => setStep(Math.min(maxStep, step + 1))}
             >
-              {step === maxStep ? 'finish' : 'next →'}
+              {step === maxStep
+                ? tr('console.flows.finish', 'finish')
+                : tr('console.flows.next', 'next →')}
             </button>
           </>
         ) : null
@@ -1230,7 +1449,10 @@ const HFFlows = () => {
     >
       {flow !== 'newToken' && (
         <WIPBanner
-          reason='Flow wizards are static step previews — wired in v3.'
+          reason={tr(
+            'console.flows.wip_static',
+            'Flow wizards are static step previews — wired in v3.',
+          )}
           todo='newChannel/incident/retry wired in v3.'
         />
       )}
@@ -1269,7 +1491,7 @@ const HFFlows = () => {
               paddingBottom: 17,
             }}
           >
-            {l}
+            {tr(`console.flows.flow_${k}`, l)}
           </button>
         ))}
       </div>
@@ -1277,12 +1499,20 @@ const HFFlows = () => {
       {flow === 'newChannel' && (
         <>
           <WIPBanner
-            reason='New Channel wizard wired in v3.'
+            reason={tr(
+              'console.flows.wip_new_channel',
+              'New Channel wizard wired in v3.',
+            )}
             todo='Requires credential validation + connection-test + model-discovery.'
             data-testid='wip-newChannel'
           />
           <Stepper
-            steps={['vendor', 'credentials', 'models', 'review']}
+            steps={[
+              tr('console.flows.step_vendor', 'vendor'),
+              tr('console.flows.step_credentials', 'credentials'),
+              tr('console.flows.step_models', 'models'),
+              tr('console.flows.step_review', 'review'),
+            ]}
             cur={step}
           />
           <div style={{ padding: '32px 40px' }}>
@@ -1292,7 +1522,14 @@ const HFFlows = () => {
       )}
       {flow === 'newToken' && (
         <>
-          <Stepper steps={['name & scope', 'limits', 'review']} cur={step} />
+          <Stepper
+            steps={[
+              tr('console.flows.step_scope', 'name & scope'),
+              tr('console.flows.step_limits', 'limits'),
+              tr('console.flows.step_review', 'review'),
+            ]}
+            cur={step}
+          />
           <div style={{ padding: '32px 40px' }}>
             <NewTokenStep
               step={step}
@@ -1313,7 +1550,10 @@ const HFFlows = () => {
       {flow === 'incident' && (
         <>
           <WIPBanner
-            reason='Incident Response wizard wired in v3.'
+            reason={tr(
+              'console.flows.wip_incident',
+              'Incident Response wizard wired in v3.',
+            )}
             todo='Event-response automation — deferred.'
             data-testid='wip-incident'
           />
@@ -1323,7 +1563,10 @@ const HFFlows = () => {
       {flow === 'retry' && (
         <>
           <WIPBanner
-            reason='Retry Chain Visualizer wired in v3.'
+            reason={tr(
+              'console.flows.wip_retry',
+              'Retry Chain Visualizer wired in v3.',
+            )}
             todo='Failed-retry orchestration — deferred.'
             data-testid='wip-retry'
           />

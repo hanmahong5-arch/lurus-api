@@ -18,13 +18,14 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import HFShell from '../../../components/hifi/HFShell';
 import WIPBanner from '../../../components/hifi/WIPBanner';
 import { API, showError, showSuccess } from '../../../helpers';
 import { useFormDraft } from '../../../hooks/common/useFormDraft';
 
 /* HiFi 7 — Models catalog. Wired to GET /api/v2/:tenant_slug/models (2026-05-19).
-   Wave 3 Phase 1 (2026-05-20): + 添加模型 modal + 试用 ↗ navigate wired. */
+   Wave 3 Phase 1 (2026-05-20): add-model modal + try ↗ navigate wired. */
 
 // Known vendor names for the add-model select. The list is used for UX
 // convenience only — the backend accepts any vendor string.
@@ -43,9 +44,10 @@ const KNOWN_VENDORS = [
   'Other',
 ];
 
+// Labels resolved at render via tr() — module scope has no i18n context.
 const QUOTA_TYPE_OPTIONS = [
-  { value: 0, label: t('按量 (token)') },
-  { value: 1, label: t('按次') },
+  { value: 0, key: 'quota_type_token', fallback: 'pay-as-you-go (token)' },
+  { value: 1, key: 'quota_type_times', fallback: 'pay-per-call' },
 ];
 
 const DRAFT_KEY = 'models-add-form';
@@ -72,6 +74,8 @@ const STATUS_LABEL = { 1: 'active', 0: 'disabled' };
 const HFModels = () => {
   const tenantSlug = useTenantSlug();
   const navigate = useNavigate();
+  // Aliased to `tr` per the v2 console convention.
+  const { t: tr } = useTranslation();
 
   const [vendor, setVendor] = useState('');
   const [models, setModels] = useState([]);
@@ -109,7 +113,9 @@ const HFModels = () => {
       if (d.vendor_counts) setVendorCounts(d.vendor_counts);
     } catch (err) {
       const msg =
-        err?.response?.data?.message ?? err?.message ?? t('加载模型失败');
+        err?.response?.data?.message ??
+        err?.message ??
+        tr('console.models.load_failed', 'Failed to load models');
       showError(msg);
     } finally {
       setLoading(false);
@@ -134,7 +140,9 @@ const HFModels = () => {
       } catch (err) {
         if (cancelled) return;
         const msg =
-          err?.response?.data?.message ?? err?.message ?? t('加载模型失败');
+          err?.response?.data?.message ??
+          err?.message ??
+          tr('console.models.load_failed', 'Failed to load models');
         showError(msg);
       } finally {
         if (!cancelled) setLoading(false);
@@ -153,7 +161,9 @@ const HFModels = () => {
   const handleAddSubmit = async (e) => {
     e.preventDefault();
     if (!form.model_name.trim()) {
-      showError(t('模型名称不能为空'));
+      showError(
+        tr('console.models.name_required', 'Model name cannot be empty'),
+      );
       return;
     }
     setAdding(true);
@@ -164,13 +174,16 @@ const HFModels = () => {
         model_ratio: Number(form.model_ratio) || 1,
         quota_type: Number(form.quota_type),
       });
-      showSuccess(t('模型已添加'));
+      showSuccess(tr('console.models.toast_added', 'Model added'));
       clearDraft();
       setAddOpen(false);
       // Refresh list.
       await fetchModels(tenantSlug, vendor);
     } catch (err) {
-      const msg = err?.response?.data?.message ?? err?.message ?? t('添加失败');
+      const msg =
+        err?.response?.data?.message ??
+        err?.message ??
+        tr('console.models.add_failed', 'Failed to add model');
       showError(msg);
     } finally {
       setAdding(false);
@@ -181,12 +194,18 @@ const HFModels = () => {
     <>
       <HFShell
         active='models'
-        crumbs={[t('平台 · 管理'), t('模型管理')]}
+        crumbs={[
+          tr('console.nav.section_platform_admin', 'platform · admin'),
+          tr('console.models.crumb', 'model management'),
+        ]}
         actions={
           <>
             {/* single-model editing deferred to v3 */}
             <WIPBanner
-              reason={t('单模型编辑推迟到 v3')}
+              reason={tr(
+                'console.models.wip_single_edit',
+                'single-model editing deferred to v3',
+              )}
               todo='v3 story: per-model enable/disable'
             />
             <button
@@ -195,7 +214,7 @@ const HFModels = () => {
               data-testid='models-add-btn'
               onClick={() => setAddOpen(true)}
             >
-              {t('+ 添加模型')}
+              {tr('console.models.add_btn', '+ add model')}
             </button>
           </>
         }
@@ -203,12 +222,12 @@ const HFModels = () => {
         <div className='hf-page-head'>
           <div>
             <div className='lbl' style={{ marginBottom: 6 }}>
-              {t('目录')}
+              {tr('console.models.catalog', 'catalog')}
             </div>
             <h1>
               {loading ? '…' : total}{' '}
               <span className='muted' style={{ fontWeight: 400 }}>
-                {t('个模型')}
+                {tr('console.models.unit_models', 'models')}
               </span>
             </h1>
           </div>
@@ -226,7 +245,7 @@ const HFModels = () => {
             flexWrap: 'wrap',
           }}
         >
-          <span className='lbl'>{t('供应商')}</span>
+          <span className='lbl'>{tr('console.models.vendor', 'vendor')}</span>
           <button
             key='all'
             type='button'
@@ -240,7 +259,7 @@ const HFModels = () => {
               color: !vendor ? 'var(--hf-bg)' : 'var(--hf-ink-2)',
             }}
           >
-            {t('全部')} ({total})
+            {tr('console.models.all', 'all')} ({total})
           </button>
           {vendorNames.map((v) => (
             <button
@@ -271,7 +290,7 @@ const HFModels = () => {
               color: 'var(--hf-ink-2)',
             }}
           >
-            {t('加载中…')}
+            {tr('console.common.loading', 'loading…')}
           </div>
         ) : (
           <div
@@ -294,7 +313,8 @@ const HFModels = () => {
                 }}
               >
                 <div className='lbl' style={{ color: 'var(--hf-ink-2)' }}>
-                  {m.vendor || t('未知供应商')}
+                  {m.vendor ||
+                    tr('console.models.unknown_vendor', 'unknown vendor')}
                 </div>
                 <div
                   className='display'
@@ -310,7 +330,13 @@ const HFModels = () => {
                   className='muted mono'
                   style={{ fontSize: 11, marginTop: 4 }}
                 >
-                  {t('状态')}: {STATUS_LABEL[m.status] ?? m.status}
+                  {tr('console.models.status', 'status')}:{' '}
+                  {STATUS_LABEL[m.status]
+                    ? tr(
+                        `console.models.status_${STATUS_LABEL[m.status]}`,
+                        STATUS_LABEL[m.status],
+                      )
+                    : m.status}
                 </div>
 
                 <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
@@ -324,11 +350,14 @@ const HFModels = () => {
                       )
                     }
                   >
-                    {t('试用')} ↗
+                    {tr('console.models.try_btn', 'try')} ↗
                   </button>
                   {/* single-model enable/disable deferred to v3 */}
                   <WIPBanner
-                    reason={t('单模型启用/禁用推迟到 v3')}
+                    reason={tr(
+                      'console.models.wip_single_toggle',
+                      'per-model enable/disable deferred to v3',
+                    )}
                     todo='v3 story: per-model enable/disable'
                   />
                 </div>
@@ -344,7 +373,7 @@ const HFModels = () => {
                   color: 'var(--hf-ink-2)',
                 }}
               >
-                {t('暂无模型')}
+                {tr('console.models.empty', 'no models yet')}
               </div>
             )}
           </div>
@@ -367,7 +396,9 @@ const HFModels = () => {
         }}
         onClose={() => setAddOpen(false)}
       >
-        <h2 style={{ margin: '0 0 20px', fontSize: 18 }}>{t('添加模型')}</h2>
+        <h2 style={{ margin: '0 0 20px', fontSize: 18 }}>
+          {tr('console.models.add_title', 'Add model')}
+        </h2>
         <form method='dialog' onSubmit={handleAddSubmit}>
           <div style={{ display: 'grid', gap: 14 }}>
             <label>
@@ -375,7 +406,7 @@ const HFModels = () => {
                 className='lbl'
                 style={{ display: 'block', marginBottom: 4 }}
               >
-                {t('模型名称')} *
+                {tr('console.models.field_name', 'model name')} *
               </span>
               <input
                 data-testid='add-model-name'
@@ -385,7 +416,7 @@ const HFModels = () => {
                 onChange={(e) =>
                   setForm({ ...form, model_name: e.target.value })
                 }
-                placeholder='e.g. gpt-4o'
+                placeholder={tr('console.models.ph_name', 'e.g. gpt-4o')}
                 style={{
                   width: '100%',
                   padding: '6px 10px',
@@ -404,7 +435,7 @@ const HFModels = () => {
                 className='lbl'
                 style={{ display: 'block', marginBottom: 4 }}
               >
-                {t('供应商')}
+                {tr('console.models.vendor', 'vendor')}
               </span>
               <select
                 data-testid='add-model-vendor'
@@ -419,7 +450,9 @@ const HFModels = () => {
                   borderRadius: 2,
                 }}
               >
-                <option value=''>{t('— 选择供应商 —')}</option>
+                <option value=''>
+                  {tr('console.models.ph_vendor', '— select vendor —')}
+                </option>
                 {KNOWN_VENDORS.map((v) => (
                   <option key={v} value={v}>
                     {v}
@@ -433,7 +466,7 @@ const HFModels = () => {
                 className='lbl'
                 style={{ display: 'block', marginBottom: 4 }}
               >
-                {t('计费类型')}
+                {tr('console.models.field_quota_type', 'billing type')}
               </span>
               <select
                 data-testid='add-model-quota-type'
@@ -452,7 +485,7 @@ const HFModels = () => {
               >
                 {QUOTA_TYPE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
-                    {o.label}
+                    {tr(`console.models.${o.key}`, o.fallback)}
                   </option>
                 ))}
               </select>
@@ -463,7 +496,7 @@ const HFModels = () => {
                 className='lbl'
                 style={{ display: 'block', marginBottom: 4 }}
               >
-                {t('模型倍率')}
+                {tr('console.models.field_ratio', 'model ratio')}
               </span>
               <input
                 data-testid='add-model-ratio'
@@ -505,7 +538,7 @@ const HFModels = () => {
                 clearDraft();
               }}
             >
-              {t('取消')}
+              {tr('console.common.cancel', 'cancel')}
             </button>
             <button
               type='submit'
@@ -514,7 +547,9 @@ const HFModels = () => {
               disabled={adding}
               onClick={handleAddSubmit}
             >
-              {adding ? t('添加中…') : t('添加')}
+              {adding
+                ? tr('console.models.adding', 'adding…')
+                : tr('console.models.add', 'add')}
             </button>
           </div>
         </form>
@@ -522,15 +557,5 @@ const HFModels = () => {
     </>
   );
 };
-
-// Minimal t() shim — keys are used as display text until i18n wires in.
-// i18n keys introduced in Wave 3 Phase 1:
-//   '+ 添加模型'  '添加模型'  '模型名称'  '供应商'  '计费类型'  '模型倍率'
-//   '按量 (token)'  '按次'  '— 选择供应商 —'  '取消'  '添加'  '添加中…'
-//   '模型已添加'  '添加失败'  '模型名称不能为空'  '单模型编辑推迟到 v3'
-//   '试用'
-function t(key) {
-  return key;
-}
 
 export default HFModels;
