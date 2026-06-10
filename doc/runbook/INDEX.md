@@ -12,6 +12,8 @@ alert / signal comes from), **Triggered by** (the literal condition),
 | [pool-threshold-alert](pool-threshold-alert.md) | `CreditPoolBalanceLow` / `CreditPoolExhausted` Prometheus rules | warning / page |
 | [wallet-revert-stranded](wallet-revert-stranded.md) | log line `STRANDED wallet debit` from `tenant_credit_pool.go` | page |
 
+| [release-download-gate](release-download-gate.md) | `RELEASE_GATED_PRODUCTS` entitlement gate (mechanism shipped, default OFF) | activation |
+
 ## Procedures (no specific trigger)
 
 | Runbook | When to read |
@@ -26,19 +28,13 @@ alert / signal comes from), **Triggered by** (the literal condition),
 
 ## When to add a runbook
 
-- A page-severity alert exists without a runbook → file blocks the
-  alert until written.
-- A failure mode required manual recovery twice → runbook on second
-  occurrence.
-- A procedure required >30 min of "look up old Slack threads" → write
-  it down.
+- Page-severity alert without a runbook → file blocks the alert until written.
+- Failure mode needed manual recovery twice → runbook on second occurrence.
+- Procedure needed >30 min of "look up old Slack threads" → write it down.
 
 ## Style
 
-- **Symptom** before **Detect** before **Reconcile** before **Recover**
-  before **Verify** before **Prevent**. Keep this order.
-- Include the exact grep / SQL / curl command. Avoid "check the logs"
-  hand-waving.
-- Mark any irreversible action with a **4-eyes** requirement.
-- Note the source of truth (ADR, audit doc, commit) so future readers
-  can verify the runbook hasn't drifted.
+- Order: **Symptom → Detect → Reconcile → Recover → Verify → Prevent**.
+- Exact grep/SQL/curl commands, no "check the logs" hand-waving.
+- Mark irreversible actions with a **4-eyes** requirement.
+- Note source of truth (ADR/audit/commit) so readers can verify no drift.

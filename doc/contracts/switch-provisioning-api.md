@@ -10,66 +10,17 @@
 
 ## 1. Purpose
 
-This document extracts the Provisioning API contract from the canonical
-ADR (`adr-2026-05-18-tenant-credit-pool.md` §4.2) into a Switch-team-facing
-spec. It exists so the Switch team (`2c-gui-switch`) can integrate against
-a stable surface without having to read the entire ADR.
-
-**Canonicality**: when this doc and the ADR disagree, the ADR is correct.
-File a PR against this doc to re-sync — do not implement against this doc
-alone if the divergence affects behaviour.
-
-**Scope**: Reseller-driven programmatic key creation and revocation only.
-Pool management (create / topup / usage query) lives on the
-session-authenticated `v2/admin` surface (ADR §4.1) and is **not** Switch
-team's integration target.
+Extracts the Provisioning API contract from the canonical ADR §4.2 into a Switch-team-facing spec so `2c-gui-switch` can integrate without reading the whole ADR. **Canonicality**: ADR wins on disagreement — file a PR to re-sync, don't implement against this doc alone if divergence affects behaviour. **Scope**: Reseller-driven programmatic key create/revoke only. Pool management (create/topup/usage) lives on session-authenticated `v2/admin` (ADR §4.1), NOT a Switch target.
 
 ---
 
 ## 2. Authentication
 
-> **🔴 Header convention — read this first**
->
-> Provisioning API requires header `X-API-Key: <management-key>`. It is
-> NOT `Authorization: Bearer <token>`. This matches the newhub
-> `internal_api_auth.go` middleware that all `/internal/*` routes share.
-> Sending `Authorization: Bearer …` will return HTTP 401 with
-> `{"success": false, "message": "API key required"}` — the middleware
-> reads the `X-API-Key` header only.
+> **🔴 Header**: requires `X-API-Key: <management-key>`, NOT `Authorization: Bearer`. Matches newhub `internal_api_auth.go` middleware (shared by all `/internal/*`). Sending Bearer → 401 `{"success":false,"message":"API key required"}` (middleware reads `X-API-Key` only).
 
-### 2.1 Issuing a management key
-
-A management key is an `internal_api_keys` row with scope
-`provisioning:write`. Issuance is an operator action on newhub:
-
-```bash
-# On newhub (operator session)
-# See _bmad-output/planning-artifacts/adr-2026-05-18-tenant-credit-pool.md §9 Q2
-#   for the 90-day TTL policy + T-14d/T-7d/T-1d rotation alert schedule.
-```
-
-Switch team receives the key out-of-band (1Password / encrypted channel).
-
-### 2.2 Key rotation
-
-Per ADR §9 Q2: management keys carry a 90-day TTL. Rotation is operator-driven
-via NATS-published alerts at T-14d / T-7d / T-1d before `expires_at`. A
-rotated key has a fresh value; the previous key is revoked atomically.
-
-Switch team should treat any 401 response on a previously-working key as
-"key has been rotated — fetch new key from secret store".
-
-### 2.3 Scope check
-
-The `provisioning:write` scope grants:
-- Create / revoke tokens within any tenant.
-- Read tenant slug → tenant ID mapping (implicit in `:slug` path arg).
-
-It does NOT grant:
-- Read/write across other internal scopes (`balance`, `quota`, `user`).
-- Access to platform credentials, wallet, or Reseller session.
-
-Blast radius is bounded to one tenant per call (the `:slug` parameter).
+- **2.1 Issuing**: a management key is an `internal_api_keys` row with scope `provisioning:write`; issuance is an operator action on newhub (see ADR §9 Q2 for 90-day TTL + T-14d/T-7d/T-1d rotation alert schedule). Switch receives the key out-of-band (1Password / encrypted channel).
+- **2.2 Rotation**: 90-day TTL (ADR §9 Q2), operator-driven via NATS alerts at T-14d/T-7d/T-1d before `expires_at`; rotated key has a fresh value, previous revoked atomically. Switch treats any 401 on a previously-working key as "rotated — fetch new key from secret store".
+- **2.3 Scope**: `provisioning:write` grants create/revoke tokens within any tenant + read slug→tenant-ID (implicit in `:slug`). Does NOT grant other internal scopes (`balance`/`quota`/`user`), platform credentials, wallet, or Reseller session. Blast radius bounded to one tenant per call (`:slug`).
 
 ---
 
@@ -232,72 +183,25 @@ The Provisioning API is **best-effort idempotent by `name` within a tenant**:
 
 ## 5. Version Lock
 
-This contract is `v0.1.0`. The version follows semver-for-APIs:
+`v0.1.0`, semver-for-APIs: **Patch** (`v0.1.x`, doc clarifications / extra error codes / new optional response fields) backwards-compatible, no coordination; **Minor** (`v0.2.0`, new optional request fields / new endpoints in `/internal/v1/provisioning/`) backwards-compatible, notify Switch; **Major** (`v1.0.0`+, breaking: request schema / status codes / path / auth header) requires Switch coordination + coordinated cutover.
 
-- **Patch** (`v0.1.x`): documentation clarifications, additional error
-  codes, new optional response fields. Backwards-compatible — no Switch
-  coordination required.
-- **Minor** (`v0.2.0`): new optional request fields, new endpoints within
-  the `/internal/v1/provisioning/` namespace. Backwards-compatible —
-  notify Switch team but no coordinated rollout needed.
-- **Major** (`v1.0.0`+): breaking changes — request schema, status codes,
-  path layout, auth header convention. **Requires Switch team
-  coordination and a coordinated cutover.**
-
-Breaking changes from v0.1.0 → v0.2.0 require:
-1. Bump version header in this file + the canonical ADR.
-2. File an issue in `2c-gui-switch` describing the migration.
-3. Hold both contracts active for ≥ 7 days during cutover.
+Breaking change (v0.1.0→v0.2.0): bump version header here + canonical ADR; file `2c-gui-switch` issue describing migration; hold both contracts active ≥7 days during cutover.
 
 ---
 
 ## 6. Switch Integration Handoff
 
-**Consumer repo**: `2c-gui-switch` (Wails desktop app — Go backend +
-TypeScript frontend).
+Consumer: `2c-gui-switch` (Wails desktop, Go + TS). Surface: Switch end-users in Reseller mode provision keys for EndUser tenants; the management key is held by the Reseller desktop instance (encrypted at rest via Wails keychain); each session calls `POST .../tenants/:slug/keys` on EndUser onboarding, presents the returned `key` once for copy-paste, then discards from memory.
 
-**Switch's expected integration surface**:
-- Switch end-users in Reseller mode provision keys for their EndUser
-  tenants via this API.
-- The management key is held by the Reseller desktop instance (encrypted
-  at rest via Wails keychain integration).
-- Each desktop session calls `POST /internal/v1/provisioning/tenants/:slug/keys`
-  on EndUser onboarding, presents the returned `key` once for copy-paste,
-  then discards it from memory.
+File issues: contract bugs (doc out of sync) → `hanmahong5-arch/lurus-newhub` label `contract:provisioning`; Switch-side bugs → `2c-gui-switch`; cross-cutting (e.g. key-rotation UX) → root governance repo, both labels.
 
-**Where to file integration issues**:
-- Contract bugs (this doc out of sync with newhub) → issues against
-  `hanmahong5-arch/lurus-newhub` with label `contract:provisioning`.
-- Switch-side integration bugs → issues against `2c-gui-switch`.
-- Cross-cutting (e.g., key rotation UX) → root governance repo issues
-  with both labels.
-
-**STAGE integration target**:
-- Hostname: `test-newhub.lurus.cn` (R6).
-- Management key: provision via operator session on R6; rotated every
-  90 days per ADR §9 Q2.
-
-**Health check**: `GET https://hub.lurus.cn/api/status` returns
-`{"success": true}` — Switch team can use this for connectivity check
-before attempting `POST /internal/v1/provisioning/...`.
+STAGE target: `test-newhub.lurus.cn` (R6); management key provisioned via operator session, rotated 90d (ADR §9 Q2). Connectivity check: `GET https://hub.lurus.cn/api/status` → `{"success":true}` before `POST /internal/v1/provisioning/...`.
 
 ---
 
-## 7. Out of Scope (Phase 2)
+## 7. Out of Scope (Phase 2) — track for v0.2.0+
 
-Items intentionally NOT in the v0.1.0 surface — track for v0.2.0+:
-
-1. **Bulk key creation** — a single call creating N keys for N sub-tenants.
-   Today: one call per key.
-2. **Key listing** — `GET /internal/v1/provisioning/tenants/:slug/keys`
-   to enumerate existing keys without raw-key disclosure (Switch UI uses
-   the v2/admin session-authenticated surface for now).
-3. **Programmatic management-key rotation** — currently operator action.
-   See ADR §9 Q2 for the 90-day rotation policy.
-4. **Idempotency-Key header** — see §4 known gap.
-5. **Webhook callbacks** — push notifications on key usage / threshold
-   events route through NATS `LLM_EVENTS` (ADR §9 Q5), not direct
-   provisioning-API webhooks.
+1. **Bulk key creation** (today one call per key). 2. **Key listing** (`GET /internal/v1/provisioning/tenants/:slug/keys` without raw-key disclosure — Switch UI uses v2/admin session surface for now). 3. **Programmatic management-key rotation** (currently operator action, ADR §9 Q2). 4. **Idempotency-Key header** (§4 known gap). 5. **Webhook callbacks** (key-usage/threshold events route through NATS `LLM_EVENTS` ADR §9 Q5, not provisioning-API webhooks).
 
 ---
 

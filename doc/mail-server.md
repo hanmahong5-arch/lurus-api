@@ -1,72 +1,18 @@
-﻿# Stalwart Mail Server Integration
+# Stalwart Mail Server Integration
 
-## Overview / 概述
+Lurus Switch integrates Stalwart Mail Server (enterprise mail + collaboration): Email (SMTP/IMAP/POP3/JMAP), Collaboration (CalDAV/CardDAV/WebDAV), Security (SPF/DKIM/DMARC/ARC/DANE/MTA-STS), anti-spam (Bayesian + DNSBL + greylisting). Clients (Outlook/Thunderbird/Apple Mail/mobile/JMAP) → Stalwart → RocksDB or PostgreSQL unified storage.
 
-Lurus Switch integrates Stalwart Mail Server as the enterprise mail & collaboration solution, providing:
-
-- **Email**: SMTP, IMAP, POP3, JMAP
-- **Collaboration**: CalDAV (Calendar), CardDAV (Contacts), WebDAV (Files)
-- **Security**: SPF, DKIM, DMARC, ARC, DANE, MTA-STS
-- **Anti-Spam**: Built-in Bayesian filter, DNSBL, greylisting
-
-## Architecture / 架构
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Client Layer                              │
-├─────────────┬─────────────┬─────────────┬─────────────┬─────────┤
-│  Outlook    │ Thunderbird │   Apple     │   Mobile    │  JMAP   │
-│ (Exchange)  │  (IMAP)     │   Mail      │   Clients   │ Clients │
-└──────┬──────┴──────┬──────┴──────┬──────┴──────┬──────┴────┬────┘
-       │             │             │             │           │
-       ▼             ▼             ▼             ▼           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Stalwart Mail Server                          │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────────┐│
-│  │  SMTP    │ │  IMAP    │ │  JMAP    │ │  CalDAV/CardDAV/     ││
-│  │ :25,:587│ │ :143,:993│ │  :8080   │ │  WebDAV              ││
-│  │  :465   │ │          │ │          │ │                      ││
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └──────────┬───────────┘│
-│       │            │            │                  │            │
-│  ┌────▼────────────▼────────────▼──────────────────▼───────────┐│
-│  │                    RocksDB / PostgreSQL                      ││
-│  │                    (Unified Storage)                         ││
-│  └──────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Quick Start / 快速开始
-
-### Development Mode / 开发模式
+## Quick Start
 
 ```bash
 cd deploy/stalwart
-
-# Windows
-.\setup-mail.ps1
-
-# Linux/macOS
-./setup-mail.sh
-```
-
-Access: http://localhost:8080 (admin / changeme)
-
-### Production Mode / 生产模式
-
-1. Configure DNS records (see below)
-2. Run with production flag:
-
-```bash
-# Windows
-.\setup-mail.ps1 -Domain "yourdomain.com" -Production
-
-# Linux/macOS
+.\setup-mail.ps1                                          # Windows dev (admin/changeme @ http://localhost:8080)
+./setup-mail.sh                                           # Linux/macOS dev
+.\setup-mail.ps1 -Domain "yourdomain.com" -Production    # production
 ./setup-mail.sh --domain yourdomain.com --production
 ```
 
-## DNS Configuration / DNS 配置
-
-Required DNS records for `yourdomain.com`:
+## DNS (for yourdomain.com)
 
 | Type | Name | Value | Priority |
 |------|------|-------|----------|
@@ -76,157 +22,59 @@ Required DNS records for `yourdomain.com`:
 | TXT | _dmarc | `v=DMARC1; p=quarantine; rua=mailto:admin@yourdomain.com` | - |
 | TXT | default._domainkey | `<DKIM_PUBLIC_KEY>` | - |
 
-### Generate DKIM Key / 生成 DKIM 密钥
+Generate DKIM after Stalwart runs: Web Admin → Settings → Domain → DKIM → copy TXT value.
 
-After Stalwart is running:
-1. Login to Web Admin
-2. Go to Settings > Domain > DKIM
-3. Generate key and copy TXT record value
+## Ports
 
-## Ports / 端口
-
-| Port | Protocol | Description |
-|------|----------|-------------|
-| 25 | SMTP | Mail Transfer Agent (MTA) |
-| 465 | SMTPS | SMTP with implicit TLS |
-| 587 | Submission | SMTP submission with STARTTLS |
-| 143 | IMAP | IMAP with STARTTLS |
-| 993 | IMAPS | IMAP with implicit TLS |
+| Port | Protocol | |
+|------|----------|---|
+| 25 | SMTP | MTA |
+| 465 | SMTPS | implicit TLS |
+| 587 | Submission | STARTTLS |
+| 143 | IMAP | STARTTLS |
+| 993 | IMAPS | implicit TLS |
 | 8080 | HTTP | Web Admin + JMAP |
-| 443 | HTTPS | Web Admin + JMAP (with Caddy) |
+| 443 | HTTPS | Web Admin + JMAP (via Caddy) |
 
-## Configuration Files / 配置文件
+## Config files
 
-```
-deploy/
-├── docker-compose.mail.yml       # Development deployment
-├── docker-compose.mail.ssl.yml   # Production with HTTPS
-└── stalwart/
-    ├── config.toml               # Main configuration
-    ├── Caddyfile.mail            # Caddy HTTPS proxy
-    ├── setup-mail.ps1            # Windows setup script
-    ├── setup-mail.sh             # Linux/macOS setup script
-    └── .env.example              # Environment template
-```
+`deploy/docker-compose.mail.yml` (dev) · `deploy/docker-compose.mail.ssl.yml` (prod HTTPS) · `deploy/stalwart/{config.toml, Caddyfile.mail, setup-mail.ps1, setup-mail.sh, .env.example}`.
 
-## Storage Options / 存储选项
+## Storage
 
-### Default: RocksDB (Embedded)
-
-Best for single-server deployments. No external dependencies.
-
-### PostgreSQL (Shared)
-
-For multi-server clustering. Uncomment in `config.toml`:
+Default RocksDB (embedded, single-server, no deps). For multi-server clustering, uncomment PostgreSQL in `config.toml`:
 
 ```toml
 [store."postgresql"]
 type = "postgresql"
-host = "postgres"
-port = 5432
-database = "stalwart"
-user = "stalwart"
-password = "stalwart123"
+host = "postgres"; port = 5432; database = "stalwart"; user = "stalwart"; password = "stalwart123"
 ```
 
-## Anti-Spam Configuration / 反垃圾邮件配置
+## Anti-spam (config.toml)
 
-Default settings in `config.toml`:
+Spam threshold 5.0 (mark) · discard threshold 10.0 (silently drop) · Bayesian auto-learn (Junk folder moves train it) · DNSBLs Spamhaus ZEN + SpamCop.
 
-- **Spam threshold**: 5.0 (mark as spam)
-- **Discard threshold**: 10.0 (silently discard)
-- **Bayesian learning**: Enabled (auto-learn from user actions)
-- **DNSBLs**: Spamhaus ZEN, SpamCop
+## Monitoring
 
-Users can train the filter by moving messages to/from Junk folder.
+Prometheus enabled by default: scrape `http://stalwart:8080/metrics` (`job_name: 'stalwart'`, targets `['stalwart:8080']`). Health: `curl http://localhost:8080/healthz`.
 
-## Monitoring / 监控
-
-### Prometheus Metrics
-
-Enabled by default. Scrape endpoint: `http://stalwart:8080/metrics`
-
-Add to Prometheus config:
-
-```yaml
-scrape_configs:
-  - job_name: 'stalwart'
-    static_configs:
-      - targets: ['stalwart:8080']
-```
-
-### Health Check
+## Common ops
 
 ```bash
-curl http://localhost:8080/healthz
+docker exec stalwart-mail stalwart-cli user create user@domain.com           # add user (or Web Admin → Directory → Users)
+docker run --rm -v stalwart_data:/data -v $(pwd):/backup alpine \
+  tar czf /backup/stalwart-backup-$(date +%Y%m%d).tar.gz /data               # backup
+docker logs -f stalwart-mail                                                  # logs (or setup-mail.{ps1 -Logs, sh --logs})
 ```
 
-## Common Operations / 常用操作
+## Troubleshooting
 
-### Add User / 添加用户
+- **Port 25 blocked** (common on cloud): request unblock from provider, or use a relay (AWS SES / SendGrid).
+- **Certificate warnings** (self-signed): use production mode with ACME (`--domain yourdomain.com --production`).
+- **Connection refused**: `docker ps --filter "name=stalwart"`, `docker logs stalwart-mail`.
 
-1. Web Admin > Directory > Users > Add
-2. Or via CLI:
+## Integration with lurus-api
 
-```bash
-docker exec stalwart-mail stalwart-cli user create user@domain.com
-```
+Stalwart runs as a separate stack. Share the network: start lurus-api (`docker-compose up -d`), then `cd deploy && docker-compose -f docker-compose.mail.yml up -d` (auto-joins `lurus-api_default` network). Both then communicate via Docker network.
 
-### Backup / 备份
-
-```bash
-# Backup data volume
-docker run --rm -v stalwart_data:/data -v $(pwd):/backup \
-  alpine tar czf /backup/stalwart-backup-$(date +%Y%m%d).tar.gz /data
-```
-
-### View Logs / 查看日志
-
-```bash
-docker logs -f stalwart-mail
-
-# Windows PowerShell
-.\setup-mail.ps1 -Logs
-
-# Linux/macOS
-./setup-mail.sh --logs
-```
-
-## Troubleshooting / 故障排除
-
-### Port 25 Blocked
-
-Many cloud providers block port 25. Solutions:
-1. Request port unblock from provider
-2. Use a relay service (AWS SES, SendGrid)
-
-### Certificate Issues
-
-For self-signed cert warnings, use production mode with ACME:
-
-```bash
-./setup-mail.sh --domain yourdomain.com --production
-```
-
-### Connection Refused
-
-Check if Stalwart is running:
-
-```bash
-docker ps --filter "name=stalwart"
-docker logs stalwart-mail
-```
-
-## Integration with lurus-api / 与 lurus-api 集成
-
-Stalwart runs as a separate service stack. To share the network with lurus-api:
-
-```bash
-# Start lurus-api first
-docker-compose up -d
-
-# Then start Stalwart (auto-joins lurus-api_default network)
-cd deploy && docker-compose -f docker-compose.mail.yml up -d
-```
-
-Both services can now communicate via Docker network.
+> Production DKIM/SMTP config + relay debugging history (DKIM PKCS#8→PKCS#1, Stalwart short-account names, Pod CIDR allowlist) — see `doc/process.md` 2026-02-25 entries.

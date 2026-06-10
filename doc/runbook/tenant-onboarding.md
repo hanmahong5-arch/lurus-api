@@ -1,249 +1,75 @@
-# Tenant Onboarding Runbook / 租户入驻手册
+# Tenant Onboarding Runbook
 
-> Auth: Zitadel (auth.lurus.cn) | API: api.lurus.cn | Flow: Zitadel Org → API Tenant → User Mapping
+> Auth: Zitadel (auth.lurus.cn) · API: api.lurus.cn · Flow: Zitadel Org → API Tenant Record → User Identity Mapping.
 
----
+Two modes: **auto-create** (`ZITADEL_AUTO_CREATE_TENANT=true` — tenant created on first user login) or **manual** (admin creates tenant via API, maps to Zitadel Org ID).
 
-## Overview
+## Phase 1: Zitadel Setup (manual)
 
-```
-Zitadel Organization ──→ API Tenant Record ──→ User Identity Mapping
-    (manual)              (API or auto)          (auto on first login)
-```
+Create Organization (record Org ID, e.g. `285895506344386561`), Project `lurus-api` (Role Assertion + Role Check enabled), OIDC Application `lurus-api-backend` (Web, PKCE, redirect `https://api.lurus.cn/api/v2/oauth/callback`, post-logout `https://api.lurus.cn/logout`, Grant Types Authorization Code + Refresh Token, JWT token 3600s / refresh 30d idle / 90d), and Project Roles `admin` / `user` / `billing_manager`. **Full step-by-step + token settings: `doc/zitadel-setup-guide.md`.**
 
-Two modes:
-- **Auto-create**: Set `ZITADEL_AUTO_CREATE_TENANT=true` — tenant created on first user login
-- **Manual**: Admin creates tenant via API, then maps to Zitadel Org ID
-
----
-
-## Phase 1: Zitadel Setup (Manual)
-
-### 1.1 Create Organization
-
-1. Login to Zitadel console: https://auth.lurus.cn
-2. Navigate to **Organizations** → **+ Create New Organization**
-3. Fill in:
-   - **Name**: e.g., "Acme Corporation"
-   - **Primary Domain**: e.g., "acme-corp"
-4. Record the **Organization ID** (e.g., `285895506344386561`)
-
-### 1.2 Create Project
-
-1. Enter the Organization → **Projects** tab
-2. Click **+ Create New Project**
-3. Fill in:
-   - **Name**: `lurus-api`
-   - **Role Assertion**: Enabled
-   - **Role Check**: Enabled
-
-### 1.3 Create OIDC Application
-
-1. In Project → **Applications** → **+ New**
-2. Select **Web** application type
-3. Configure:
-   - **Name**: `lurus-api-backend`
-   - **Auth Method**: PKCE (recommended)
-   - **Redirect URIs**:
-     ```
-     https://api.lurus.cn/api/v2/oauth/callback
-     ```
-   - **Post Logout Redirect URIs**:
-     ```
-     https://api.lurus.cn/logout
-     ```
-   - **Grant Types**: Authorization Code + Refresh Token
-   - **Token Settings**:
-     - Access Token Type: JWT
-     - Access Token Lifetime: 3600s
-     - Refresh Token Idle Expiration: 2592000s (30d)
-     - Refresh Token Expiration: 7776000s (90d)
-4. Save **Client ID** and **Client Secret** immediately (shown only once)
-
-### 1.4 Create Project Roles
-
-In Project → **Roles** tab, create:
-
-| Role Key | Display Name | Description |
-|----------|-------------|-------------|
-| `admin` | Administrator | Full tenant access |
-| `user` | User | Standard access |
-| `billing_manager` | Billing Manager | Billing/subscription management |
-
-### 1.5 Update K8s Secrets
+Update K8s secret + restart:
 
 ```bash
-ssh root@100.98.57.55 "kubectl create secret generic lurus-api-secrets \
-  --from-literal=ZITADEL_CLIENT_ID='<client_id>' \
-  --from-literal=ZITADEL_CLIENT_SECRET='<client_secret>' \
-  --from-literal=SQL_DSN='postgres://...' \
-  --from-literal=SESSION_SECRET='...' \
-  -n lurus-system --dry-run=client -o yaml | kubectl apply -f -"
-
-ssh root@100.98.57.55 "kubectl rollout restart deployment/lurus-api -n lurus-system"
+kubectl create secret generic lurus-api-secrets \
+  --from-literal=ZITADEL_CLIENT_ID='<client_id>' --from-literal=ZITADEL_CLIENT_SECRET='<client_secret>' \
+  --from-literal=SQL_DSN='postgres://...' --from-literal=SESSION_SECRET='...' \
+  -n lurus-system --dry-run=client -o yaml | kubectl apply -f -
+kubectl rollout restart deployment/lurus-api -n lurus-system
 ```
-
----
 
 ## Phase 2: API Tenant Creation
 
-### Option A: Auto-Create (Recommended)
+**Option A — auto-create (recommended)**: with `ZITADEL_AUTO_CREATE_TENANT=true`, first login from a new Zitadel Org auto-creates the tenant. No API call.
 
-With `ZITADEL_AUTO_CREATE_TENANT=true`, the first user login from a new Zitadel Org automatically creates the tenant record.
-
-No manual API call needed.
-
-### Option B: Manual Create via Admin API
+**Option B — manual via admin API**:
 
 ```bash
 curl -X POST https://api.lurus.cn/api/v2/admin/tenants \
-  -H "Content-Type: application/json" \
-  -H "Cookie: session=<platform_admin_session>" \
-  -d '{
-    "zitadel_org_id": "285895506344386561",
-    "slug": "acme-corp",
-    "name": "Acme Corporation",
-    "plan_type": "pro",
-    "max_users": 500,
-    "max_quota": 5000000
-  }'
+  -H "Content-Type: application/json" -H "Cookie: session=<platform_admin_session>" \
+  -d '{"zitadel_org_id":"285895506344386561","slug":"acme-corp","name":"Acme Corporation","plan_type":"pro","max_users":500,"max_quota":5000000}'
+# 201 → {"success":true,"data":{"id":"uuid","zitadel_org_id":...,"slug":...,"name":...,"status":1,"plan_type":"pro"}}
 ```
 
-**Response** (201):
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid-xxx",
-    "zitadel_org_id": "285895506344386561",
-    "slug": "acme-corp",
-    "name": "Acme Corporation",
-    "status": 1,
-    "plan_type": "pro"
-  }
-}
-```
+Tenant status: `1` Enabled (normal) · `2` Disabled (login blocked, data preserved) · `3` Suspended (login + API blocked).
 
-### Tenant Status Values
+## Phase 3: User First Login (automatic)
 
-| Status | Meaning | Effect |
-|--------|---------|--------|
-| 1 | Enabled | Normal operation |
-| 2 | Disabled | Login blocked, data preserved |
-| 3 | Suspended | Login blocked, API blocked |
+`/api/v2/acme-corp/auth/login` → 302 to `auth.lurus.cn/oauth/v2/authorize` → Zitadel login/consent → 302 to `/api/v2/oauth/callback?code&state` → exchange code → ZitadelAuth middleware auto-maps user → session created.
 
----
-
-## Phase 3: User First Login
-
-### Flow
-
-```
-User → /api/v2/acme-corp/auth/login
-     → 302 to auth.lurus.cn/oauth/v2/authorize
-     → Zitadel login/consent
-     → 302 to /api/v2/oauth/callback?code=xxx&state=yyy
-     → Exchange code for tokens
-     → ZitadelAuth middleware auto-maps user
-     → Session created, redirect to app
-```
-
-### What Happens Automatically
-
-1. **JWT validated** via JWKS from auth.lurus.cn
-2. **Tenant resolved** from `urn:zitadel:iam:org:id` claim → `tenants.zitadel_org_id`
-3. **User mapped** from `sub` claim → `user_identity_mappings` record created
-4. **Lurus user created** with default quota from tenant plan
-5. **Tenant context injected** into request for data isolation
-
----
+Automatic steps: JWT validated via JWKS → tenant resolved from `urn:zitadel:iam:org:id` claim → `tenants.zitadel_org_id` → user mapped from `sub` claim → `user_identity_mappings` row → Lurus user created with tenant-plan default quota → tenant context injected for isolation.
 
 ## Phase 4: Verification
 
-### Check Tenant Exists
-
 ```bash
-# Via admin API
-curl -s https://api.lurus.cn/api/v2/admin/tenants \
-  -H "Cookie: session=<admin_session>" | jq '.data[] | {id, slug, name, status}'
-
-# Via database
-psql "postgres://lurus:LurusOps2026@100.94.177.10:30543/lurusapi" \
-  -c "SELECT id, slug, name, status, plan_type FROM tenants;"
+curl -s https://api.lurus.cn/api/v2/admin/tenants -H "Cookie: session=<admin_session>" | jq '.data[] | {id,slug,name,status}'
+psql "$DSN" -c "SELECT id, slug, name, status, plan_type FROM tenants;"
+psql "$DSN" -c "SELECT zitadel_user_id, lurus_user_id, tenant_id, email FROM user_identity_mappings WHERE tenant_id='<tenant_id>';"
+curl -v https://api.lurus.cn/api/v2/acme-corp/auth/login?redirect_url=/dashboard   # expect 302 → auth.lurus.cn/oauth/v2/authorize
 ```
-
-### Check User Mapping
-
-```bash
-psql "postgres://lurus:LurusOps2026@100.94.177.10:30543/lurusapi" \
-  -c "SELECT zitadel_user_id, lurus_user_id, tenant_id, email FROM user_identity_mappings WHERE tenant_id = '<tenant_id>';"
-```
-
-### Test Login Flow
-
-```bash
-# Should redirect to Zitadel
-curl -v https://api.lurus.cn/api/v2/acme-corp/auth/login?redirect_url=/dashboard
-# Expect: 302 → https://auth.lurus.cn/oauth/v2/authorize?...
-```
-
----
 
 ## Phase 5: Tenant Management
 
-### Admin Operations
-
 | Operation | Endpoint | Method |
 |-----------|----------|--------|
-| List tenants | `/api/v2/admin/tenants` | GET |
-| Create tenant | `/api/v2/admin/tenants` | POST |
-| Get tenant | `/api/v2/admin/tenants/:id` | GET |
-| Update tenant | `/api/v2/admin/tenants/:id` | PUT |
-| Enable | `/api/v2/admin/tenants/:id/enable` | POST |
-| Disable | `/api/v2/admin/tenants/:id/disable` | POST |
-| Suspend | `/api/v2/admin/tenants/:id/suspend` | POST |
+| List / Create | `/api/v2/admin/tenants` | GET / POST |
+| Get / Update | `/api/v2/admin/tenants/:id` | GET / PUT |
+| Enable / Disable / Suspend | `/api/v2/admin/tenants/:id/{enable,disable,suspend}` | POST |
 | Stats | `/api/v2/admin/tenants/:id/stats` | GET |
 
-### Disable a Tenant
-
 ```bash
-curl -X POST https://api.lurus.cn/api/v2/admin/tenants/<id>/disable \
-  -H "Cookie: session=<admin_session>"
+curl -X POST https://api.lurus.cn/api/v2/admin/tenants/<id>/disable -H "Cookie: session=<admin_session>"  # all users lose login, data preserved
+curl -X PUT https://api.lurus.cn/api/v2/admin/tenants/<id> -H "Content-Type: application/json" -H "Cookie: session=<admin_session>" -d '{"max_quota":10000000,"max_users":1000}'
 ```
-
-Effect: All users in tenant lose login access. Data preserved.
-
-### Adjust Quota
-
-```bash
-curl -X PUT https://api.lurus.cn/api/v2/admin/tenants/<id> \
-  -H "Content-Type: application/json" \
-  -H "Cookie: session=<admin_session>" \
-  -d '{"max_quota": 10000000, "max_users": 1000}'
-```
-
----
 
 ## Troubleshooting
 
 | Problem | Check |
 |---------|-------|
-| Login redirects but never completes | Verify OIDC redirect URI matches exactly |
-| "Tenant not found" on login | Check `ZITADEL_AUTO_CREATE_TENANT=true` or create manually |
-| JWT verification fails | Check `ZITADEL_ISSUER`, verify JWKS endpoint reachable |
-| User not created on login | Check `ZITADEL_AUTO_CREATE_USER=true` |
-| Cross-tenant data visible | Verify tenant_id in request context, check GORM plugin |
+| Login redirects but never completes | OIDC redirect URI matches exactly |
+| "Tenant not found" on login | `ZITADEL_AUTO_CREATE_TENANT=true` or create manually |
+| JWT verification fails | `ZITADEL_ISSUER`, JWKS endpoint reachable |
+| User not created on login | `ZITADEL_AUTO_CREATE_USER=true` |
+| Cross-tenant data visible | tenant_id in request context, GORM plugin |
 
-### Environment Variables
-
-```bash
-ZITADEL_ENABLED=true
-ZITADEL_ISSUER=https://auth.lurus.cn
-ZITADEL_CLIENT_ID=<from Phase 1.3>
-ZITADEL_CLIENT_SECRET=<from Phase 1.3>
-ZITADEL_REDIRECT_URI=https://api.lurus.cn/api/v2/oauth/callback
-ZITADEL_JWKS_URI=https://auth.lurus.cn/oauth/v2/keys
-ZITADEL_AUTO_CREATE_TENANT=true
-ZITADEL_AUTO_CREATE_USER=true
-ZITADEL_ENABLE_PKCE=true
-```
+Env: `ZITADEL_ENABLED=true`, `ZITADEL_ISSUER=https://auth.lurus.cn`, `ZITADEL_CLIENT_ID`/`_SECRET` (Phase 1.3), `ZITADEL_REDIRECT_URI=https://api.lurus.cn/api/v2/oauth/callback`, `ZITADEL_JWKS_URI=https://auth.lurus.cn/oauth/v2/keys`, `ZITADEL_AUTO_CREATE_TENANT=true`, `ZITADEL_AUTO_CREATE_USER=true`, `ZITADEL_ENABLE_PKCE=true`.
