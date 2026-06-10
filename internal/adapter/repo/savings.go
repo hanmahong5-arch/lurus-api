@@ -65,7 +65,7 @@ func GetSpendByProduct(startTime int64) ([]ProductSpendRow, error) {
 // JSON object (relay rows) or an empty string (some error/legacy rows), so the
 // extract must be guarded against non-JSON input or it errors mid-query.
 func jsonSourceProductExpr() string {
-	switch LOG_DB.Dialector.Name() {
+	switch LOG_DB.Name() {
 	case "postgres":
 		// newhub always persists Other as a valid JSON object or "" — NULLIF
 		// guards the empty case so the ::jsonb cast never sees invalid input.

@@ -73,7 +73,7 @@ func fetchAndApplyBillingConfig(ctx context.Context) {
 		SysLog(fmt.Sprintf("billing_config_poll: WARN request failed (keeping current value): %v", err))
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		SysLog(fmt.Sprintf("billing_config_poll: WARN non-200 status %d (keeping current value)", resp.StatusCode))

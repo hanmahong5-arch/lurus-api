@@ -132,7 +132,7 @@ func setupFundRouter(t *testing.T) (*gin.Engine, func(), *repo.Tenant, *repo.Ten
 		common.RedisEnabled = prevRedis
 		sqlDB, _ := db.DB()
 		if sqlDB != nil {
-			sqlDB.Close()
+			_ = sqlDB.Close()
 		}
 	}
 
