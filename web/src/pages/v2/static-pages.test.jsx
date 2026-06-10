@@ -39,9 +39,22 @@ vi.mock('../../components/hifi/HFShell', () => ({
 // AccountDisabled is hi-fi now (no Semi UI / no illustrations) — nothing to
 // stub for it beyond react-i18next below.
 
-// react-i18next
+// react-i18next — fallback-returning mock (simulates the default en render),
+// same pattern as Channel/index.test.jsx.
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (k) => k }),
+  useTranslation: () => ({
+    t: (key, fallback, opts) => {
+      const vars =
+        typeof fallback === 'object' && fallback !== null ? fallback : opts;
+      let out = typeof fallback === 'string' ? fallback : key;
+      if (vars) {
+        for (const [k, v] of Object.entries(vars)) {
+          out = out.split(`{{${k}}}`).join(String(v));
+        }
+      }
+      return out;
+    },
+  }),
 }));
 
 // Variants uses TweaksPanel from hifi — stub all exported components.
@@ -86,9 +99,9 @@ describe('AccountDisabled page', () => {
     expect(container.querySelector('.btn.primary')).toBeTruthy();
     // …and a suspended account must NOT mount the nav shell.
     expect(queryByTestId('hf-shell')).toBeNull();
-    // Both i18n CTAs render (mock t() echoes the key).
-    expect(getByText('联系管理员')).toBeTruthy();
-    expect(getByText('切换账号')).toBeTruthy();
+    // Both i18n CTAs render (mock t() returns the English fallback).
+    expect(getByText('Contact administrator')).toBeTruthy();
+    expect(getByText('Switch account')).toBeTruthy();
   });
 });
 
