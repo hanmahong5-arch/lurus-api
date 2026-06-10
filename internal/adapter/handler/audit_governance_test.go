@@ -81,6 +81,7 @@ func setupAdminGovRouter(t *testing.T) *adminGovCtx {
 		gov.GET("/fingerprints", GetGovernanceFingerprintStats)
 		gov.GET("/latency", GetGovernanceLatencyStats)
 		gov.GET("/efficiency", GetGovernanceEfficiencyStats)
+		gov.GET("/savings", GetGovernanceSavings)
 	}
 
 	return &adminGovCtx{
