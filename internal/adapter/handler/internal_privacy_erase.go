@@ -140,7 +140,7 @@ func InternalPrivacyErase(c *gin.Context) {
 			`{"event":"privacy_erase_disable_failed","who":"account:%d/user:%d","what":"disable user at erasure intake","result":"failed: %s"}`,
 			req.AccountID, user.Id, err.Error()))
 	}
-	if n, err := repo.DisableTokensByUserID(user.Id); err != nil {
+	if n, err := repo.DisableTokensByUserID(c.Request.Context(), user.Id); err != nil {
 		common.SysError(fmt.Sprintf(
 			`{"event":"privacy_erase_disable_failed","who":"account:%d/user:%d","what":"disable tokens at erasure intake","result":"failed: %s"}`,
 			req.AccountID, user.Id, err.Error()))
@@ -177,7 +177,7 @@ func InternalGetPrivacyErasure(c *gin.Context) {
 		return
 	}
 
-	row, err := repo.GetErasureRequestByEventID(eventID)
+	row, err := repo.GetErasureRequestByEventID(c.Request.Context(), eventID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{

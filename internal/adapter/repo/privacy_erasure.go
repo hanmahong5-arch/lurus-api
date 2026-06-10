@@ -86,9 +86,9 @@ func CreateErasureRequestIdempotent(
 
 // GetErasureRequestByEventID fetches one request for the platform poll /
 // compliance-evidence endpoint. Returns gorm.ErrRecordNotFound when absent.
-func GetErasureRequestByEventID(eventID string) (*PrivacyErasureRequest, error) {
+func GetErasureRequestByEventID(ctx context.Context, eventID string) (*PrivacyErasureRequest, error) {
 	var row PrivacyErasureRequest
-	err := DB.Where("event_id = ?", eventID).First(&row).Error
+	err := DB.WithContext(ctx).Where("event_id = ?", eventID).First(&row).Error
 	if err != nil {
 		return nil, err
 	}
@@ -98,12 +98,12 @@ func GetErasureRequestByEventID(eventID string) (*PrivacyErasureRequest, error) 
 // ListPendingErasureRequests returns the executor's work queue, oldest first
 // so a stuck request cannot starve newer ones of their place in line forever
 // (each pass retries from the front).
-func ListPendingErasureRequests(limit int) ([]*PrivacyErasureRequest, error) {
+func ListPendingErasureRequests(ctx context.Context, limit int) ([]*PrivacyErasureRequest, error) {
 	if limit <= 0 {
 		limit = 10
 	}
 	var rows []*PrivacyErasureRequest
-	err := DB.Where("status = ?", ErasureStatusPending).
+	err := DB.WithContext(ctx).Where("status = ?", ErasureStatusPending).
 		Order("created_at ASC").
 		Limit(limit).
 		Find(&rows).Error
@@ -114,7 +114,7 @@ func ListPendingErasureRequests(limit int) ([]*PrivacyErasureRequest, error) {
 }
 
 // AdvanceErasureStep persists the crash-resume cursor after a step completes.
-func AdvanceErasureStep(id int64, step string, logsScrubbedDelta int64) error {
+func AdvanceErasureStep(ctx context.Context, id int64, step string, logsScrubbedDelta int64) error {
 	updates := map[string]interface{}{
 		"step":       step,
 		"last_error": "",
@@ -123,13 +123,13 @@ func AdvanceErasureStep(id int64, step string, logsScrubbedDelta int64) error {
 	if logsScrubbedDelta > 0 {
 		updates["logs_scrubbed"] = gorm.Expr("logs_scrubbed + ?", logsScrubbedDelta)
 	}
-	return DB.Model(&PrivacyErasureRequest{}).Where("id = ?", id).Updates(updates).Error
+	return DB.WithContext(ctx).Model(&PrivacyErasureRequest{}).Where("id = ?", id).Updates(updates).Error
 }
 
 // MarkErasureCompleted finalizes the request row (kept as compliance evidence).
-func MarkErasureCompleted(id int64) error {
+func MarkErasureCompleted(ctx context.Context, id int64) error {
 	now := time.Now()
-	return DB.Model(&PrivacyErasureRequest{}).Where("id = ?", id).Updates(map[string]interface{}{
+	return DB.WithContext(ctx).Model(&PrivacyErasureRequest{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status":       ErasureStatusCompleted,
 		"last_error":   "",
 		"completed_at": now,
@@ -139,11 +139,11 @@ func MarkErasureCompleted(id int64) error {
 
 // RecordErasureError stores the latest executor failure without changing
 // status — the next tick retries from the persisted step cursor.
-func RecordErasureError(id int64, msg string) error {
+func RecordErasureError(ctx context.Context, id int64, msg string) error {
 	if len(msg) > 512 {
 		msg = msg[:512]
 	}
-	return DB.Model(&PrivacyErasureRequest{}).Where("id = ?", id).Updates(map[string]interface{}{
+	return DB.WithContext(ctx).Model(&PrivacyErasureRequest{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"last_error": msg,
 		"updated_at": time.Now(),
 	}).Error
@@ -152,8 +152,8 @@ func RecordErasureError(id int64, msg string) error {
 // DisableTokensByUserID flips every enabled token of the user to disabled —
 // the synchronous "stop the bleeding" action at erasure intake, before the
 // background cascade hard-deletes them.
-func DisableTokensByUserID(userID int) (int64, error) {
-	result := WithoutTenantIsolation(DB).Model(&Token{}).
+func DisableTokensByUserID(ctx context.Context, userID int) (int64, error) {
+	result := WithoutTenantIsolation(DB.WithContext(ctx)).Model(&Token{}).
 		Where("user_id = ?", userID).
 		Update("status", common.TokenStatusDisabled)
 	return result.RowsAffected, result.Error
@@ -161,8 +161,8 @@ func DisableTokensByUserID(userID int) (int64, error) {
 
 // HardDeleteUserTokens removes ALL tokens of the user, including soft-deleted
 // rows (Unscoped) — token keys and names are personal-adjacent data.
-func HardDeleteUserTokens(userID int) (int64, error) {
-	result := WithoutTenantIsolation(DB).Unscoped().
+func HardDeleteUserTokens(ctx context.Context, userID int) (int64, error) {
+	result := WithoutTenantIsolation(DB.WithContext(ctx)).Unscoped().
 		Where("user_id = ?", userID).
 		Delete(&Token{})
 	if result.Error != nil {
@@ -173,8 +173,8 @@ func HardDeleteUserTokens(userID int) (int64, error) {
 
 // HardDeleteUserIdentityMappings removes the Zitadel identity binding rows
 // (email / display name / preferred username), including soft-deleted rows.
-func HardDeleteUserIdentityMappings(userID int) (int64, error) {
-	result := WithoutTenantIsolation(DB).Unscoped().
+func HardDeleteUserIdentityMappings(ctx context.Context, userID int) (int64, error) {
+	result := WithoutTenantIsolation(DB.WithContext(ctx)).Unscoped().
 		Where("lurus_user_id = ?", userID).
 		Delete(&UserIdentityMapping{})
 	if result.Error != nil {
@@ -192,13 +192,13 @@ func HardDeleteUserIdentityMappings(userID int) (int64, error) {
 // Resumable: rows already carrying ErasedMarker in username are skipped, so
 // re-running after a crash continues where the previous pass stopped.
 // Returns an empty slice when the user has no rows left to scrub.
-func AnonymizeLogsBatch(userID int, batchSize int) ([]int, error) {
+func AnonymizeLogsBatch(ctx context.Context, userID int, batchSize int) ([]int, error) {
 	if batchSize <= 0 {
 		batchSize = 500
 	}
 
 	var ids []int
-	err := WithoutTenantIsolation(LOG_DB).Model(&Log{}).
+	err := WithoutTenantIsolation(LOG_DB.WithContext(ctx)).Model(&Log{}).
 		Where("user_id = ? AND username <> ?", userID, ErasedMarker).
 		Order("id ASC").
 		Limit(batchSize).
@@ -210,7 +210,7 @@ func AnonymizeLogsBatch(userID int, batchSize int) ([]int, error) {
 		return nil, nil
 	}
 
-	err = WithoutTenantIsolation(LOG_DB).Model(&Log{}).
+	err = WithoutTenantIsolation(LOG_DB.WithContext(ctx)).Model(&Log{}).
 		Where("id IN ?", ids).
 		Updates(map[string]interface{}{
 			"username":   ErasedMarker,
@@ -229,13 +229,13 @@ func AnonymizeLogsBatch(userID int, batchSize int) ([]int, error) {
 // the user's audit events while keeping action/resource/timestamps — the
 // security trail stays intact under its existing retention TTL. Returns the
 // number of rows scrubbed; 0 means done.
-func ScrubAuditEventsBatch(userID int, batchSize int) (int64, error) {
+func ScrubAuditEventsBatch(ctx context.Context, userID int, batchSize int) (int64, error) {
 	if batchSize <= 0 {
 		batchSize = 500
 	}
 
 	var ids []int64
-	err := DB.Model(&entity.AuditEvent{}).
+	err := DB.WithContext(ctx).Model(&entity.AuditEvent{}).
 		Where("actor_id = ? AND actor_type = ? AND (ip <> '' OR details <> ?)",
 			userID, "user", ErasedMarker).
 		Order("id ASC").
@@ -248,7 +248,7 @@ func ScrubAuditEventsBatch(userID int, batchSize int) (int64, error) {
 		return 0, nil
 	}
 
-	result := DB.Model(&entity.AuditEvent{}).
+	result := DB.WithContext(ctx).Model(&entity.AuditEvent{}).
 		Where("id IN ?", ids).
 		Updates(map[string]interface{}{
 			"ip":      "",
@@ -265,12 +265,12 @@ func ScrubAuditEventsBatch(userID int, batchSize int) (int64, error) {
 // disables the account, and soft-deletes the row. The integer id survives so
 // financial ledgers (redemptions, pool draws, logs) keep a valid pseudonymous
 // reference.
-func AnonymizeUserRow(userID int) error {
+func AnonymizeUserRow(ctx context.Context, userID int) error {
 	if userID == 0 {
 		return errors.New("user id is required")
 	}
 	now := time.Now()
-	err := WithoutTenantIsolation(DB).Model(&User{}).
+	err := WithoutTenantIsolation(DB.WithContext(ctx)).Model(&User{}).
 		Where("id = ?", userID).
 		Updates(map[string]interface{}{
 			"username":         fmt.Sprintf("erased_%d", userID), // unique index needs a distinct value

@@ -65,7 +65,7 @@ func StartPrivacyErasureWithContext(ctx context.Context) {
 // the row and retried next tick from the persisted step cursor — one stuck
 // request must not halt the others.
 func runErasurePass(ctx context.Context) {
-	pending, err := repo.ListPendingErasureRequests(10)
+	pending, err := repo.ListPendingErasureRequests(ctx, 10)
 	if err != nil {
 		common.SysError(fmt.Sprintf("privacy erasure: list pending: %v", err))
 		return
@@ -76,11 +76,11 @@ func runErasurePass(ctx context.Context) {
 			return
 		default:
 		}
-		if err := executeErasure(req); err != nil {
+		if err := executeErasure(ctx, req); err != nil {
 			common.SysError(fmt.Sprintf(
 				`{"event":"privacy_erase_step_failed","who":"account:%d/user:%d","what":"erasure %s at step %q","result":"failed, will retry: %s"}`,
 				req.AccountID, req.UserID, req.EventID, req.Step, err.Error()))
-			if recErr := repo.RecordErasureError(req.ID, err.Error()); recErr != nil {
+			if recErr := repo.RecordErasureError(ctx, req.ID, err.Error()); recErr != nil {
 				common.SysError(fmt.Sprintf("privacy erasure: record error on %s: %v", req.EventID, recErr))
 			}
 		}
@@ -95,24 +95,24 @@ func runErasurePass(ctx context.Context) {
 //  3. logs                 pseudonymize in batches + best-effort Meili purge
 //  4. audit_events         scrub ip/details in batches
 //  5. users                anonymize in place + soft delete → completed
-func executeErasure(req *repo.PrivacyErasureRequest) error {
+func executeErasure(ctx context.Context, req *repo.PrivacyErasureRequest) error {
 	step := req.Step
 
 	if step == repo.ErasureStepNone {
-		if _, err := repo.HardDeleteUserTokens(req.UserID); err != nil {
+		if _, err := repo.HardDeleteUserTokens(ctx, req.UserID); err != nil {
 			return err
 		}
-		if err := repo.AdvanceErasureStep(req.ID, repo.ErasureStepTokensDeleted, 0); err != nil {
+		if err := repo.AdvanceErasureStep(ctx, req.ID, repo.ErasureStepTokensDeleted, 0); err != nil {
 			return err
 		}
 		step = repo.ErasureStepTokensDeleted
 	}
 
 	if step == repo.ErasureStepTokensDeleted {
-		if _, err := repo.HardDeleteUserIdentityMappings(req.UserID); err != nil {
+		if _, err := repo.HardDeleteUserIdentityMappings(ctx, req.UserID); err != nil {
 			return err
 		}
-		if err := repo.AdvanceErasureStep(req.ID, repo.ErasureStepMappingsDeleted, 0); err != nil {
+		if err := repo.AdvanceErasureStep(ctx, req.ID, repo.ErasureStepMappingsDeleted, 0); err != nil {
 			return err
 		}
 		step = repo.ErasureStepMappingsDeleted
@@ -121,7 +121,7 @@ func executeErasure(req *repo.PrivacyErasureRequest) error {
 	if step == repo.ErasureStepMappingsDeleted {
 		var scrubbed int64
 		for {
-			ids, err := repo.AnonymizeLogsBatch(req.UserID, erasureBatchSize)
+			ids, err := repo.AnonymizeLogsBatch(ctx, req.UserID, erasureBatchSize)
 			if err != nil {
 				return err
 			}
@@ -135,7 +135,7 @@ func executeErasure(req *repo.PrivacyErasureRequest) error {
 				common.SysError(fmt.Sprintf("privacy erasure: meilisearch purge (%d docs) non-fatal: %v", len(ids), err))
 			}
 		}
-		if err := repo.AdvanceErasureStep(req.ID, repo.ErasureStepLogsAnonymized, scrubbed); err != nil {
+		if err := repo.AdvanceErasureStep(ctx, req.ID, repo.ErasureStepLogsAnonymized, scrubbed); err != nil {
 			return err
 		}
 		step = repo.ErasureStepLogsAnonymized
@@ -143,7 +143,7 @@ func executeErasure(req *repo.PrivacyErasureRequest) error {
 
 	if step == repo.ErasureStepLogsAnonymized {
 		for {
-			n, err := repo.ScrubAuditEventsBatch(req.UserID, erasureBatchSize)
+			n, err := repo.ScrubAuditEventsBatch(ctx, req.UserID, erasureBatchSize)
 			if err != nil {
 				return err
 			}
@@ -151,17 +151,17 @@ func executeErasure(req *repo.PrivacyErasureRequest) error {
 				break
 			}
 		}
-		if err := repo.AdvanceErasureStep(req.ID, repo.ErasureStepAuditScrubbed, 0); err != nil {
+		if err := repo.AdvanceErasureStep(ctx, req.ID, repo.ErasureStepAuditScrubbed, 0); err != nil {
 			return err
 		}
 		step = repo.ErasureStepAuditScrubbed
 	}
 
 	if step == repo.ErasureStepAuditScrubbed {
-		if err := repo.AnonymizeUserRow(req.UserID); err != nil {
+		if err := repo.AnonymizeUserRow(ctx, req.UserID); err != nil {
 			return err
 		}
-		if err := repo.MarkErasureCompleted(req.ID); err != nil {
+		if err := repo.MarkErasureCompleted(ctx, req.ID); err != nil {
 			return err
 		}
 		common.SysLog(fmt.Sprintf(

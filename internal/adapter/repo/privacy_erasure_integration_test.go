@@ -10,6 +10,7 @@ package repo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -85,21 +86,21 @@ func TestPrivacyErasure_PG_CascadePrimitives(t *testing.T) {
 		t.Fatalf("create intent: %v", err)
 	}
 	if _, replayErr := CreateErasureRequestIdempotent(context.Background(),
-		"evt-pg-1", accountID, "", "", user.Id, "default", ErasureStatusPending); replayErr != ErrErasureEventExists {
+		"evt-pg-1", accountID, "", "", user.Id, "default", ErasureStatusPending); !errors.Is(replayErr, ErrErasureEventExists) {
 		t.Errorf("replay err = %v, want ErrErasureEventExists", replayErr)
 	}
 
 	// --- Dispositions ---
-	if n, err := HardDeleteUserTokens(user.Id); err != nil || n != 3 {
+	if n, err := HardDeleteUserTokens(context.Background(), user.Id); err != nil || n != 3 {
 		t.Fatalf("HardDeleteUserTokens = (%d, %v), want (3, nil) — soft-deleted row must count", n, err)
 	}
-	if n, err := HardDeleteUserIdentityMappings(user.Id); err != nil || n != 1 {
+	if n, err := HardDeleteUserIdentityMappings(context.Background(), user.Id); err != nil || n != 1 {
 		t.Fatalf("HardDeleteUserIdentityMappings = (%d, %v), want (1, nil)", n, err)
 	}
 
 	var scrubbed int
 	for {
-		ids, err := AnonymizeLogsBatch(user.Id, 500)
+		ids, err := AnonymizeLogsBatch(context.Background(), user.Id, 500)
 		if err != nil {
 			t.Fatalf("AnonymizeLogsBatch: %v", err)
 		}
@@ -113,7 +114,7 @@ func TestPrivacyErasure_PG_CascadePrimitives(t *testing.T) {
 	}
 
 	for {
-		n, err := ScrubAuditEventsBatch(user.Id, 500)
+		n, err := ScrubAuditEventsBatch(context.Background(), user.Id, 500)
 		if err != nil {
 			t.Fatalf("ScrubAuditEventsBatch: %v", err)
 		}
@@ -122,10 +123,10 @@ func TestPrivacyErasure_PG_CascadePrimitives(t *testing.T) {
 		}
 	}
 
-	if err := AnonymizeUserRow(user.Id); err != nil {
+	if err := AnonymizeUserRow(context.Background(), user.Id); err != nil {
 		t.Fatalf("AnonymizeUserRow: %v", err)
 	}
-	if err := MarkErasureCompleted(row.ID); err != nil {
+	if err := MarkErasureCompleted(context.Background(), row.ID); err != nil {
 		t.Fatalf("MarkErasureCompleted: %v", err)
 	}
 
@@ -176,13 +177,13 @@ func TestPrivacyErasure_PG_CascadePrimitives(t *testing.T) {
 	}
 
 	// --- Re-run: every primitive must be a no-op now ---
-	if n, _ := HardDeleteUserTokens(user.Id); n != 0 {
+	if n, _ := HardDeleteUserTokens(context.Background(), user.Id); n != 0 {
 		t.Errorf("re-run token delete affected %d rows, want 0", n)
 	}
-	if ids, _ := AnonymizeLogsBatch(user.Id, 500); len(ids) != 0 {
+	if ids, _ := AnonymizeLogsBatch(context.Background(), user.Id, 500); len(ids) != 0 {
 		t.Errorf("re-run log batch returned %d ids, want 0", len(ids))
 	}
-	if n, _ := ScrubAuditEventsBatch(user.Id, 500); n != 0 {
+	if n, _ := ScrubAuditEventsBatch(context.Background(), user.Id, 500); n != 0 {
 		t.Errorf("re-run audit scrub affected %d rows, want 0", n)
 	}
 }

@@ -122,7 +122,7 @@ func TestExecuteErasure_FullCascade(t *testing.T) {
 	db := openErasureTestDB(t)
 	userID, row := seedErasureFixture(t, db, 1200)
 
-	if err := executeErasure(row); err != nil {
+	if err := executeErasure(context.Background(), row); err != nil {
 		t.Fatalf("executeErasure: %v", err)
 	}
 
@@ -182,7 +182,7 @@ func TestExecuteErasure_FullCascade(t *testing.T) {
 	}
 
 	// request row: completed with accurate evidence counter
-	final, err := repo.GetErasureRequestByEventID("evt-erase-1")
+	final, err := repo.GetErasureRequestByEventID(context.Background(), "evt-erase-1")
 	if err != nil {
 		t.Fatalf("get request: %v", err)
 	}
@@ -195,10 +195,10 @@ func TestExecuteErasure_FullCascade(t *testing.T) {
 
 	// Re-run on the completed snapshot: every step is keyed off the persisted
 	// cursor, so a second pass must change nothing.
-	if err := executeErasure(final); err != nil {
+	if err := executeErasure(context.Background(), final); err != nil {
 		t.Fatalf("re-run: %v", err)
 	}
-	again, _ := repo.GetErasureRequestByEventID("evt-erase-1")
+	again, _ := repo.GetErasureRequestByEventID(context.Background(), "evt-erase-1")
 	if again.LogsScrubbed != 1200 {
 		t.Errorf("re-run mutated logs_scrubbed: %d", again.LogsScrubbed)
 	}
@@ -212,15 +212,15 @@ func TestExecuteErasure_ResumesFromStepCursor(t *testing.T) {
 	userID, row := seedErasureFixture(t, db, 5)
 
 	// Simulate a crash after the logs step completed.
-	if err := repo.AdvanceErasureStep(row.ID, repo.ErasureStepLogsAnonymized, 5); err != nil {
+	if err := repo.AdvanceErasureStep(context.Background(), row.ID, repo.ErasureStepLogsAnonymized, 5); err != nil {
 		t.Fatalf("advance: %v", err)
 	}
-	resumed, err := repo.GetErasureRequestByEventID(row.EventID)
+	resumed, err := repo.GetErasureRequestByEventID(context.Background(), row.EventID)
 	if err != nil {
 		t.Fatalf("refetch: %v", err)
 	}
 
-	if err := executeErasure(resumed); err != nil {
+	if err := executeErasure(context.Background(), resumed); err != nil {
 		t.Fatalf("resume run: %v", err)
 	}
 
@@ -231,7 +231,7 @@ func TestExecuteErasure_ResumesFromStepCursor(t *testing.T) {
 		t.Errorf("tokens = %d, want 3 (resume must skip completed steps)", tokenCount)
 	}
 
-	final, _ := repo.GetErasureRequestByEventID(row.EventID)
+	final, _ := repo.GetErasureRequestByEventID(context.Background(), row.EventID)
 	if final.Status != repo.ErasureStatusCompleted {
 		t.Errorf("status = %q, want completed", final.Status)
 	}
@@ -251,7 +251,7 @@ func TestRunErasurePass_RecordsErrorAndContinues(t *testing.T) {
 
 	runErasurePass(context.Background())
 
-	failed, err := repo.GetErasureRequestByEventID(row.EventID)
+	failed, err := repo.GetErasureRequestByEventID(context.Background(), row.EventID)
 	if err != nil {
 		t.Fatalf("refetch: %v", err)
 	}
