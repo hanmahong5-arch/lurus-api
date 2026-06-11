@@ -243,6 +243,34 @@ var (
 		[]string{"tenant_id"},
 	)
 
+	// CreditPoolOverdraftTotal counts post-consume debits that found the pool
+	// already exhausted and were recorded as overdraft (negative balance +
+	// relay_overdraft draw row) instead of being dropped. A non-zero rate means
+	// the relay gate admitted requests that out-raced the pool balance — debt
+	// is repaid by the next topup. P0-3 fix (2026-06-10).
+	CreditPoolOverdraftTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "credit_pool_overdraft_total",
+			Help:      "Post-consume pool debits recorded as overdraft (pool was exhausted), by tenant",
+		},
+		[]string{"tenant_id"},
+	)
+
+	// CreditPoolDebitLostTotal counts post-consume pool debits that failed with
+	// a hard DB error (not exhaustion) and could NOT be recorded — the honest
+	// residual gap after P0-3. Every increment is a known conservation-law
+	// violation that needs manual reconciliation; alert on any increase.
+	CreditPoolDebitLostTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "credit_pool_debit_lost_total",
+			Help:      "Post-consume pool debits dropped due to hard DB errors (conservation-law violations)",
+		},
+	)
+
 	// ProvisioningKeysCreatedTotal counts Provisioning-API key creations.
 	// Bumped from the POST /internal/v1/provisioning/tenants/:slug/keys handler.
 	// Used to measure Switch-Reseller adoption rate during Q3 pilot.

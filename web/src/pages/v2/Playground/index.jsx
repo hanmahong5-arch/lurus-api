@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import HFShell from '../../../components/hifi/HFShell';
 import { API, showError, showSuccess } from '../../../helpers';
 import { useFormDraft } from '../../../hooks/common/useFormDraft';
@@ -85,7 +86,8 @@ const useTenantSlug = () => {
 // Sort columns by latency so the fastest is leftmost — gives the user an
 // at-a-glance perf comparison without an extra UI control. Stable: keeps
 // original column index as tiebreaker so the layout doesn't reshuffle
-// between identical runs.
+// between identical runs. `label` doubles as the i18n key suffix
+// (console.playground.verdict_<label>).
 const verdictFor = (item, allItems) => {
   if (item.error_code) return { label: 'error', color: 'var(--hf-err)' };
   const sorted = allItems
@@ -101,6 +103,8 @@ const verdictFor = (item, allItems) => {
 
 const HFPlayground = () => {
   const tenantSlug = useTenantSlug();
+  // Aliased to `tr` per the v2 console convention.
+  const { t: tr } = useTranslation();
 
   // Form state — persisted via useFormDraft so a tab close mid-edit doesn't
   // lose the user's prompt. Key NOT scoped per-tenant (playground is a
@@ -177,7 +181,12 @@ const HFPlayground = () => {
 
   const runAll = useCallback(async () => {
     if (!form.user.trim()) {
-      showError('User prompt cannot be empty');
+      showError(
+        tr(
+          'console.playground.err_empty_prompt',
+          'User prompt cannot be empty',
+        ),
+      );
       return;
     }
     setRunning(true);
@@ -196,15 +205,21 @@ const HFPlayground = () => {
       if (res?.data?.success) {
         setItems(res.data.data.items);
       } else {
-        showError(res?.data?.message || 'Run failed');
+        showError(
+          res?.data?.message ||
+            tr('console.playground.run_failed', 'Run failed'),
+        );
       }
     } catch (err) {
-      const msg = err?.response?.data?.message || err?.message || 'Run failed';
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        tr('console.playground.run_failed', 'Run failed');
       showError(msg);
     } finally {
       setRunning(false);
     }
-  }, [form, tenantSlug]);
+  }, [form, tenantSlug, tr]);
 
   // ⌘/Ctrl + Enter triggers run from any focus position inside the page.
   useEffect(() => {
@@ -220,7 +235,10 @@ const HFPlayground = () => {
 
   // ── save handler ──
   const handleSave = useCallback(async () => {
-    const name = window.prompt('保存预设', '');
+    const name = window.prompt(
+      tr('console.playground.save_preset_prompt', 'Preset name'),
+      '',
+    );
     if (!name || !name.trim()) return;
     try {
       const res = await API.post(`/api/v2/${tenantSlug}/playground/presets`, {
@@ -234,15 +252,22 @@ const HFPlayground = () => {
         }),
       });
       if (res?.data?.success) {
-        showSuccess('预设已保存');
+        showSuccess(tr('console.playground.preset_saved', 'Preset saved'));
         setPresets(null); // invalidate cached list so next open re-fetches
       } else {
-        showError(res?.data?.message || '保存失败');
+        showError(
+          res?.data?.message ||
+            tr('console.playground.save_failed', 'Save failed'),
+        );
       }
     } catch (err) {
-      showError(err?.response?.data?.message || err?.message || '保存失败');
+      showError(
+        err?.response?.data?.message ||
+          err?.message ||
+          tr('console.playground.save_failed', 'Save failed'),
+      );
     }
-  }, [form, tenantSlug]);
+  }, [form, tenantSlug, tr]);
 
   // ── blank▾ toggle handler ──
   const handleBlankToggle = useCallback(async () => {
@@ -305,11 +330,16 @@ const HFPlayground = () => {
         '?' +
         params.toString();
       navigator.clipboard?.writeText(url);
-      showSuccess('分享链接已复制');
+      showSuccess(tr('console.playground.share_copied', 'Share link copied'));
     } catch (_) {
-      showError('复制失败，请手动复制地址栏 URL');
+      showError(
+        tr(
+          'console.playground.share_copy_failed',
+          'Copy failed — copy the URL from the address bar manually',
+        ),
+      );
     }
-  }, [form]);
+  }, [form, tr]);
 
   // ── swap▾ toggle handler ──
   const handleSwapToggle = useCallback(
@@ -352,10 +382,15 @@ const HFPlayground = () => {
   return (
     <HFShell
       active='playground'
-      crumbs={['workspace', 'playground']}
+      crumbs={[
+        tr('console.nav.section_workspace', 'workspace'),
+        tr('console.playground.crumb', 'playground'),
+      ]}
       actions={
         <>
-          <span className='lbl'>preset:</span>
+          <span className='lbl'>
+            {tr('console.playground.preset_label', 'preset:')}
+          </span>
 
           {/* blank▾ — dropdown listing user presets + blank/clear option */}
           <div
@@ -368,7 +403,7 @@ const HFPlayground = () => {
               onClick={handleBlankToggle}
               data-testid='playground-blank-btn'
             >
-              blank ▾
+              {tr('console.playground.blank_btn', 'blank ▾')}
             </button>
             {blankOpen && (
               <div
@@ -398,7 +433,7 @@ const HFPlayground = () => {
                     padding: '6px 12px',
                   }}
                 >
-                  blank (清空)
+                  {tr('console.playground.blank_clear', 'blank (clear)')}
                 </button>
                 {presets && presets.length > 0 && (
                   <div
@@ -435,7 +470,7 @@ const HFPlayground = () => {
                       fontSize: 11,
                     }}
                   >
-                    暂无预设
+                    {tr('console.playground.no_presets', 'no presets yet')}
                   </div>
                 )}
               </div>
@@ -449,7 +484,7 @@ const HFPlayground = () => {
             onClick={handleSave}
             data-testid='playground-save-btn'
           >
-            save
+            {tr('console.common.save', 'save')}
           </button>
 
           {/* share↗ — copies URL with current form state as query params */}
@@ -459,7 +494,7 @@ const HFPlayground = () => {
             onClick={handleShare}
             data-testid='playground-share-btn'
           >
-            share ↗
+            {tr('console.playground.share', 'share ↗')}
           </button>
         </>
       }
@@ -480,10 +515,14 @@ const HFPlayground = () => {
           }}
         >
           <div className='lbl' style={{ marginBottom: 4 }}>
-            compare
+            {tr('console.playground.compare', 'compare')}
           </div>
           <h1 className='display' style={{ fontSize: 28, margin: 0 }}>
-            {form.models.length} models, one prompt, side by side
+            {tr(
+              'console.playground.headline',
+              '{{count}} models, one prompt, side by side',
+              { count: form.models.length },
+            )}
           </h1>
 
           {restoredFromDraft && (
@@ -498,13 +537,16 @@ const HFPlayground = () => {
               }}
               data-testid='playground-restored-banner'
             >
-              Restored from saved draft.{' '}
+              {tr(
+                'console.playground.restored_draft',
+                'Restored from saved draft.',
+              )}{' '}
               <button
                 type='button'
                 className='btn ghost xs'
                 onClick={clearDraft}
               >
-                Discard
+                {tr('console.playground.discard', 'Discard')}
               </button>
             </div>
           )}
@@ -521,7 +563,7 @@ const HFPlayground = () => {
               className='lbl'
               style={{ alignSelf: 'flex-start', paddingTop: 6 }}
             >
-              system
+              {tr('console.playground.system', 'system')}
             </div>
             <textarea
               data-testid='playground-system'
@@ -545,7 +587,7 @@ const HFPlayground = () => {
               className='lbl'
               style={{ alignSelf: 'flex-start', paddingTop: 6 }}
             >
-              user
+              {tr('console.playground.user', 'user')}
             </div>
             <textarea
               data-testid='playground-user'
@@ -576,9 +618,11 @@ const HFPlayground = () => {
               flexWrap: 'wrap',
             }}
           >
-            <span className='lbl'>params</span>
+            <span className='lbl'>
+              {tr('console.playground.params', 'params')}
+            </span>
             <label className='pill' style={{ display: 'inline-flex', gap: 6 }}>
-              temp ·
+              {tr('console.playground.param_temp', 'temp')} ·
               <input
                 data-testid='playground-temp'
                 type='number'
@@ -618,7 +662,7 @@ const HFPlayground = () => {
               />
             </label>
             <label className='pill' style={{ display: 'inline-flex', gap: 6 }}>
-              max ·
+              {tr('console.playground.param_max', 'max')} ·
               <input
                 data-testid='playground-max'
                 type='number'
@@ -647,7 +691,11 @@ const HFPlayground = () => {
               onClick={runAll}
               data-testid='playground-run'
             >
-              {running ? '▶ running…' : `▶ run all ${form.models.length}`}
+              {running
+                ? tr('console.playground.running', '▶ running…')
+                : tr('console.playground.run_all', '▶ run all {{count}}', {
+                    count: form.models.length,
+                  })}
             </button>
           </div>
         </div>
@@ -703,7 +751,7 @@ const HFPlayground = () => {
                       data-testid={`playground-swap-btn-${col.idx}`}
                       onClick={() => handleSwapToggle(col.idx)}
                     >
-                      swap ▾
+                      {tr('console.playground.swap_btn', 'swap ▾')}
                     </button>
                     {swapOpen === col.idx && (
                       <div
@@ -731,7 +779,7 @@ const HFPlayground = () => {
                               fontSize: 11,
                             }}
                           >
-                            加载中…
+                            {tr('console.common.loading', 'loading…')}
                           </div>
                         )}
                         {availableModels.map((m) => {
@@ -775,13 +823,16 @@ const HFPlayground = () => {
                         {col.result.latency_ms}ms
                       </span>
                       <span className='pill'>
-                        tok {col.result.prompt_tokens}↗
+                        {tr('console.playground.unit_tok', 'tok')}{' '}
+                        {col.result.prompt_tokens}↗
                         {col.result.completion_tokens}
                       </span>
                     </>
                   ) : (
                     <span className='pill faint'>
-                      {running ? 'running…' : 'idle'}
+                      {running
+                        ? tr('console.playground.running_short', 'running…')
+                        : tr('console.playground.idle', 'idle')}
                     </span>
                   )}
                 </div>
@@ -790,7 +841,7 @@ const HFPlayground = () => {
                     className='lbl'
                     style={{ marginTop: 10, color: v.color }}
                   >
-                    {v.label}
+                    {tr(`console.playground.verdict_${v.label}`, v.label)}
                   </div>
                 )}
               </div>
@@ -826,18 +877,27 @@ const HFPlayground = () => {
               }}
             >
               {!col.result && running && (
-                <span className='muted'>Awaiting response…</span>
+                <span className='muted'>
+                  {tr('console.playground.awaiting', 'Awaiting response…')}
+                </span>
               )}
               {!col.result && !running && (
                 <span className='muted'>
-                  Press ⌘/Ctrl + Enter or click "run all" to compare.
+                  {tr(
+                    'console.playground.press_hint',
+                    'Press ⌘/Ctrl + Enter or click "run all" to compare.',
+                  )}
                 </span>
               )}
               {col.result?.error_code && (
                 <>
-                  <div className='strong'>Error · {col.result.error_code}</div>
+                  <div className='strong'>
+                    {tr('console.playground.error_label', 'Error')} ·{' '}
+                    {col.result.error_code}
+                  </div>
                   <div style={{ marginTop: 6 }}>
-                    {col.result.error_message || '(no message)'}
+                    {col.result.error_message ||
+                      tr('console.playground.no_message', '(no message)')}
                   </div>
                 </>
               )}
@@ -872,7 +932,7 @@ const HFPlayground = () => {
             >
               <span className='muted mono'>
                 {col.result
-                  ? `${col.result.prompt_tokens + col.result.completion_tokens} tok`
+                  ? `${col.result.prompt_tokens + col.result.completion_tokens} ${tr('console.playground.unit_tok', 'tok')}`
                   : '—'}
               </span>
               <span style={{ flex: 1 }} />
@@ -885,7 +945,7 @@ const HFPlayground = () => {
                   navigator.clipboard?.writeText(col.result.content);
                 }}
               >
-                copy
+                {tr('console.common.copy', 'copy')}
               </button>
             </div>
           ))}

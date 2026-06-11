@@ -135,6 +135,7 @@ func SetupIntegrationRouter(t *testing.T) (*gin.Engine, func()) {
 		internal.GET("/user/by-email/:email", middleware.RequireScope(repo.ScopeUserRead), InternalGetUserByEmail)
 		internal.GET("/user/by-phone/:phone", middleware.RequireScope(repo.ScopeUserRead), InternalGetUserByPhone)
 		internal.POST("/user", middleware.RequireScope(repo.ScopeUserWrite), InternalCreateUser)
+		internal.POST("/user/provision", middleware.RequireScope(repo.ScopeUserWrite), InternalProvisionUser)
 		internal.PUT("/user/:id", middleware.RequireScope(repo.ScopeUserWrite), InternalUpdateUser)
 		internal.DELETE("/user/:id", middleware.RequireScope(repo.ScopeUserDelete), InternalDeleteUser)
 		internal.GET("/quota/user/:id", middleware.RequireScope(repo.ScopeQuotaRead), InternalGetUserQuota)

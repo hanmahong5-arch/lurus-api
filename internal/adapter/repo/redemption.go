@@ -148,10 +148,8 @@ func Redeem(key string, userId int) (quota int, err error) {
 	}
 	redemption := &Redemption{}
 
-	keyCol := "`key`"
-	if common.UsingPostgreSQL {
-		keyCol = `"key"`
-	}
+	// PG-only runtime; the SQLite test tier also accepts double-quoted identifiers.
+	keyCol := `"key"`
 	common.RandomSleep()
 	// Use WithoutTenantIsolation because this function does its own explicit tenant check
 	err = WithoutTenantIsolation(DB).Transaction(func(tx *gorm.DB) error {

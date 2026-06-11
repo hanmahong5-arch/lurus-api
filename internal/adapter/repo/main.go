@@ -1,6 +1,8 @@
 package repo
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -11,12 +13,20 @@ import (
 	"github.com/LurusTech/lurus-hub/internal/domain/entity"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/pkg/constant"
+	"github.com/LurusTech/lurus-hub/internal/pkg/migration"
+	"github.com/LurusTech/lurus-hub/migrations"
 
-	"github.com/glebarez/sqlite"
-	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
+
+// migrationBaselineThrough is the highest migrations/*.sql version that the
+// embedded Runner records as applied WITHOUT executing: 001–004 are MySQL
+// dialect (cannot run on PostgreSQL) and 005–020 were applied to STAGE by
+// hand before the Runner existed; on a fresh database their schema comes
+// from AutoMigrate. Only versions above this ever execute — they must be
+// PostgreSQL-only and idempotent (see internal/pkg/migration package doc).
+const migrationBaselineThrough = "020_create_privacy_erasure_requests"
 
 var commonGroupCol string
 var commonKeyCol string
@@ -33,39 +43,17 @@ func InitCol() {
 }
 
 func initCol() {
-	// init common column names
-	if common.UsingPostgreSQL {
-		commonGroupCol = `"group"`
-		commonKeyCol = `"key"`
-		commonTrueVal = "true"
-		commonFalseVal = "false"
-	} else {
-		commonGroupCol = "`group`"
-		commonKeyCol = "`key`"
-		commonTrueVal = "1"
-		commonFalseVal = "0"
-	}
-	if os.Getenv("LOG_SQL_DSN") != "" {
-		switch common.LogSqlType {
-		case common.DatabaseTypePostgreSQL:
-			logGroupCol = `"group"`
-			logKeyCol = `"key"`
-		default:
-			logGroupCol = commonGroupCol
-			logKeyCol = commonKeyCol
-		}
-	} else {
-		// LOG_SQL_DSN 为空时，日志数据库与主数据库相同
-		if common.UsingPostgreSQL {
-			logGroupCol = `"group"`
-			logKeyCol = `"key"`
-		} else {
-			logGroupCol = commonGroupCol
-			logKeyCol = commonKeyCol
-		}
-	}
-	// log sql type and database type
-	//common.SysLog("Using Log SQL Type: " + common.LogSqlType)
+	// Runtime is PostgreSQL-only (2026-06). The hermetic glebarez SQLite
+	// unit-test tier also accepts double-quoted identifiers and true/false
+	// boolean literals, so these constants are unconditional.
+	// UPSTREAM-MERGE NOTE: new-api branches on MySQL/SQLite dialect here;
+	// newhub is PG-only, keep the PG constants on conflicts.
+	commonGroupCol = `"group"`
+	commonKeyCol = `"key"`
+	commonTrueVal = "true"
+	commonFalseVal = "false"
+	logGroupCol = commonGroupCol
+	logKeyCol = commonKeyCol
 }
 
 var DB *gorm.DB
@@ -107,94 +95,50 @@ func CheckSetup() {
 	}
 }
 
-func chooseDB(envName string, isLog bool) (*gorm.DB, error) {
-	defer func() {
-		initCol()
-	}()
+// chooseDB opens the PostgreSQL database named by envName.
+// UPSTREAM-MERGE NOTE: new-api supports MySQL/SQLite here; newhub is PG-only
+// (2026-06), keep the PG arm on conflicts.
+func chooseDB(envName string) (*gorm.DB, error) {
+	defer initCol()
 	dsn := os.Getenv(envName)
-	if dsn != "" {
-		if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
-			// Use PostgreSQL
-			common.SysLog("using PostgreSQL as database")
-			if !isLog {
-				common.UsingPostgreSQL = true
-			} else {
-				common.LogSqlType = common.DatabaseTypePostgreSQL
-			}
-			return gorm.Open(postgres.New(postgres.Config{
-				DSN:                  dsn,
-				PreferSimpleProtocol: true, // disables implicit prepared statement usage
-			}), &gorm.Config{
-				PrepareStmt: true, // precompile SQL
-			})
-		}
-		if strings.HasPrefix(dsn, "local") {
-			common.SysLog("SQL_DSN not set, using SQLite as database")
-			if !isLog {
-				common.UsingSQLite = true
-			} else {
-				common.LogSqlType = common.DatabaseTypeSQLite
-			}
-			return gorm.Open(sqlite.Open(common.SQLitePath), &gorm.Config{
-				PrepareStmt: true, // precompile SQL
-			})
-		}
-		// Use MySQL
-		common.SysLog("using MySQL as database")
-		// check parseTime
-		if !strings.Contains(dsn, "parseTime") {
-			if strings.Contains(dsn, "?") {
-				dsn += "&parseTime=true"
-			} else {
-				dsn += "?parseTime=true"
-			}
-		}
-		if !isLog {
-			common.UsingMySQL = true
-		} else {
-			common.LogSqlType = common.DatabaseTypeMySQL
-		}
-		return gorm.Open(mysql.Open(dsn), &gorm.Config{
-			PrepareStmt: true, // precompile SQL
-		})
-	}
-	// Use SQLite
-	common.SysLog("SQL_DSN not set, using SQLite as database")
-	common.UsingSQLite = true
-	return gorm.Open(sqlite.Open(common.SQLitePath), &gorm.Config{
+	common.SysLog("using PostgreSQL as database")
+	common.UsingPostgreSQL = true
+	return gorm.Open(postgres.New(postgres.Config{
+		DSN:                  dsn,
+		PreferSimpleProtocol: true, // disables implicit prepared statement usage
+	}), &gorm.Config{
 		PrepareStmt: true, // precompile SQL
 	})
 }
 
-// shouldRefuseSQLiteFallback reports whether the process must fail fast rather than
-// silently falling back to the SQLite dev database: true when no SQL_DSN is configured
-// AND we are running inside a container. In a container the SQLite file lands on a
-// readOnlyRootFilesystem, so the pod boots and passes health checks while every write
-// silently fails. Locally (not in a container) the SQLite fallback stays a valid dev
-// convenience. Any non-empty SQL_DSN routes to PostgreSQL/MySQL (see chooseDB) and
-// never triggers the refusal.
-func shouldRefuseSQLiteFallback(sqlDSN string, inContainer bool) bool {
-	return sqlDSN == "" && inContainer
+// validateSQLDSN is the PG-only boot gate: newhub refuses to start on anything
+// but a PostgreSQL DSN. The historical SQLite dev fallback (empty DSN /
+// "local") and MySQL support were removed 2026-06 — production has been pure
+// PostgreSQL since launch, and a silent SQLite fallback on a misconfigured pod
+// passes health checks while every write fails on the read-only root
+// filesystem. The hermetic SQLite unit-test tier injects its DB directly and
+// never goes through this gate.
+func validateSQLDSN(dsn string) error {
+	if dsn == "" {
+		return errors.New("SQL_DSN is required (PostgreSQL-only since 2026-06); set a postgres:// or postgresql:// DSN")
+	}
+	if !strings.HasPrefix(dsn, "postgres://") && !strings.HasPrefix(dsn, "postgresql://") {
+		scheme, _, _ := strings.Cut(dsn, "://")
+		return fmt.Errorf("unsupported SQL DSN scheme %q: newhub is PostgreSQL-only since 2026-06 (MySQL and the SQLite dev fallback were removed); set a postgres:// or postgresql:// DSN", scheme)
+	}
+	return nil
 }
 
 func InitDB() (err error) {
-	if shouldRefuseSQLiteFallback(os.Getenv("SQL_DSN"), common.IsRunningInContainer()) {
-		common.FatalLog("SQL_DSN is required in a container environment; refusing to start " +
-			"with the SQLite dev fallback (writes silently fail on a read-only root filesystem). " +
-			"Set SQL_DSN to a PostgreSQL or MySQL DSN.")
+	if err := validateSQLDSN(os.Getenv("SQL_DSN")); err != nil {
+		common.FatalLog("SQL_DSN: " + err.Error())
 	}
-	db, err := chooseDB("SQL_DSN", false)
+	db, err := chooseDB("SQL_DSN")
 	if err == nil {
 		if common.DebugEnabled {
 			db = db.Debug()
 		}
 		DB = db
-		// MySQL charset/collation startup check: ensure Chinese-capable charset
-		if common.UsingMySQL {
-			if err := checkMySQLChineseSupport(DB); err != nil {
-				panic(err)
-			}
-		}
 		sqlDB, err := DB.DB()
 		if err != nil {
 			return err
@@ -239,12 +183,44 @@ func InitDB() (err error) {
 		// first asynchronous renew flips the flag.
 		common.SetLeader(true)
 		common.SysLog("database migration started")
-		err = migrateDB()
-		return err
+		if err = migrateDB(); err != nil {
+			return err
+		}
+		// Embedded SQL migration runner (ported from platform): runs in
+		// the lease-winner branch after AutoMigrate, so the boot lease
+		// stays the primary serializer; the runner's own pg_advisory_lock
+		// additionally guards against a future migrate subcommand or
+		// hand-run binary racing a booting pod.
+		if !migrationsAutoRunEnabled() {
+			common.SysLog("embedded SQL migrations skipped: MIGRATIONS_AUTO_RUN is disabled")
+			return nil
+		}
+		runner := &migration.Runner{
+			DB:              sqlDB,
+			FS:              migrations.FS,
+			BaselineThrough: migrationBaselineThrough,
+		}
+		if err := runner.Run(context.Background()); err != nil {
+			return fmt.Errorf("run embedded SQL migrations: %w", err)
+		}
+		return nil
 	} else {
 		common.FatalLog(err)
 	}
 	return err
+}
+
+// migrationsAutoRunEnabled gates the embedded SQL migration runner.
+// Unset defaults to ON — AutoMigrate has always run unconditionally on the
+// lease winner, so default-on matches the existing boot posture.
+// MIGRATIONS_AUTO_RUN=false|0|no|off is the escape hatch for hand-applied
+// migrations (e.g. an ALTER the app's PG role does not own).
+func migrationsAutoRunEnabled() bool {
+	switch strings.ToLower(os.Getenv("MIGRATIONS_AUTO_RUN")) {
+	case "false", "0", "no", "off":
+		return false
+	}
+	return true
 }
 
 func InitLogDB() (err error) {
@@ -252,18 +228,15 @@ func InitLogDB() (err error) {
 		LOG_DB = DB
 		return
 	}
-	db, err := chooseDB("LOG_SQL_DSN", true)
+	if err := validateSQLDSN(os.Getenv("LOG_SQL_DSN")); err != nil {
+		common.FatalLog("LOG_SQL_DSN: " + err.Error())
+	}
+	db, err := chooseDB("LOG_SQL_DSN")
 	if err == nil {
 		if common.DebugEnabled {
 			db = db.Debug()
 		}
 		LOG_DB = db
-		// If log DB is MySQL, also ensure Chinese-capable charset
-		if common.LogSqlType == common.DatabaseTypeMySQL {
-			if err := checkMySQLChineseSupport(LOG_DB); err != nil {
-				panic(err)
-			}
-		}
 		sqlDB, err := LOG_DB.DB()
 		if err != nil {
 			return err
@@ -325,6 +298,8 @@ func migrateDB() error {
 		&PlaygroundPreset{},
 		// HA leader-election lease (H1.3)
 		&entity.LeaderElection{},
+		// PIPL §47 erasure intent / progress / evidence (migration 020)
+		&entity.PrivacyErasureRequest{},
 	)
 	if err != nil {
 		return err
@@ -429,98 +404,6 @@ func CloseDB() error {
 		}
 	}
 	return closeDB(DB)
-}
-
-// checkMySQLChineseSupport ensures the MySQL connection and current schema
-// default charset/collation can store Chinese characters. It allows common
-// Chinese-capable charsets (utf8mb4, utf8, gbk, big5, gb18030) and panics otherwise.
-func checkMySQLChineseSupport(db *gorm.DB) error {
-	// 仅检测：当前库默认字符集/排序规则 + 各表的排序规则（隐含字符集）
-
-	// Read current schema defaults
-	var schemaCharset, schemaCollation string
-	err := db.Raw("SELECT DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = DATABASE()").Row().Scan(&schemaCharset, &schemaCollation)
-	if err != nil {
-		return fmt.Errorf("读取当前库默认字符集/排序规则失败 / Failed to read schema default charset/collation: %v", err)
-	}
-
-	toLower := func(s string) string { return strings.ToLower(s) }
-	// Allowed charsets that can store Chinese text
-	allowedCharsets := map[string]string{
-		"utf8mb4": "utf8mb4_",
-		"utf8":    "utf8_",
-		"gbk":     "gbk_",
-		"big5":    "big5_",
-		"gb18030": "gb18030_",
-	}
-	isChineseCapable := func(cs, cl string) bool {
-		csLower := toLower(cs)
-		clLower := toLower(cl)
-		if prefix, ok := allowedCharsets[csLower]; ok {
-			if clLower == "" {
-				return true
-			}
-			return strings.HasPrefix(clLower, prefix)
-		}
-		// 如果仅提供了排序规则，尝试按排序规则前缀判断
-		for _, prefix := range allowedCharsets {
-			if strings.HasPrefix(clLower, prefix) {
-				return true
-			}
-		}
-		return false
-	}
-
-	// 1) 当前库默认值必须支持中文
-	if !isChineseCapable(schemaCharset, schemaCollation) {
-		return fmt.Errorf("当前库默认字符集/排序规则不支持中文：schema(%s/%s)。请将库设置为 utf8mb4/utf8/gbk/big5/gb18030 / Schema default charset/collation is not Chinese-capable: schema(%s/%s). Please set to utf8mb4/utf8/gbk/big5/gb18030",
-			schemaCharset, schemaCollation, schemaCharset, schemaCollation)
-	}
-
-	// 2) 所有物理表的排序规则（隐含字符集）必须支持中文
-	type tableInfo struct {
-		Name      string
-		Collation *string
-	}
-	var tables []tableInfo
-	if err := db.Raw("SELECT TABLE_NAME, TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'").Scan(&tables).Error; err != nil {
-		return fmt.Errorf("读取表排序规则失败 / Failed to read table collations: %v", err)
-	}
-
-	var badTables []string
-	for _, t := range tables {
-		// NULL 或空表示继承库默认设置，已在上面校验库默认，视为通过
-		if t.Collation == nil || *t.Collation == "" {
-			continue
-		}
-		cl := *t.Collation
-		// 仅凭排序规则判断是否中文可用
-		ok := false
-		lower := strings.ToLower(cl)
-		for _, prefix := range allowedCharsets {
-			if strings.HasPrefix(lower, prefix) {
-				ok = true
-				break
-			}
-		}
-		if !ok {
-			badTables = append(badTables, fmt.Sprintf("%s(%s)", t.Name, cl))
-		}
-	}
-
-	if len(badTables) > 0 {
-		// 限制输出数量以避免日志过长
-		maxShow := 20
-		shown := badTables
-		if len(shown) > maxShow {
-			shown = shown[:maxShow]
-		}
-		return fmt.Errorf(
-			"存在不支持中文的表，请修复其排序规则/字符集。示例（最多展示 %d 项）：%v / Found tables not Chinese-capable. Please fix their collation/charset. Examples (showing up to %d): %v",
-			maxShow, shown, maxShow, shown,
-		)
-	}
-	return nil
 }
 
 var (

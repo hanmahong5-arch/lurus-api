@@ -510,6 +510,70 @@ func PreConsumeTokenQuota(relayInfo *relaycommon.RelayInfo, quota int) error {
 	return nil
 }
 
+// sourceProductOf returns the resolved cross-product attribution tag for a
+// relay (Workstream 0), or the default product id when unset. Used as the
+// wallet productId so spend is attributable per product instead of the old
+// hardcoded "lurus-api".
+func sourceProductOf(relayInfo *relaycommon.RelayInfo) string {
+	if relayInfo != nil && relayInfo.SourceProduct != "" {
+		return relayInfo.SourceProduct
+	}
+	return ratio_setting.DefaultSourceProduct
+}
+
+// debitTenantPool records the post-consume debit against the token's tenant
+// credit pool. Three outcomes (P0-3, ADR 2026-06-10 pool-overdraft):
+//
+//  1. Normal: DebitPool succeeds — relay_debit draw row.
+//  2. Exhausted: the gate admitted a request that out-raced the balance.
+//     The user quota and upstream tokens are already spent, so we record the
+//     debt via OverdraftDebitPool (balance goes negative, relay_overdraft
+//     draw row) instead of dropping the debit. The negative balance keeps
+//     the relay gate closed until a topup repays it.
+//  3. Hard DB error: the debit is lost — CRITICAL structured log +
+//     CreditPoolDebitLostTotal counter (honest residual gap, needs manual
+//     reconciliation).
+//
+// Tokens without a tenant, tenants without a pool row, and unlimited pools
+// all skip the debit (pool gate semantics: no pool = unlimited).
+func debitTenantPool(relayInfo *relaycommon.RelayInfo, quota int) {
+	tok, terr := repo.GetTokenById(relayInfo.TokenId)
+	if terr != nil || tok == nil || tok.TenantId == "" {
+		return
+	}
+	pool, perr := repo.GetTenantCreditPool(tok.TenantId)
+	if perr != nil || pool == nil || pool.IsUnlimited() {
+		return
+	}
+
+	derr := repo.DebitPool(pool.ID, tok.TenantId, int64(quota), relayInfo.TokenId, 0)
+	if derr == nil {
+		metrics.CreditPoolDebitTotal.WithLabelValues(tok.TenantId).Inc()
+		metrics.CreditPoolBalance.WithLabelValues(tok.TenantId).Set(float64(pool.CurrentBalance - int64(quota)))
+		return
+	}
+
+	if errors.Is(derr, repo.ErrPoolExhausted) {
+		newBalance, oerr := repo.OverdraftDebitPool(pool.ID, tok.TenantId, int64(quota), relayInfo.TokenId, 0)
+		if oerr == nil {
+			metrics.CreditPoolOverdraftTotal.WithLabelValues(tok.TenantId).Inc()
+			metrics.CreditPoolBalance.WithLabelValues(tok.TenantId).Set(float64(newBalance))
+			common.SysLog(fmt.Sprintf(
+				`{"event":"pool_overdraft","who":"tenant:%s","what":"post-consume debit %d on exhausted pool %d (token %d)","result":"recorded as relay_overdraft, new_balance=%d"}`,
+				tok.TenantId, quota, pool.ID, relayInfo.TokenId, newBalance))
+			return
+		}
+		derr = oerr
+	}
+
+	// Hard DB error on either path: the debit is dropped. This is the honest
+	// residual gap — surface it loudly instead of a quiet info log.
+	metrics.CreditPoolDebitLostTotal.Inc()
+	common.SysError(fmt.Sprintf(
+		`{"event":"pool_debit_lost","who":"tenant:%s","what":"post-consume debit %d on pool %d (token %d) failed","result":"debit NOT recorded, conservation broken: %s"}`,
+		tok.TenantId, quota, pool.ID, relayInfo.TokenId, derr.Error()))
+}
+
 func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int, sendEmail bool) (err error) {
 	// Phase 1: Update local user quota
 	if quota > 0 {
@@ -528,22 +592,12 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 		}
 	}
 
-	// Phase 2.5: Tenant credit pool debit (ADR 2026-05-18 §5).
-	// Best-effort: pool exhaustion at post-consume time is rare (the gate
-	// already enforced) and never fails the user-facing response. We log
-	// over-debits (ErrPoolExhausted) so ops can spot pool-balance drift.
+	// Phase 2.5: Tenant credit pool debit (ADR 2026-05-18 §5, P0-3 overdraft
+	// semantics 2026-06-10). Never fails the user-facing response, but the
+	// debit itself is no longer best-effort: exhaustion falls back to an
+	// overdraft draw so the ledger stays conserved.
 	if quota > 0 && relayInfo.TokenId > 0 {
-		if tok, terr := repo.GetTokenById(relayInfo.TokenId); terr == nil && tok != nil && tok.TenantId != "" {
-			if pool, perr := repo.GetTenantCreditPool(tok.TenantId); perr == nil && pool != nil && !pool.IsUnlimited() {
-				if derr := repo.DebitPool(pool.ID, tok.TenantId, int64(quota), relayInfo.TokenId, 0); derr != nil {
-					common.SysLog(fmt.Sprintf("pool debit non-fatal: tenant=%s quota=%d err=%s",
-						tok.TenantId, quota, derr.Error()))
-				} else {
-					metrics.CreditPoolDebitTotal.WithLabelValues(tok.TenantId).Inc()
-					metrics.CreditPoolBalance.WithLabelValues(tok.TenantId).Set(float64(pool.CurrentBalance - int64(quota)))
-				}
-			}
-		}
+		debitTenantPool(relayInfo, quota)
 	}
 
 	// Phase 3: Update token quota with compensation on failure.
@@ -631,7 +685,7 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 				debitCtx, debitCancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer debitCancel()
 				if _, debitErr := common.DebitWalletGRPC(debitCtx, accountID, amountLB, "llm_usage",
-					fmt.Sprintf("relay userId=%d", relayInfo.UserId), "lurus-api"); debitErr != nil {
+					fmt.Sprintf("relay userId=%d", relayInfo.UserId), sourceProductOf(relayInfo)); debitErr != nil {
 					common.SysLog(fmt.Sprintf("legacy wallet debit failed: accountID=%d, amount=%.4f LB, err=%s",
 						accountID, amountLB, debitErr.Error()))
 				}

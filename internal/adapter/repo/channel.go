@@ -370,18 +370,10 @@ func SearchChannelsByTenant(tenantID string, keyword string, group string, model
 
 func searchChannelsScoped(tenantID string, keyword string, group string, model string, idSort bool) ([]*Channel, error) {
 	var channels []*Channel
-	modelsCol := "`models`"
-
-	// 如果是 PostgreSQL，使用双引号
-	if common.UsingPostgreSQL {
-		modelsCol = `"models"`
-	}
-
-	baseURLCol := "`base_url`"
-	// 如果是 PostgreSQL，使用双引号
-	if common.UsingPostgreSQL {
-		baseURLCol = `"base_url"`
-	}
+	// UPSTREAM-MERGE NOTE: new-api branches on MySQL backtick quoting here;
+	// newhub is PG-only (2026-06), keep the double-quoted identifiers.
+	modelsCol := `"models"`
+	baseURLCol := `"base_url"`
 
 	order := "priority desc"
 	if idSort {
@@ -398,13 +390,8 @@ func searchChannelsScoped(tenantID string, keyword string, group string, model s
 	var whereClause string
 	var args []interface{}
 	if group != "" && group != "null" {
-		var groupCondition string
-		if common.UsingMySQL {
-			groupCondition = `CONCAT(',', ` + commonGroupCol + `, ',') LIKE ?`
-		} else {
-			// sqlite, PostgreSQL
-			groupCondition = `(',' || ` + commonGroupCol + ` || ',') LIKE ?`
-		}
+		// `||` concat works on both PostgreSQL (runtime) and the SQLite test tier.
+		groupCondition := `(',' || ` + commonGroupCol + ` || ',') LIKE ?`
 		whereClause = "(id = ? OR name LIKE ? OR " + commonKeyCol + " = ? OR " + baseURLCol + " LIKE ?) AND " + modelsCol + ` LIKE ? AND ` + groupCondition
 		args = append(args, common.String2Int(keyword), "%"+keyword+"%", keyword, "%"+keyword+"%", "%"+model+"%", "%,"+group+",%")
 	} else {
@@ -896,18 +883,10 @@ func GetPaginatedTags(offset int, limit int) ([]*string, error) {
 
 func SearchTags(keyword string, group string, model string, idSort bool) ([]*string, error) {
 	var tags []*string
-	modelsCol := "`models`"
-
-	// 如果是 PostgreSQL，使用双引号
-	if common.UsingPostgreSQL {
-		modelsCol = `"models"`
-	}
-
-	baseURLCol := "`base_url`"
-	// 如果是 PostgreSQL，使用双引号
-	if common.UsingPostgreSQL {
-		baseURLCol = `"base_url"`
-	}
+	// UPSTREAM-MERGE NOTE: new-api branches on MySQL backtick quoting here;
+	// newhub is PG-only (2026-06), keep the double-quoted identifiers.
+	modelsCol := `"models"`
+	baseURLCol := `"base_url"`
 
 	order := "priority desc"
 	if idSort {
@@ -921,13 +900,8 @@ func SearchTags(keyword string, group string, model string, idSort bool) ([]*str
 	var whereClause string
 	var args []interface{}
 	if group != "" && group != "null" {
-		var groupCondition string
-		if common.UsingMySQL {
-			groupCondition = `CONCAT(',', ` + commonGroupCol + `, ',') LIKE ?`
-		} else {
-			// sqlite, PostgreSQL
-			groupCondition = `(',' || ` + commonGroupCol + ` || ',') LIKE ?`
-		}
+		// `||` concat works on both PostgreSQL (runtime) and the SQLite test tier.
+		groupCondition := `(',' || ` + commonGroupCol + ` || ',') LIKE ?`
 		whereClause = "(id = ? OR name LIKE ? OR " + commonKeyCol + " = ? OR " + baseURLCol + " LIKE ?) AND " + modelsCol + ` LIKE ? AND ` + groupCondition
 		args = append(args, common.String2Int(keyword), "%"+keyword+"%", keyword, "%"+keyword+"%", "%"+model+"%", "%,"+group+",%")
 	} else {

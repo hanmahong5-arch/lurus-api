@@ -97,6 +97,12 @@ type RelayInfo struct {
 	UsePrice               bool
 	RelayMode              int
 	OriginModelName        string
+	// SourceProduct is the resolved cross-product attribution tag for this
+	// relay (Workstream 0). Set on the main Relay() path from the
+	// X-Lurus-Product header; empty on paths that don't resolve it (callers
+	// fall back to the default product id). Carried here because the wallet
+	// settlement path (PostConsumeQuota) has no gin.Context.
+	SourceProduct          string
 	RequestURLPath         string
 	ShouldIncludeUsage     bool
 	DisablePing            bool // 是否禁止向下游发送自定义 Ping

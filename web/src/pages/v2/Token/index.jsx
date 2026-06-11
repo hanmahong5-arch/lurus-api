@@ -22,9 +22,33 @@ import { useTranslation } from 'react-i18next';
 import HFShell from '../../../components/hifi/HFShell';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { API, showError, showSuccess } from '../../../helpers';
+import {
+  QUOTA_PER_USD,
+  quotaToUSD,
+  formatRelativeTime,
+} from '../../../helpers/formatting';
 
-const BASE_URL = 'https://api.lurus.cn/v1';
-const QUOTA_PER_USD = 500_000;
+const RELAY_HOST = 'https://api.lurus.cn';
+const BASE_URL = `${RELAY_HOST}/v1`;
+
+// Client base URLs the hub genuinely speaks. We intentionally omit an "Azure"
+// URL: the hub's client-facing relay is OpenAI-compatible at /v1 (Azure is an
+// upstream channel type, not a client endpoint) — inventing one would be a
+// fabricated URL. Each entry is copy-pasteable into the matching SDK's baseURL.
+const CLIENT_ENDPOINTS = [
+  ['OpenAI / compatible', `${RELAY_HOST}/v1`],
+  ['Anthropic · Claude SDK', RELAY_HOST],
+  ['Gemini', `${RELAY_HOST}/v1beta`],
+];
+
+// Quota bar colour keyed to REMAINING headroom: red < 10%, amber < 30%, else
+// green. Unlimited tokens have no cap → neutral.
+const quotaBarColor = (remainingRatio) => {
+  if (remainingRatio == null) return 'var(--hf-ink-2)';
+  if (remainingRatio < 0.1) return 'var(--hf-err)';
+  if (remainingRatio < 0.3) return 'var(--hf-warn)';
+  return 'var(--hf-ok)';
+};
 
 const useTenantSlug = () => {
   const [slug, setSlug] = useState('default');
@@ -36,8 +60,6 @@ const useTenantSlug = () => {
   }, []);
   return slug;
 };
-
-const quotaToUSD = (q) => (q / QUOTA_PER_USD).toFixed(2);
 
 const tokenStatus = (t) => {
   if (!t || t.status !== 1) return 'disabled';
@@ -52,15 +74,6 @@ const tokenStatus = (t) => {
 };
 
 const maskKey = (key) => (key ? `sk-...${key.slice(-4)}` : 'sk-...????');
-
-const relTime = (ts) => {
-  if (!ts) return '—';
-  const s = Math.floor(Date.now() / 1000) - ts;
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
-};
 
 const fmtExpiry = (ts) => {
   if (!ts || ts === -1) return 'never';
@@ -117,6 +130,7 @@ await client.messages.create({
 // ─── Create token modal ───────────────────────────────────────────────────────
 
 const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
+  const { t: tr } = useTranslation();
   const [form, setForm] = useState({
     name: '',
     cap: '',
@@ -151,7 +165,10 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
       if (res?.data?.success) {
         const { key } = res.data.data;
         showSuccess(
-          "Token created — copy your key now, it won't be shown again.",
+          tr(
+            'console.token.toast_created',
+            "Token created — copy your key now, it won't be shown again.",
+          ),
         );
         onCreated(key);
       }
@@ -189,11 +206,13 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
         }}
       >
         <div className='strong' style={{ fontSize: 15 }}>
-          New token
+          {tr('console.token.modal_title', 'New token')}
         </div>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <span className='lbl'>name *</span>
+          <span className='lbl'>
+            {tr('console.token.field_name', 'name *')}
+          </span>
           <input
             ref={nameRef}
             style={{
@@ -207,7 +226,7 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
               outline: 'none',
               width: '100%',
             }}
-            placeholder='e.g. prod-backend'
+            placeholder={tr('console.token.ph_name', 'e.g. prod-backend')}
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             required
@@ -222,12 +241,16 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
               setForm((f) => ({ ...f, unlimited: e.target.checked }))
             }
           />
-          <span className='lbl'>unlimited quota</span>
+          <span className='lbl'>
+            {tr('console.token.unlimited_quota', 'unlimited quota')}
+          </span>
         </label>
 
         {!form.unlimited && (
           <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <span className='lbl'>monthly cap ($)</span>
+            <span className='lbl'>
+              {tr('console.token.monthly_cap_usd', 'monthly cap ($)')}
+            </span>
             <input
               style={{
                 fontFamily: 'var(--hf-mono)',
@@ -258,12 +281,19 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
               setForm((f) => ({ ...f, limitModels: e.target.checked }))
             }
           />
-          <span className='lbl'>restrict models</span>
+          <span className='lbl'>
+            {tr('console.token.restrict_models', 'restrict models')}
+          </span>
         </label>
 
         {form.limitModels && (
           <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <span className='lbl'>allowed models (comma-separated)</span>
+            <span className='lbl'>
+              {tr(
+                'console.token.allowed_models',
+                'allowed models (comma-separated)',
+              )}
+            </span>
             <input
               style={{
                 fontFamily: 'var(--hf-mono)',
@@ -276,7 +306,10 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
                 outline: 'none',
                 width: '100%',
               }}
-              placeholder='gpt-4o, claude-3.5-sonnet'
+              placeholder={tr(
+                'console.token.ph_models',
+                'gpt-4o, claude-3.5-sonnet',
+              )}
               value={form.models}
               onChange={(e) =>
                 setForm((f) => ({ ...f, models: e.target.value }))
@@ -294,10 +327,12 @@ const CreateModal = ({ tenantSlug, onCreated, onClose }) => {
           }}
         >
           <button type='button' className='btn ghost' onClick={onClose}>
-            cancel
+            {tr('console.common.cancel', 'cancel')}
           </button>
           <button type='submit' className='btn primary' disabled={saving}>
-            {saving ? 'creating…' : 'create token'}
+            {saving
+              ? tr('console.token.creating', 'creating…')
+              : tr('console.token.create_token', 'create token')}
           </button>
         </div>
       </form>
@@ -357,7 +392,9 @@ const LANG_TABS = [
 const HFToken = () => {
   const navigate = useNavigate();
   const tenantSlug = useTenantSlug();
-  const { t } = useTranslation();
+  // Aliased to `tr` because this page uses `t` as the token loop variable in
+  // several .map/.filter callbacks — `t` would otherwise shadow the translator.
+  const { t: tr } = useTranslation();
 
   const [tokens, setTokens] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -372,6 +409,10 @@ const HFToken = () => {
   // Tier 1.3: confirm dialog state for rotate / revoke. `intent` is the
   // verb so a single dialog handles both flows without duplicating layout.
   const [confirmIntent, setConfirmIntent] = useState(null); // 'rotate' | 'revoke' | null
+  // Phase 2b batch ops: `marked` is the id-based multi-select Set (kept separate
+  // from the master-detail index `sel` so the two never collide).
+  const [marked, setMarked] = useState(new Set());
+  const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
 
   const fetchTokens = useCallback(async () => {
     setLoading(true);
@@ -429,6 +470,39 @@ const HFToken = () => {
     });
   };
 
+  const toggleMark = (id) => {
+    setMarked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const performBatchDelete = async () => {
+    if (marked.size === 0) return;
+    setSaving(true);
+    try {
+      const ids = [...marked];
+      const res = await API.post(`/api/v2/${tenantSlug}/tokens/batch-delete`, {
+        ids,
+      });
+      if (res?.data?.success) {
+        showSuccess(
+          tr('console.token.toast_deleted', {
+            count: res.data.deleted ?? ids.length,
+          }),
+        );
+        setConfirmBatchDelete(false);
+        setMarked(new Set());
+        await fetchTokens();
+      }
+    } catch (_) {
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Tier 1.3: rotate / revoke route through ConfirmDialog. The handlers
   // below open the dialog; the actual mutation happens in performRotate /
   // performRevoke once the user types the token name and clicks Confirm.
@@ -454,7 +528,12 @@ const HFToken = () => {
         const newKey = res.data.data.key;
         setRotatedKeys((prev) => ({ ...prev, [token.id]: newKey }));
         setRevealed((prev) => new Set([...prev, token.id]));
-        showSuccess('Key rotated — copy the new key now.');
+        showSuccess(
+          tr(
+            'console.token.toast_rotated',
+            'Key rotated — copy the new key now.',
+          ),
+        );
         setConfirmIntent(null);
       }
     } catch (_) {
@@ -468,7 +547,7 @@ const HFToken = () => {
     try {
       const res = await API.delete(`/api/v2/${tenantSlug}/tokens/${token.id}`);
       if (res?.data?.success) {
-        showSuccess('Token revoked');
+        showSuccess(tr('console.token.toast_revoked', 'Token revoked'));
         setConfirmIntent(null);
         await fetchTokens();
       }
@@ -512,7 +591,7 @@ const HFToken = () => {
         body,
       );
       if (res?.data?.success) {
-        showSuccess('Saved');
+        showSuccess(tr('console.token.toast_saved', 'Saved'));
         await fetchTokens();
       }
     } catch (_) {
@@ -546,16 +625,28 @@ const HFToken = () => {
 
   const settingsRows = token
     ? [
-        ['model scope', fmtModels(token), 'models'],
         [
-          'monthly cap',
+          tr('console.token.model_scope', 'model scope'),
+          fmtModels(token),
+          'models',
+        ],
+        [
+          tr('console.token.monthly_cap', 'monthly cap'),
           token.unlimited_quota
             ? '∞'
             : `$${quotaToUSD(token.used_quota + token.remain_quota)}`,
           'cap',
         ],
-        ['expires', fmtExpiry(token.expired_time), 'expires'],
-        ['allowed ips', fmtIPs(token.allow_ips), 'ips'],
+        [
+          tr('console.token.expires', 'expires'),
+          fmtExpiry(token.expired_time),
+          'expires',
+        ],
+        [
+          tr('console.token.allowed_ips', 'allowed ips'),
+          fmtIPs(token.allow_ips),
+          'ips',
+        ],
       ]
     : [];
 
@@ -566,16 +657,22 @@ const HFToken = () => {
   return (
     <HFShell
       active='tokens'
-      crumbs={['my account', 'tokens']}
+      crumbs={[
+        tr('console.nav.section_my_account', 'my account'),
+        tr('console.token.crumb', 'tokens'),
+      ]}
       actions={
         <>
           {loading ? (
             <span className='muted mono' style={{ fontSize: 11 }}>
-              loading…
+              {tr('console.common.loading', 'loading…')}
             </span>
           ) : (
             <span className='muted mono' style={{ fontSize: 11 }}>
-              {activeCount} active · ${totalUsedUSD}
+              {tr('console.token.summary', {
+                active: activeCount,
+                used: totalUsedUSD,
+              })}
               {parseFloat(totalCapUSD) > 0 ? ` / $${totalCapUSD}` : ''}
             </span>
           )}
@@ -584,7 +681,7 @@ const HFToken = () => {
             className='btn primary'
             onClick={() => setCreating(true)}
           >
-            + new token
+            {tr('console.token.new_token', '+ new token')}
           </button>
         </>
       }
@@ -612,21 +709,89 @@ const HFToken = () => {
             }}
           >
             <div className='lbl' style={{ marginBottom: 4 }}>
-              your tokens
+              {tr('console.token.your_tokens', 'your tokens')}
             </div>
             <div className='display' style={{ fontSize: 26 }}>
               {loading
                 ? '…'
-                : `${tokens.length} token${tokens.length !== 1 ? 's' : ''}`}
+                : tr('console.token.count', {
+                    count: tokens.length,
+                  })}
             </div>
           </div>
+
+          {/* Batch action bar — appears once any token is selected. */}
+          {marked.size > 0 && (
+            <div
+              data-testid='token-batch-bar'
+              style={{
+                padding: '10px 22px',
+                borderBottom: '1px solid var(--hf-rule)',
+                background: 'var(--hf-accent)',
+                color: '#fff',
+                fontFamily: 'var(--hf-mono)',
+                fontSize: 11,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                flexWrap: 'wrap',
+              }}
+            >
+              <span>
+                <b>{marked.size}</b> {tr('console.token.selected', 'selected')}
+              </span>
+              <span style={{ flex: 1 }} />
+              {/* Batch copy is honestly deferred: keys are masked in the list, so
+                  revealing N plaintext keys at once needs a key-reveal endpoint
+                  (security review). Greyed with a reason, never silently absent. */}
+              <button
+                type='button'
+                className='btn'
+                data-testid='token-batch-copy-btn'
+                disabled
+                title={tr(
+                  'console.token.batch_copy_deferred',
+                  'batch copy needs a key-reveal endpoint — deferred (security review)',
+                )}
+                style={{
+                  background: 'rgba(255,255,255,0.15)',
+                  borderColor: 'rgba(255,255,255,0.3)',
+                  color: '#fff',
+                }}
+              >
+                {tr('console.common.copy', 'copy')}
+              </button>
+              <button
+                type='button'
+                className='btn'
+                data-testid='token-batch-delete-btn'
+                disabled={saving}
+                onClick={() => setConfirmBatchDelete(true)}
+                style={{
+                  background: 'rgba(255,255,255,0.15)',
+                  borderColor: 'rgba(255,255,255,0.3)',
+                  color: '#fff',
+                }}
+              >
+                {tr('console.common.delete', 'delete')}
+              </button>
+              <button
+                type='button'
+                className='btn ghost'
+                style={{ color: '#fff' }}
+                onClick={() => setMarked(new Set())}
+              >
+                {tr('console.token.clear', 'clear')}
+              </button>
+            </div>
+          )}
 
           {loading && (
             <div
               className='muted'
               style={{ padding: '20px 22px', fontSize: 12 }}
             >
-              Loading…
+              {tr('console.common.loading', 'Loading…')}
             </div>
           )}
 
@@ -635,7 +800,10 @@ const HFToken = () => {
               className='muted'
               style={{ padding: '20px 22px', fontSize: 12 }}
             >
-              No tokens yet. Create one to get started.
+              {tr(
+                'console.token.empty',
+                'No tokens yet. Create one to get started.',
+              )}
             </div>
           )}
 
@@ -660,14 +828,41 @@ const HFToken = () => {
                 <div
                   style={{
                     display: 'flex',
-                    alignItems: 'baseline',
+                    alignItems: 'center',
                     justifyContent: 'space-between',
+                    gap: 8,
                   }}
                 >
-                  <span className='strong' style={{ fontSize: 13 }}>
-                    {t.name}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      minWidth: 0,
+                    }}
+                  >
+                    <input
+                      type='checkbox'
+                      data-testid={`token-check-${t.id}`}
+                      checked={marked.has(t.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => toggleMark(t.id)}
+                    />
+                    <span
+                      className='strong'
+                      style={{
+                        fontSize: 13,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {t.name}
+                    </span>
+                  </div>
+                  <span className={statusClass(st)}>
+                    {tr(`console.token.status_${st}`, st)}
                   </span>
-                  <span className={statusClass(st)}>{st}</span>
                 </div>
                 <div
                   className='mono muted'
@@ -679,10 +874,16 @@ const HFToken = () => {
                   className='mono faint'
                   style={{ fontSize: 9, marginTop: 2 }}
                 >
-                  created {relTime(t.created_time)} · last used{' '}
-                  {relTime(t.accessed_time)}
+                  {tr('console.token.created', 'created')}{' '}
+                  {formatRelativeTime(t.created_time)} ·{' '}
+                  {tr('console.token.last_used', 'last used')}{' '}
+                  {formatRelativeTime(t.accessed_time)}
                   {t.creator_user_id > 0 && (
-                    <> · by user #{t.creator_user_id}</>
+                    <>
+                      {' '}
+                      · {tr('console.token.by_user', 'by user')} #
+                      {t.creator_user_id}
+                    </>
                   )}
                 </div>
                 <div className='muted' style={{ fontSize: 11, marginTop: 2 }}>
@@ -710,10 +911,7 @@ const HFToken = () => {
                         style={{
                           height: '100%',
                           width: `${Math.min(ratio * 100, 100)}%`,
-                          background:
-                            ratio > 0.9
-                              ? 'var(--hf-accent)'
-                              : 'var(--hf-ink-2)',
+                          background: quotaBarColor(1 - ratio),
                         }}
                       />
                     </div>
@@ -728,7 +926,10 @@ const HFToken = () => {
         <div style={{ overflow: 'auto', padding: 28 }}>
           {!token && !loading && (
             <div className='muted' style={{ fontSize: 13 }}>
-              Create a token to get started.
+              {tr(
+                'console.token.detail_empty',
+                'Create a token to get started.',
+              )}
             </div>
           )}
 
@@ -752,7 +953,10 @@ const HFToken = () => {
                       color: 'var(--hf-ok)',
                     }}
                   >
-                    Token created — copy your key now
+                    {tr(
+                      'console.token.created_banner',
+                      'Token created — copy your key now',
+                    )}
                   </div>
                   <div
                     style={{ display: 'flex', alignItems: 'center', gap: 10 }}
@@ -768,7 +972,7 @@ const HFToken = () => {
                       className='btn sm'
                       onClick={() => copy(newlyCreatedKey)}
                     >
-                      copy
+                      {tr('console.common.copy', 'copy')}
                     </button>
                     <button
                       type='button'
@@ -782,16 +986,19 @@ const HFToken = () => {
               )}
 
               <div className='lbl' style={{ marginBottom: 4 }}>
-                integration · {token.name}
+                {tr('console.token.integration', 'integration')} · {token.name}
               </div>
               <h1
                 className='display'
                 style={{ fontSize: 36, margin: 0, letterSpacing: '-0.025em' }}
               >
-                Drop into your stack
+                {tr('console.token.drop_in', 'Drop into your stack')}
               </h1>
               <div className='muted' style={{ marginTop: 6 }}>
-                OpenAI-compatible. Same SDK. Swap the base URL.
+                {tr(
+                  'console.token.openai_compatible',
+                  'OpenAI-compatible. Same SDK. Swap the base URL.',
+                )}
               </div>
 
               <div className='panel' style={{ marginTop: 22, padding: 16 }}>
@@ -803,7 +1010,9 @@ const HFToken = () => {
                     alignItems: 'center',
                   }}
                 >
-                  <span className='lbl'>base url</span>
+                  <span className='lbl'>
+                    {tr('console.token.base_url', 'base url')}
+                  </span>
                   <span className='mono strong' style={{ fontSize: 13 }}>
                     {BASE_URL}
                   </span>
@@ -812,7 +1021,7 @@ const HFToken = () => {
                     className='btn sm'
                     onClick={() => copy(BASE_URL)}
                   >
-                    copy
+                    {tr('console.common.copy', 'copy')}
                   </button>
                 </div>
                 <hr
@@ -830,7 +1039,9 @@ const HFToken = () => {
                     alignItems: 'center',
                   }}
                 >
-                  <span className='lbl'>api key</span>
+                  <span className='lbl'>
+                    {tr('console.token.api_key', 'api key')}
+                  </span>
                   <span
                     className='mono strong'
                     style={{ fontSize: 13, wordBreak: 'break-all' }}
@@ -844,14 +1055,16 @@ const HFToken = () => {
                         className='btn sm'
                         onClick={() => handleReveal(token)}
                       >
-                        {revealed.has(token.id) ? 'hide' : 'reveal'}
+                        {revealed.has(token.id)
+                          ? tr('console.token.hide', 'hide')
+                          : tr('console.token.reveal', 'reveal')}
                       </button>
                       <button
                         type='button'
                         className='btn sm'
                         onClick={() => copy(rotatedKey(token))}
                       >
-                        copy
+                        {tr('console.common.copy', 'copy')}
                       </button>
                     </>
                   ) : (
@@ -859,9 +1072,50 @@ const HFToken = () => {
                       className='faint'
                       style={{ fontSize: 10, gridColumn: '3 / span 2' }}
                     >
-                      full key shown once · on create / rotate
+                      {tr(
+                        'console.token.key_shown_once',
+                        'full key shown once · on create / rotate',
+                      )}
                     </span>
                   )}
+                </div>
+              </div>
+
+              {/* Client base URLs — copy the right baseURL per SDK. */}
+              <div className='panel' style={{ marginTop: 14, padding: 16 }}>
+                <div className='lbl' style={{ marginBottom: 10 }}>
+                  {tr('console.token.client_base_urls', 'client base urls')}
+                </div>
+                <div
+                  style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+                >
+                  {CLIENT_ENDPOINTS.map(([label, url]) => (
+                    <div
+                      key={label}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '170px 1fr auto',
+                        gap: 12,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <span className='lbl'>{label}</span>
+                      <span
+                        className='mono'
+                        style={{ fontSize: 12, wordBreak: 'break-all' }}
+                      >
+                        {url}
+                      </span>
+                      <button
+                        type='button'
+                        className='btn ghost sm'
+                        data-testid={`copy-endpoint-${label}`}
+                        onClick={() => copy(url)}
+                      >
+                        {tr('console.common.copy', 'copy')}
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -904,7 +1158,7 @@ const HFToken = () => {
                   style={{ alignSelf: 'center' }}
                   onClick={() => copy(snippetMap[lang])}
                 >
-                  copy ⧉
+                  {tr('console.common.copy', 'copy')} ⧉
                 </button>
               </div>
               <pre
@@ -926,7 +1180,7 @@ const HFToken = () => {
 
               {/* Settings */}
               <div className='lbl' style={{ marginTop: 24, marginBottom: 8 }}>
-                token settings
+                {tr('console.token.token_settings', 'token settings')}
               </div>
               <div className='panel'>
                 {settingsRows.map(([label, value, field], i, arr) => (
@@ -961,7 +1215,7 @@ const HFToken = () => {
                         disabled={saving}
                         onClick={() => setEditField(field)}
                       >
-                        edit
+                        {tr('console.common.edit', 'edit')}
                       </button>
                     )}
                   </div>
@@ -976,21 +1230,21 @@ const HFToken = () => {
                   disabled={saving}
                   onClick={handleRotate}
                 >
-                  rotate key
+                  {tr('console.token.rotate_key', 'rotate key')}
                 </button>
                 <button
                   type='button'
                   className='btn'
                   onClick={() => navigate('/console/v2/log')}
                 >
-                  view logs
+                  {tr('console.token.view_logs', 'view logs')}
                 </button>
                 <button
                   type='button'
                   className='btn'
                   onClick={() => navigate('/console/v2/playground')}
                 >
-                  test in playground
+                  {tr('console.token.test_playground', 'test in playground')}
                 </button>
                 <span style={{ flex: 1 }} />
                 <button
@@ -1003,7 +1257,7 @@ const HFToken = () => {
                   }}
                   onClick={handleRevoke}
                 >
-                  revoke
+                  {tr('console.token.revoke', 'revoke')}
                 </button>
               </div>
             </>
@@ -1021,8 +1275,8 @@ const HFToken = () => {
 
       <ConfirmDialog
         visible={confirmIntent === 'revoke'}
-        title={t('撤销令牌 "{{name}}"?', { name: token?.name || '' })}
-        consequenceList={[t('旧密钥将立即失效'), t('此操作无法撤销')]}
+        title={tr('撤销令牌 "{{name}}"?', { name: token?.name || '' })}
+        consequenceList={[tr('旧密钥将立即失效'), tr('此操作无法撤销')]}
         confirmText={token?.name || ''}
         onConfirm={performRevoke}
         onCancel={() => !saving && setConfirmIntent(null)}
@@ -1030,12 +1284,21 @@ const HFToken = () => {
 
       <ConfirmDialog
         visible={confirmIntent === 'rotate'}
-        title={t('轮换密钥 "{{name}}"?', { name: token?.name || '' })}
-        consequenceList={[t('旧密钥将立即失效')]}
+        title={tr('轮换密钥 "{{name}}"?', { name: token?.name || '' })}
+        consequenceList={[tr('旧密钥将立即失效')]}
         confirmText={token?.name || ''}
         confirmButtonType='warning'
         onConfirm={performRotate}
         onCancel={() => !saving && setConfirmIntent(null)}
+      />
+
+      <ConfirmDialog
+        visible={confirmBatchDelete}
+        title={tr('删除 {{n}} 个令牌?', { n: marked.size })}
+        consequenceList={[tr('选中令牌的密钥将立即失效'), tr('此操作无法撤销')]}
+        confirmText={`delete ${marked.size} tokens`}
+        onConfirm={performBatchDelete}
+        onCancel={() => !saving && setConfirmBatchDelete(false)}
       />
     </HFShell>
   );

@@ -54,6 +54,7 @@ const planTagClass = (plan) => {
 const PLANS = ['free', 'startup', 'team', 'enterprise'];
 
 const CreateModal = ({ onCreated, onClose }) => {
+  const { t: tr } = useTranslation();
   const [form, setForm] = useState({
     name: '',
     slug: '',
@@ -83,7 +84,7 @@ const CreateModal = ({ onCreated, onClose }) => {
       };
       const res = await API.post('/api/v2/admin/tenants', body);
       if (res?.data?.success) {
-        showSuccess('Tenant created');
+        showSuccess(tr('console.tenant.toast_created', 'Tenant created'));
         onCreated();
       }
     } catch (_) {
@@ -132,15 +133,17 @@ const CreateModal = ({ onCreated, onClose }) => {
         }}
       >
         <div className='strong' style={{ fontSize: 15 }}>
-          New tenant
+          {tr('console.tenant.modal_title', 'New tenant')}
         </div>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <span className='lbl'>name *</span>
+          <span className='lbl'>
+            {tr('console.tenant.field_name', 'name *')}
+          </span>
           <input
             ref={nameRef}
             style={inputStyle}
-            placeholder='e.g. Acme Corp'
+            placeholder={tr('console.tenant.ph_name', 'e.g. Acme Corp')}
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             required
@@ -148,10 +151,12 @@ const CreateModal = ({ onCreated, onClose }) => {
         </label>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <span className='lbl'>slug *</span>
+          <span className='lbl'>
+            {tr('console.tenant.field_slug', 'slug *')}
+          </span>
           <input
             style={inputStyle}
-            placeholder='e.g. acme'
+            placeholder={tr('console.tenant.ph_slug', 'e.g. acme')}
             value={form.slug}
             onChange={(e) =>
               setForm((f) => ({
@@ -164,7 +169,7 @@ const CreateModal = ({ onCreated, onClose }) => {
         </label>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <span className='lbl'>plan</span>
+          <span className='lbl'>{tr('console.tenant.field_plan', 'plan')}</span>
           <select
             style={{ ...inputStyle, cursor: 'pointer' }}
             value={form.plan}
@@ -179,7 +184,12 @@ const CreateModal = ({ onCreated, onClose }) => {
         </label>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <span className='lbl'>quota limit ($, 0 = unlimited)</span>
+          <span className='lbl'>
+            {tr(
+              'console.tenant.field_quota_limit',
+              'quota limit ($, 0 = unlimited)',
+            )}
+          </span>
           <input
             style={inputStyle}
             type='number'
@@ -202,10 +212,12 @@ const CreateModal = ({ onCreated, onClose }) => {
           }}
         >
           <button type='button' className='btn ghost' onClick={onClose}>
-            cancel
+            {tr('console.common.cancel', 'cancel')}
           </button>
           <button type='submit' className='btn primary' disabled={saving}>
-            {saving ? 'creating…' : 'create tenant'}
+            {saving
+              ? tr('console.tenant.creating', 'creating…')
+              : tr('console.tenant.create_tenant', 'create tenant')}
           </button>
         </div>
       </form>
@@ -216,6 +228,7 @@ const CreateModal = ({ onCreated, onClose }) => {
 // ─── Stats drawer ─────────────────────────────────────────────────────────────
 
 const StatsDrawer = ({ tenant, onClose }) => {
+  const { t: tr } = useTranslation();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -271,7 +284,7 @@ const StatsDrawer = ({ tenant, onClose }) => {
           }}
         >
           <div className='strong' style={{ fontSize: 15 }}>
-            {tenant.name} · stats
+            {tenant.name} · {tr('console.tenant.stats_title', 'stats')}
           </div>
           <button type='button' className='btn ghost sm' onClick={onClose}>
             ✕
@@ -280,13 +293,13 @@ const StatsDrawer = ({ tenant, onClose }) => {
 
         {loading && (
           <div className='muted' style={{ fontSize: 12 }}>
-            Loading…
+            {tr('console.common.loading', 'Loading…')}
           </div>
         )}
 
         {!loading && !stats && (
           <div className='muted' style={{ fontSize: 12 }}>
-            No stats available.
+            {tr('console.tenant.no_stats', 'No stats available.')}
           </div>
         )}
 
@@ -319,7 +332,9 @@ const StatsDrawer = ({ tenant, onClose }) => {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 const HFTenants = () => {
-  const { t } = useTranslation();
+  // Aliased to `tr`: `t` is used as the tenant loop variable in .map/.reduce
+  // callbacks below and would shadow the translator.
+  const { t: tr } = useTranslation();
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
@@ -370,9 +385,11 @@ const HFTenants = () => {
   const performAction = async () => {
     if (!actionConfirm) return;
     const { tenant, action } = actionConfirm;
-    const label = { enable: 'enable', disable: 'disable', suspend: 'suspend' }[
-      action
-    ];
+    const toastByAction = {
+      enable: tr('console.tenant.toast_enabled', 'Tenant enabled'),
+      disable: tr('console.tenant.toast_disabled', 'Tenant disabled'),
+      suspend: tr('console.tenant.toast_suspended', 'Tenant suspended'),
+    };
     setActioning(tenant.id);
     try {
       const res = await API.post(
@@ -380,7 +397,7 @@ const HFTenants = () => {
         {},
       );
       if (res?.data?.success) {
-        showSuccess(`Tenant ${label}d`);
+        showSuccess(toastByAction[action]);
         setActionConfirm(null);
         await fetchTenants(keyword);
       }
@@ -403,18 +420,26 @@ const HFTenants = () => {
   return (
     <HFShell
       active='users'
-      crumbs={['platform · admin', 'tenants']}
+      crumbs={[
+        tr('console.nav.section_platform_admin', 'platform · admin'),
+        tr('console.tenant.crumb', 'tenants'),
+      ]}
       actions={
         <>
           {loading ? (
             <span className='muted mono' style={{ fontSize: 11 }}>
-              loading…
+              {tr('console.common.loading', 'loading…')}
             </span>
           ) : (
             !forbidden && (
               <span className='muted mono' style={{ fontSize: 11 }}>
-                {tenants.length} tenant{tenants.length !== 1 ? 's' : ''} · $
-                {totalUsedUSD} used
+                {tr('console.tenant.count', '{{count}} tenants', {
+                  count: tenants.length,
+                })}{' '}
+                ·{' '}
+                {tr('console.tenant.used_amount', '${{amount}} used', {
+                  amount: totalUsedUSD,
+                })}
               </span>
             )
           )}
@@ -423,7 +448,7 @@ const HFTenants = () => {
             className='btn primary'
             onClick={() => setCreating(true)}
           >
-            + new tenant
+            {tr('console.tenant.new_tenant', '+ new tenant')}
           </button>
         </>
       }
@@ -431,23 +456,31 @@ const HFTenants = () => {
       <div className='hf-page-head'>
         <div>
           <div className='lbl' style={{ marginBottom: 6 }}>
-            tenants
+            {tr('console.tenant.crumb', 'tenants')}
           </div>
           <h1>
             {loading
               ? '…'
               : forbidden
-                ? 'Admin access required'
-                : `${tenants.length} tenant${tenants.length !== 1 ? 's' : ''}`}
+                ? tr('console.tenant.admin_required', 'Admin access required')
+                : tr('console.tenant.count', '{{count}} tenants', {
+                    count: tenants.length,
+                  })}
             {!loading && !forbidden && parseFloat(totalUsedUSD) > 0 && (
               <span className='muted' style={{ fontWeight: 400 }}>
                 {' '}
-                · ${totalUsedUSD} used
+                ·{' '}
+                {tr('console.tenant.used_amount', '${{amount}} used', {
+                  amount: totalUsedUSD,
+                })}
               </span>
             )}
           </h1>
           <div className='sub'>
-            isolation · per-tenant keys · per-tenant budgets
+            {tr(
+              'console.tenant.sub',
+              'isolation · per-tenant keys · per-tenant budgets',
+            )}
           </div>
         </div>
       </div>
@@ -456,11 +489,13 @@ const HFTenants = () => {
         <div style={{ padding: 24 }}>
           <div className='panel' style={{ padding: '20px 24px' }}>
             <div className='strong' style={{ marginBottom: 6 }}>
-              Admin access required
+              {tr('console.tenant.admin_required', 'Admin access required')}
             </div>
             <div className='muted' style={{ fontSize: 12 }}>
-              You do not have permission to manage tenants. Contact a platform
-              administrator.
+              {tr(
+                'console.tenant.admin_required_body',
+                'You do not have permission to manage tenants. Contact a platform administrator.',
+              )}
             </div>
           </div>
         </div>
@@ -481,7 +516,7 @@ const HFTenants = () => {
                 outline: 'none',
                 width: 260,
               }}
-              placeholder='search tenants…'
+              placeholder={tr('console.tenant.ph_search', 'search tenants…')}
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
             />
@@ -493,7 +528,7 @@ const HFTenants = () => {
                 className='muted'
                 style={{ padding: '20px 24px', fontSize: 12 }}
               >
-                Loading…
+                {tr('console.common.loading', 'Loading…')}
               </div>
             ) : tenants.length === 0 ? (
               <div
@@ -501,19 +536,25 @@ const HFTenants = () => {
                 style={{ padding: '20px 24px', fontSize: 12 }}
               >
                 {keyword
-                  ? 'No tenants match your search.'
-                  : 'No tenants yet. Create one to get started.'}
+                  ? tr(
+                      'console.tenant.empty_search',
+                      'No tenants match your search.',
+                    )
+                  : tr(
+                      'console.tenant.empty',
+                      'No tenants yet. Create one to get started.',
+                    )}
               </div>
             ) : (
               <table className='t'>
                 <thead>
                   <tr>
-                    <th>tenant</th>
-                    <th>plan</th>
-                    <th>status</th>
-                    <th>users</th>
-                    <th>used</th>
-                    <th>quota cap</th>
+                    <th>{tr('console.tenant.th_tenant', 'tenant')}</th>
+                    <th>{tr('console.tenant.th_plan', 'plan')}</th>
+                    <th>{tr('console.tenant.th_status', 'status')}</th>
+                    <th>{tr('console.tenant.th_users', 'users')}</th>
+                    <th>{tr('console.tenant.th_used', 'used')}</th>
+                    <th>{tr('console.tenant.th_quota_cap', 'quota cap')}</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -576,7 +617,10 @@ const HFTenants = () => {
                             data-testid={`tenant-status-${t.id}`}
                             className={tenantStatusClass(t.status)}
                           >
-                            {tenantStatusLabel(t.status)}
+                            {tr(
+                              `console.tenant.status_${tenantStatusLabel(t.status)}`,
+                              tenantStatusLabel(t.status),
+                            )}
                           </span>
                         </td>
 
@@ -650,7 +694,7 @@ const HFTenants = () => {
                               disabled={isActioning}
                               onClick={() => setStatsTarget(t)}
                             >
-                              stats
+                              {tr('console.tenant.btn_stats', 'stats')}
                             </button>
                             <button
                               type='button'
@@ -658,7 +702,7 @@ const HFTenants = () => {
                               disabled={isActioning}
                               onClick={() => setPoolTarget(t)}
                             >
-                              pool
+                              {tr('console.tenant.btn_pool', 'pool')}
                             </button>
                             {t.status !== 1 && (
                               <button
@@ -668,7 +712,9 @@ const HFTenants = () => {
                                 disabled={isActioning}
                                 onClick={() => handleAction(t, 'enable')}
                               >
-                                {isActioning ? '…' : 'enable'}
+                                {isActioning
+                                  ? '…'
+                                  : tr('console.tenant.btn_enable', 'enable')}
                               </button>
                             )}
                             {t.status === 1 && (
@@ -679,7 +725,9 @@ const HFTenants = () => {
                                 disabled={isActioning}
                                 onClick={() => handleAction(t, 'disable')}
                               >
-                                {isActioning ? '…' : 'disable'}
+                                {isActioning
+                                  ? '…'
+                                  : tr('console.tenant.btn_disable', 'disable')}
                               </button>
                             )}
                             {t.status !== 3 && (
@@ -691,7 +739,9 @@ const HFTenants = () => {
                                 style={{ color: 'var(--hf-warn)' }}
                                 onClick={() => handleAction(t, 'suspend')}
                               >
-                                {isActioning ? '…' : 'suspend'}
+                                {isActioning
+                                  ? '…'
+                                  : tr('console.tenant.btn_suspend', 'suspend')}
                               </button>
                             )}
                           </div>
@@ -730,11 +780,20 @@ const HFTenants = () => {
 
       <ConfirmDialog
         visible={!!actionConfirm}
-        title={t('对租户 "{{name}}" 执行 {{action}} 操作?', {
-          name: actionConfirm?.tenant?.name || '',
-          action: actionConfirm?.action || '',
-        })}
-        consequenceList={[t('该操作会影响该租户下所有 token 与 channel')]}
+        title={tr(
+          'console.tenant.confirm_action_title',
+          'Perform {{action}} on tenant "{{name}}"?',
+          {
+            name: actionConfirm?.tenant?.name || '',
+            action: actionConfirm?.action || '',
+          },
+        )}
+        consequenceList={[
+          tr(
+            'console.tenant.confirm_action_consequence',
+            'This affects every token and channel under this tenant',
+          ),
+        ]}
         confirmText={actionConfirm?.tenant?.name || ''}
         confirmButtonType={
           actionConfirm?.action === 'enable' ? 'warning' : 'danger'

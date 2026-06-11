@@ -226,8 +226,13 @@ func run(ctx context.Context, startTime time.Time) error {
 		})
 	}
 
+	// Background task: poll platform billing-config endpoint every 30s so the
+	// unified-billing toggle can be flipped from the platform console at runtime
+	// without a pod restart.  No-op when IDENTITY_SERVICE_URL is unset.
+	common.StartBillingConfigPoller(ctx)
+
 	// Background task: billing outbox processor (5s ticker)
-	if common.BillingUnifiedEnabled {
+	if common.BillingUnifiedEnabled() {
 		g.Go(func() error {
 			ticker := time.NewTicker(5 * time.Second)
 			defer ticker.Stop()
@@ -261,6 +266,9 @@ func run(ctx context.Context, startTime time.Time) error {
 		// Phase H1.4: automatic token rotation. Leader-gated internally so only
 		// one replica rotates each due token; started on master-capable nodes.
 		lifecycle.StartSecretRotationWithContext(ctx)
+		// PIPL §47 erasure cascade executor. Leader-gated internally; the
+		// cascade is idempotent + crash-resumable via the per-request step cursor.
+		lifecycle.StartPrivacyErasureWithContext(ctx)
 	}
 
 	// pprof server
@@ -537,7 +545,7 @@ func InitResources(ctx context.Context) error {
 	}
 
 	// Initialize billing outbox (pre-auth settlement retry queue)
-	if common.BillingUnifiedEnabled {
+	if common.BillingUnifiedEnabled() {
 		if err := app.InitBillingOutbox(repo.DB); err != nil {
 			common.SysError(fmt.Sprintf("Failed to initialize billing outbox: %v", err))
 		} else {

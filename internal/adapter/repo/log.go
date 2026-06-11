@@ -562,6 +562,12 @@ func GetUserLogsWithParams(params *LogQueryParams) (logs []*Log, total int64, er
 		tx = tx.Where("token_name = ?", params.TokenName)
 	}
 
+	// Cursor filter for live-tail: only rows strictly newer than the given id.
+	// id is indexed and monotonic, so this is a cheap "give me what's new" probe.
+	if params.AfterID > 0 {
+		tx = tx.Where("id > ?", params.AfterID)
+	}
+
 	// Count total matching records
 	err = tx.Count(&total).Error
 	if err != nil {

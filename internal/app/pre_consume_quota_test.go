@@ -1,6 +1,9 @@
 package app
 
 import (
+	"encoding/json"
+	"net/http"
+	"strings"
 	"testing"
 
 	relaycommon "github.com/LurusTech/lurus-hub/internal/adapter/provider/common"
@@ -170,5 +173,67 @@ func TestPreConsumeQuota_NonExistentUser_ReturnsError(t *testing.T) {
 	apiErr := PreConsumeQuota(c, 100, relayInfo)
 	if apiErr == nil {
 		t.Fatal("expected error for non-existent user")
+	}
+}
+
+// TestPreConsumeQuota_InsufficientLocalQuota_402_CarriesTopupURL verifies that the
+// HTTP-402 error produced when a user has insufficient local quota carries a
+// topup_url in its Metadata and in the OpenAI envelope, so clients can navigate
+// the user to the wallet top-up page.
+func TestPreConsumeQuota_InsufficientLocalQuota_402_CarriesTopupURL(t *testing.T) {
+	setupServiceTestDB(t)
+
+	// A user with zero quota cannot afford any request.
+	db := setupServiceTestDB(t)
+	userId := seedTestUser(t, db, 0)
+
+	c := createTestGinContext()
+	relayInfo := &relaycommon.RelayInfo{
+		UserId:         userId,
+		TokenUnlimited: true,
+	}
+
+	apiErr := PreConsumeQuota(c, 100, relayInfo)
+	if apiErr == nil {
+		t.Fatal("expected 402 error for zero-quota user")
+	}
+
+	if apiErr.StatusCode != http.StatusPaymentRequired {
+		t.Errorf("expected status 402, got %d", apiErr.StatusCode)
+	}
+
+	// Metadata must carry topup_url pointing at IdentityPublicURL + /wallet/topup.
+	if len(apiErr.Metadata) == 0 {
+		t.Fatal("expected non-empty Metadata on 402 insufficient-quota error")
+	}
+	var meta map[string]string
+	if err := json.Unmarshal(apiErr.Metadata, &meta); err != nil {
+		t.Fatalf("Metadata is not valid JSON: %v", err)
+	}
+	topupURL, ok := meta["topup_url"]
+	if !ok {
+		t.Fatalf("Metadata missing 'topup_url' key; got: %s", string(apiErr.Metadata))
+	}
+	if !strings.HasSuffix(topupURL, "/wallet/topup") {
+		t.Errorf("topup_url %q should end with /wallet/topup", topupURL)
+	}
+	if !strings.HasPrefix(topupURL, common.IdentityPublicURL) {
+		t.Errorf("topup_url %q should start with IdentityPublicURL %q", topupURL, common.IdentityPublicURL)
+	}
+
+	// The rendered client envelope (what the end user actually receives via the
+	// relay) MUST also carry the topup_url — ToOpenAIError forwards Metadata.
+	// Asserting only apiErr.Metadata above would miss a dropped-Metadata bug in
+	// the envelope conversion.
+	env := apiErr.ToOpenAIError()
+	if len(env.Metadata) == 0 {
+		t.Fatal("expected non-empty Metadata on the rendered OpenAI envelope (user-facing)")
+	}
+	var envMeta map[string]string
+	if err := json.Unmarshal(env.Metadata, &envMeta); err != nil {
+		t.Fatalf("envelope Metadata is not valid JSON: %v", err)
+	}
+	if _, ok := envMeta["topup_url"]; !ok {
+		t.Fatalf("rendered envelope Metadata missing 'topup_url'; got: %s", string(env.Metadata))
 	}
 }

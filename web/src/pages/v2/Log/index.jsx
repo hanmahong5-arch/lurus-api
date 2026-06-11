@@ -16,21 +16,35 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import HFShell from '../../../components/hifi/HFShell';
-import WIPBanner from '../../../components/hifi/WIPBanner';
+import NotAvailable from '../../../components/hifi/NotAvailable';
 import { API, showError } from '../../../helpers';
 
-/* Wave 2: Cluster tab wired; Live tail SSE deferred to v3 */
+/* Wave 2: Cluster tab wired. Round 2: Live tail wired via cursor-poll. */
 
 /*
- * v2 Log page — wired to GET /api/v2/:tenant_slug/logs.
- * TTFT and upstream channel are not returned by the API; displayed as —.
- * Cluster/Live tail tabs render WIPBanner — backend aggregation/streaming
- * endpoints don't exist yet (see hardening-swarm-2026-05-18-acceptance.md).
+ * v2 Log page — wired to GET /api/v2/:tenant_slug/logs (+ /logs/stat header).
+ * TTFT is not stored in the log schema → rendered as an honest n/a, never a
+ * silent —. Upstream channel is shown when the row carries a channel id/name,
+ * otherwise n/a. The outcome tag is derived from the log `type` (error rows are
+ * not painted green). Live tail polls /logs?after_id=<cursor> every 3s: the
+ * service runs fixed replicas over shared Postgres, so a stateless cursor-poll
+ * lands on any pod where an SSE stream would pin to one and break on churn.
  */
 
 const QUOTA_PER_USD = 500_000;
+const LOG_TYPE_ERROR = 5;
+
+// Outcome derived from the log type — error logs (type 5) must not render as a
+// green "200". We do not store the upstream HTTP status, so this reports the
+// recorded outcome class, not a fabricated status code. `label` doubles as the
+// i18n key suffix (console.log.outcome_<label>).
+const outcomeTag = (r) =>
+  Number(r?.type) === LOG_TYPE_ERROR
+    ? { cls: 'tag error', label: 'error' }
+    : { cls: 'tag ok', label: 'ok' };
 
 const useTenantSlug = () => {
   const [slug, setSlug] = useState('default');
@@ -68,11 +82,26 @@ const fmtCost = (quota) => {
 
 const PAGE_SIZE = 50;
 
+// Live-tail tuning. 3s poll matches the plan; the buffer is bounded so a
+// long-running tail can't grow memory without limit (drop oldest at the cap).
+const LIVE_POLL_MS = 3000;
+const LIVE_CAP = 200;
+
 const HFLog = () => {
   const tenantSlug = useTenantSlug();
+  // Aliased to `tr` to match the v2 console convention (avoids shadowing by
+  // local loop variables named `t`).
+  const { t: tr } = useTranslation();
 
   const [tab, setTab] = useState('trace');
   const [selRow, setSelRow] = useState(0);
+
+  // Live tail (cursor-poll) state. `liveCursor` is a ref (not state) so the
+  // interval callback always reads the latest id without re-subscribing.
+  const [liveRows, setLiveRows] = useState([]);
+  const [liveOn, setLiveOn] = useState(true);
+  const liveCursorRef = useRef(0);
+  const liveSeededRef = useRef(false);
 
   // Cluster tab state
   const [clusterBucket, setClusterBucket] = useState('hour');
@@ -84,6 +113,11 @@ const HFLog = () => {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+
+  // Aggregate stat header (RPM/TPM/total requests/total quota) — wired to
+  // GET /logs/stat over the same filters as the trace list.
+  const [stat, setStat] = useState(null);
+  const [statLoading, setStatLoading] = useState(false);
 
   // Filter state
   const [filterModel, setFilterModel] = useState('');
@@ -121,7 +155,10 @@ const HFLog = () => {
           setTotal(d.total ?? 0);
           setSelRow(0);
         } else {
-          showError(res?.data?.message || 'Failed to load logs');
+          showError(
+            res?.data?.message ||
+              tr('console.log.load_failed', 'Failed to load logs'),
+          );
         }
       } catch (_) {
         // error toast shown by API interceptor
@@ -129,13 +166,46 @@ const HFLog = () => {
         setLoading(false);
       }
     },
+    [tenantSlug, tr],
+  );
+
+  const fetchStat = useCallback(
+    async (model, token, start, end) => {
+      setStatLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (model) params.set('model_name', model);
+        if (token) params.set('token_name', token);
+        if (start)
+          params.set(
+            'start_time',
+            String(Math.floor(new Date(start).getTime() / 1000)),
+          );
+        if (end)
+          params.set(
+            'end_time',
+            String(Math.floor(new Date(end).getTime() / 1000)),
+          );
+        const qs = params.toString();
+        const res = await API.get(
+          `/api/v2/${tenantSlug}/logs/stat` + (qs ? `?${qs}` : ''),
+        );
+        if (res?.data?.success) setStat(res.data.data);
+      } catch (_) {
+        // non-fatal: the header simply shows — until the next successful fetch
+      } finally {
+        setStatLoading(false);
+      }
+    },
     [tenantSlug],
   );
 
   // Fetch on mount and whenever tenantSlug changes
   useEffect(() => {
-    if (tenantSlug)
+    if (tenantSlug) {
       fetchLogs(page, filterModel, filterToken, filterStart, filterEnd);
+      fetchStat(filterModel, filterToken, filterStart, filterEnd);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantSlug]);
 
@@ -152,7 +222,13 @@ const HFLog = () => {
           items.sort((a, b) => b.count - a.count);
           setClusterItems(items);
         } else {
-          showError(res?.data?.message || 'Failed to load cluster data');
+          showError(
+            res?.data?.message ||
+              tr(
+                'console.log.cluster_load_failed',
+                'Failed to load cluster data',
+              ),
+          );
         }
       } catch (_) {
         // error toast shown by API interceptor
@@ -160,7 +236,7 @@ const HFLog = () => {
         setClusterLoading(false);
       }
     },
-    [tenantSlug],
+    [tenantSlug, tr],
   );
 
   // Fetch cluster when switching to cluster tab or bucket changes
@@ -171,9 +247,68 @@ const HFLog = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, clusterBucket, tenantSlug]);
 
+  // ── Live tail (cursor-poll) ───────────────────────────────────────────────
+  // disableDuplicate bypasses api.js's in-flight-GET dedup so a steady poll
+  // loop is never coalesced into a single shared promise.
+  const fetchLivePage = useCallback(
+    async (afterId) => {
+      const params = new URLSearchParams({ page_size: '50' });
+      if (afterId > 0) params.set('after_id', String(afterId));
+      const res = await API.get(
+        `/api/v2/${tenantSlug}/logs?${params.toString()}`,
+        { disableDuplicate: true },
+      );
+      if (!res?.data?.success) return [];
+      return res.data.data.logs ?? [];
+    },
+    [tenantSlug],
+  );
+
+  // Seed: one page of the latest logs establishes the cursor so the first poll
+  // doesn't re-deliver rows already shown.
+  const seedLive = useCallback(async () => {
+    const rows = await fetchLivePage(0);
+    const sorted = [...rows].sort((a, b) => (b.id || 0) - (a.id || 0));
+    liveCursorRef.current = sorted.length ? sorted[0].id || 0 : 0;
+    setLiveRows(sorted.slice(0, LIVE_CAP));
+  }, [fetchLivePage]);
+
+  const pollLive = useCallback(async () => {
+    const rows = await fetchLivePage(liveCursorRef.current);
+    if (rows.length === 0) return;
+    const sorted = [...rows].sort((a, b) => (b.id || 0) - (a.id || 0));
+    liveCursorRef.current = Math.max(liveCursorRef.current, sorted[0].id || 0);
+    // Prepend newest, then clamp to the buffer cap (drop oldest).
+    setLiveRows((prev) => [...sorted, ...prev].slice(0, LIVE_CAP));
+  }, [fetchLivePage]);
+
+  useEffect(() => {
+    if (tab !== 'live' || !tenantSlug || !liveOn) return undefined;
+    let intervalId = null;
+    let cancelled = false;
+    (async () => {
+      if (!liveSeededRef.current) {
+        await seedLive();
+        liveSeededRef.current = true;
+      }
+      if (cancelled) return;
+      intervalId = setInterval(pollLive, LIVE_POLL_MS);
+    })();
+    return () => {
+      cancelled = true;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [tab, tenantSlug, liveOn, seedLive, pollLive]);
+
+  // Re-seed fresh on the next entry once the user leaves the live tab.
+  useEffect(() => {
+    if (tab !== 'live') liveSeededRef.current = false;
+  }, [tab]);
+
   const applyFilters = () => {
     setPage(1);
     fetchLogs(1, filterModel, filterToken, filterStart, filterEnd);
+    fetchStat(filterModel, filterToken, filterStart, filterEnd);
   };
 
   const goPage = (next) => {
@@ -198,11 +333,18 @@ const HFLog = () => {
   return (
     <HFShell
       active='logs'
-      crumbs={['my account', 'usage & logs']}
+      crumbs={[
+        tr('console.nav.section_my_account', 'my account'),
+        tr('console.log.crumb', 'usage & logs'),
+      ]}
       actions={
         <>
           <span className='muted mono' style={{ fontSize: 11 }}>
-            {loading ? 'loading…' : `${total} requests`}
+            {loading
+              ? tr('console.common.loading', 'loading…')
+              : tr('console.log.requests_count', '{{count}} requests', {
+                  count: total,
+                })}
           </span>
         </>
       }
@@ -221,14 +363,14 @@ const HFLog = () => {
       >
         <input
           style={{ ...inputStyle, width: 160 }}
-          placeholder='model name…'
+          placeholder={tr('console.log.ph_model', 'model name…')}
           value={filterModel}
           onChange={(e) => setFilterModel(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
         />
         <input
           style={{ ...inputStyle, width: 140 }}
-          placeholder='token name…'
+          placeholder={tr('console.log.ph_token', 'token name…')}
           value={filterToken}
           onChange={(e) => setFilterToken(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
@@ -236,7 +378,7 @@ const HFLog = () => {
         <input
           style={{ ...inputStyle, width: 160 }}
           type='datetime-local'
-          title='start time'
+          title={tr('console.log.start_time', 'start time')}
           value={filterStart}
           onChange={(e) => setFilterStart(e.target.value)}
         />
@@ -246,12 +388,12 @@ const HFLog = () => {
         <input
           style={{ ...inputStyle, width: 160 }}
           type='datetime-local'
-          title='end time'
+          title={tr('console.log.end_time', 'end time')}
           value={filterEnd}
           onChange={(e) => setFilterEnd(e.target.value)}
         />
         <button type='button' className='btn primary' onClick={applyFilters}>
-          search
+          {tr('console.common.search', 'search')}
         </button>
         <button
           type='button'
@@ -263,9 +405,10 @@ const HFLog = () => {
             setFilterEnd('');
             setPage(1);
             fetchLogs(1, '', '', '', '');
+            fetchStat('', '', '', '');
           }}
         >
-          clear
+          {tr('console.log.clear', 'clear')}
         </button>
         {tab === 'trace' && (
           <button
@@ -291,9 +434,61 @@ const HFLog = () => {
                 `/api/v2/${tenantSlug}/logs/export` + (qs ? `?${qs}` : '');
             }}
           >
-            📥 导出 CSV
+            📥 {tr('console.log.export_csv', 'export CSV')}
           </button>
         )}
+      </div>
+
+      {/* Aggregate stat header — GET /logs/stat over the active filters.
+          requests/quota reflect the full filter window; rpm/tpm are rolling
+          last-60s rates. Honest — until the first successful fetch. */}
+      <div
+        data-testid='log-stat-header'
+        style={{
+          display: 'flex',
+          gap: 30,
+          padding: '10px 28px',
+          borderBottom: '1px solid var(--hf-rule)',
+          background: 'var(--hf-paper)',
+          flexWrap: 'wrap',
+        }}
+      >
+        {[
+          [
+            tr('console.log.stat_requests', 'requests'),
+            stat ? Number(stat.total_requests ?? 0).toLocaleString() : '—',
+            tr('console.log.in_window', 'in window'),
+          ],
+          [
+            tr('console.log.stat_quota', 'quota'),
+            stat
+              ? `$${(Number(stat.total_quota ?? 0) / QUOTA_PER_USD).toFixed(4)}`
+              : '—',
+            tr('console.log.in_window', 'in window'),
+          ],
+          [
+            tr('console.log.stat_rpm', 'rpm'),
+            stat ? Number(stat.rpm ?? 0).toLocaleString() : '—',
+            tr('console.log.last_60s', 'last 60s'),
+          ],
+          [
+            tr('console.log.stat_tpm', 'tpm'),
+            stat ? Number(stat.tpm ?? 0).toLocaleString() : '—',
+            tr('console.log.last_60s', 'last 60s'),
+          ],
+        ].map(([l, v, sub]) => (
+          <div key={l}>
+            <div className='lbl'>
+              {l}
+              <span className='faint' style={{ marginLeft: 5 }}>
+                · {sub}
+              </span>
+            </div>
+            <div className='display' style={{ fontSize: 20, marginTop: 2 }}>
+              {statLoading ? '…' : v}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Tabs */}
@@ -306,9 +501,9 @@ const HFLog = () => {
         }}
       >
         {[
-          ['trace', 'Requests', total || ''],
-          ['cluster', 'Error clusters', '—'],
-          ['live', 'Live tail', '—'],
+          ['trace', tr('console.log.tab_requests', 'Requests'), total || ''],
+          ['cluster', tr('console.log.tab_clusters', 'Error clusters'), '—'],
+          ['live', tr('console.log.tab_live', 'Live tail'), '—'],
         ].map(([k, l, c]) => (
           <button
             key={k}
@@ -367,7 +562,7 @@ const HFLog = () => {
                   className='muted'
                   style={{ padding: '20px 22px', fontSize: 12 }}
                 >
-                  Loading…
+                  {tr('console.common.loading', 'Loading…')}
                 </div>
               )}
 
@@ -376,7 +571,7 @@ const HFLog = () => {
                   className='muted'
                   style={{ padding: '20px 22px', fontSize: 12 }}
                 >
-                  No logs found.
+                  {tr('console.log.empty', 'No logs found.')}
                 </div>
               )}
 
@@ -384,15 +579,15 @@ const HFLog = () => {
                 <table className='t'>
                   <thead>
                     <tr>
-                      <th>timestamp</th>
-                      <th>dur</th>
-                      <th>ttft</th>
-                      <th>model</th>
-                      <th>upstream</th>
-                      <th>token</th>
-                      <th>tok</th>
+                      <th>{tr('console.log.th_timestamp', 'timestamp')}</th>
+                      <th>{tr('console.log.th_dur', 'dur')}</th>
+                      <th>{tr('console.log.th_ttft', 'ttft')}</th>
+                      <th>{tr('console.log.th_model', 'model')}</th>
+                      <th>{tr('console.log.th_upstream', 'upstream')}</th>
+                      <th>{tr('console.log.th_token', 'token')}</th>
+                      <th>{tr('console.log.th_tok', 'tok')}</th>
                       <th>$</th>
-                      <th>code</th>
+                      <th>{tr('console.log.th_code', 'code')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -417,16 +612,43 @@ const HFLog = () => {
                             <span className='faint'>ms</span>
                           )}
                         </td>
-                        <td className='mono'>—</td>
+                        <td className='mono'>
+                          <NotAvailable
+                            reason={tr(
+                              'console.log.ttft_na_reason',
+                              'TTFT not stored: the log schema has no time-to-first-token column',
+                            )}
+                          />
+                        </td>
                         <td className='strong'>{r.model_name || '—'}</td>
-                        <td className='mono muted'>—</td>
+                        <td className='mono muted'>
+                          {r.channel_name ? (
+                            r.channel_name
+                          ) : r.channel ? (
+                            `#${r.channel}`
+                          ) : (
+                            <NotAvailable
+                              reason={tr(
+                                'console.log.upstream_na_reason',
+                                'upstream channel id not recorded on this log row',
+                              )}
+                            />
+                          )}
+                        </td>
                         <td className='mono muted'>{r.token_name || '—'}</td>
                         <td className='mono muted'>
                           {fmtTok(r.prompt_tokens, r.completion_tokens)}
                         </td>
                         <td className='mono'>{fmtCost(r.quota)}</td>
                         <td>
-                          <span className='tag ok'>200</span>
+                          {(() => {
+                            const o = outcomeTag(r);
+                            return (
+                              <span className={o.cls}>
+                                {tr(`console.log.outcome_${o.label}`, o.label)}
+                              </span>
+                            );
+                          })()}
                         </td>
                       </tr>
                     ))}
@@ -446,7 +668,8 @@ const HFLog = () => {
                     }}
                   >
                     <div className='lbl' style={{ marginBottom: 4 }}>
-                      request · {fmtTime(selectedLog.created_at)}
+                      {tr('console.log.detail_request', 'request')} ·{' '}
+                      {fmtTime(selectedLog.created_at)}
                     </div>
                     <div className='display' style={{ fontSize: 19 }}>
                       {selectedLog.model_name || '—'}
@@ -460,7 +683,14 @@ const HFLog = () => {
                         flexWrap: 'wrap',
                       }}
                     >
-                      <span className='tag ok'>200</span>
+                      {(() => {
+                        const o = outcomeTag(selectedLog);
+                        return (
+                          <span className={o.cls}>
+                            {tr(`console.log.outcome_${o.label}`, o.label)}
+                          </span>
+                        );
+                      })()}
                       {selectedLog.model_name && (
                         <span className='pill'>{selectedLog.model_name}</span>
                       )}
@@ -470,14 +700,16 @@ const HFLog = () => {
                         </span>
                       )}
                       {selectedLog.is_stream && (
-                        <span className='pill'>stream</span>
+                        <span className='pill'>
+                          {tr('console.log.stream', 'stream')}
+                        </span>
                       )}
                     </div>
                   </div>
 
                   <div style={{ padding: 20 }}>
                     <div className='lbl' style={{ marginBottom: 8 }}>
-                      details
+                      {tr('console.log.details', 'details')}
                     </div>
                     <div
                       className='panel-paper'
@@ -489,38 +721,64 @@ const HFLog = () => {
                       }}
                     >
                       <div>
-                        <span className='muted'>model:</span>{' '}
+                        <span className='muted'>
+                          {tr('console.log.detail_model', 'model')}:
+                        </span>{' '}
                         {selectedLog.model_name || '—'}
                       </div>
                       <div>
-                        <span className='muted'>token name:</span>{' '}
+                        <span className='muted'>
+                          {tr('console.log.detail_token_name', 'token name')}:
+                        </span>{' '}
                         {selectedLog.token_name || '—'}
                       </div>
                       <div>
-                        <span className='muted'>prompt tokens:</span>{' '}
+                        <span className='muted'>
+                          {tr(
+                            'console.log.detail_prompt_tokens',
+                            'prompt tokens',
+                          )}
+                          :
+                        </span>{' '}
                         {selectedLog.prompt_tokens ?? '—'}
                       </div>
                       <div>
-                        <span className='muted'>completion tokens:</span>{' '}
+                        <span className='muted'>
+                          {tr(
+                            'console.log.detail_completion_tokens',
+                            'completion tokens',
+                          )}
+                          :
+                        </span>{' '}
                         {selectedLog.completion_tokens ?? '—'}
                       </div>
                       <div>
-                        <span className='muted'>cost:</span>{' '}
+                        <span className='muted'>
+                          {tr('console.log.detail_cost', 'cost')}:
+                        </span>{' '}
                         {fmtCost(selectedLog.quota)}
                       </div>
                       <div>
-                        <span className='muted'>duration:</span>{' '}
+                        <span className='muted'>
+                          {tr('console.log.detail_duration', 'duration')}:
+                        </span>{' '}
                         {selectedLog.total_latency_ms != null
                           ? `${selectedLog.total_latency_ms}ms`
                           : '—'}
                       </div>
                       <div>
-                        <span className='muted'>streaming:</span>{' '}
-                        {selectedLog.is_stream ? 'yes' : 'no'}
+                        <span className='muted'>
+                          {tr('console.log.detail_streaming', 'streaming')}:
+                        </span>{' '}
+                        {selectedLog.is_stream
+                          ? tr('console.log.yes', 'yes')
+                          : tr('console.log.no', 'no')}
                       </div>
                       {selectedLog.content && (
                         <div>
-                          <span className='muted'>note:</span>{' '}
+                          <span className='muted'>
+                            {tr('console.log.detail_note', 'note')}:
+                          </span>{' '}
                           {selectedLog.content}
                         </div>
                       )}
@@ -533,7 +791,10 @@ const HFLog = () => {
                     className='muted'
                     style={{ padding: '20px 22px', fontSize: 12 }}
                   >
-                    Select a row to view details.
+                    {tr(
+                      'console.log.select_row',
+                      'Select a row to view details.',
+                    )}
                   </div>
                 )
               )}
@@ -558,10 +819,13 @@ const HFLog = () => {
               disabled={page <= 1 || loading}
               onClick={() => goPage(page - 1)}
             >
-              ← prev
+              {tr('console.log.prev', '← prev')}
             </button>
             <span className='mono muted'>
-              page {page} of {totalPages}
+              {tr('console.log.page_of', 'page {{page}} of {{total}}', {
+                page,
+                total: totalPages,
+              })}
             </span>
             <button
               type='button'
@@ -569,10 +833,14 @@ const HFLog = () => {
               disabled={page >= totalPages || loading}
               onClick={() => goPage(page + 1)}
             >
-              next →
+              {tr('console.log.next', 'next →')}
             </button>
             <span className='muted' style={{ marginLeft: 'auto' }}>
-              {total} total · {PAGE_SIZE} per page
+              {tr(
+                'console.log.total_per_page',
+                '{{total}} total · {{size}} per page',
+                { total, size: PAGE_SIZE },
+              )}
             </span>
           </div>
         </div>
@@ -595,7 +863,7 @@ const HFLog = () => {
               className='muted'
               style={{ fontSize: 11, fontFamily: 'var(--hf-mono)' }}
             >
-              bucket:
+              {tr('console.log.bucket_label', 'bucket:')}
             </span>
             {['hour', 'day'].map((b) => (
               <button
@@ -605,7 +873,7 @@ const HFLog = () => {
                 style={{ fontSize: 11 }}
                 onClick={() => setClusterBucket(b)}
               >
-                {b}
+                {tr(`console.log.bucket_${b}`, b)}
               </button>
             ))}
             {clusterLoading && (
@@ -613,7 +881,7 @@ const HFLog = () => {
                 className='muted'
                 style={{ fontSize: 11, fontFamily: 'var(--hf-mono)' }}
               >
-                loading…
+                {tr('console.common.loading', 'loading…')}
               </span>
             )}
           </div>
@@ -621,7 +889,10 @@ const HFLog = () => {
           {/* Cluster table */}
           {!clusterLoading && clusterItems.length === 0 && (
             <div className='muted' style={{ padding: '20px 0', fontSize: 12 }}>
-              No cluster data for selected period.
+              {tr(
+                'console.log.cluster_empty',
+                'No cluster data for selected period.',
+              )}
             </div>
           )}
 
@@ -629,10 +900,10 @@ const HFLog = () => {
             <table className='t' data-testid='cluster-table'>
               <thead>
                 <tr>
-                  <th>model</th>
-                  <th>error code</th>
-                  <th>bucket</th>
-                  <th>count</th>
+                  <th>{tr('console.log.th_model', 'model')}</th>
+                  <th>{tr('console.log.th_error_code', 'error code')}</th>
+                  <th>{tr('console.log.th_bucket', 'bucket')}</th>
+                  <th>{tr('console.log.th_count', 'count')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -669,25 +940,133 @@ const HFLog = () => {
         </div>
       )}
 
-      {/* ── Live tail tab — no streaming endpoint yet ── */}
+      {/* ── Live tail tab — cursor-poll against /logs?after_id= every 3s ── */}
       {tab === 'live' && (
-        <div style={{ padding: 24 }}>
-          <WIPBanner
-            reason='Live tail needs either an SSE/WebSocket stream or a high-frequency polling cursor against /logs. Neither is wired.'
-            todo='Backend: /api/v2/{slug}/logs/stream (SSE) OR cursor param on /logs; UI wires after.'
-          />
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            height: 'calc(100vh - 270px)',
+          }}
+        >
+          {/* Controls */}
           <div
-            className='panel'
             style={{
-              marginTop: 14,
-              padding: 24,
-              textAlign: 'center',
-              color: 'var(--hf-ink-3)',
-              fontFamily: 'var(--hf-mono)',
-              fontSize: 12,
+              padding: '10px 28px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              borderBottom: '1px solid var(--hf-rule)',
+              background: 'var(--hf-paper)',
             }}
           >
-            No live-tail data — streaming endpoint not implemented.
+            <span
+              data-testid='live-status'
+              className={liveOn ? 'tag ok' : 'tag'}
+            >
+              {liveOn
+                ? tr('console.log.live_polling', '● live · polling 3s')
+                : tr('console.log.live_paused', '⏸ paused')}
+            </span>
+            <button
+              type='button'
+              className='btn'
+              data-testid='live-pause-btn'
+              onClick={() => setLiveOn((v) => !v)}
+            >
+              {liveOn
+                ? tr('console.log.pause', 'pause')
+                : tr('console.log.resume', 'resume')}
+            </button>
+            <span className='muted mono' style={{ fontSize: 11 }}>
+              {tr(
+                'console.log.live_rows',
+                '{{count}} rows · newest first · cap {{cap}}',
+                { count: liveRows.length, cap: LIVE_CAP },
+              )}
+            </span>
+          </div>
+
+          {/* Live table — reuses the trace columns (incl. honest TTFT n/a). */}
+          <div style={{ overflow: 'auto', flex: 1 }}>
+            {liveRows.length === 0 ? (
+              <div
+                className='muted'
+                style={{ padding: '20px 22px', fontSize: 12 }}
+              >
+                {liveOn
+                  ? tr('console.log.live_waiting', 'Waiting for live requests…')
+                  : tr(
+                      'console.log.live_paused_hint',
+                      'Paused — resume to continue tailing.',
+                    )}
+              </div>
+            ) : (
+              <table className='t' data-testid='live-table'>
+                <thead>
+                  <tr>
+                    <th>{tr('console.log.th_timestamp', 'timestamp')}</th>
+                    <th>{tr('console.log.th_dur', 'dur')}</th>
+                    <th>{tr('console.log.th_ttft', 'ttft')}</th>
+                    <th>{tr('console.log.th_model', 'model')}</th>
+                    <th>{tr('console.log.th_upstream', 'upstream')}</th>
+                    <th>{tr('console.log.th_token', 'token')}</th>
+                    <th>{tr('console.log.th_tok', 'tok')}</th>
+                    <th>$</th>
+                    <th>{tr('console.log.th_code', 'code')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {liveRows.map((r, i) => {
+                    const o = outcomeTag(r);
+                    return (
+                      <tr key={r.id ?? i}>
+                        <td className='mono muted'>{fmtTime(r.created_at)}</td>
+                        <td className='mono'>
+                          {r.total_latency_ms ?? '—'}
+                          {r.total_latency_ms != null && (
+                            <span className='faint'>ms</span>
+                          )}
+                        </td>
+                        <td className='mono'>
+                          <NotAvailable
+                            reason={tr(
+                              'console.log.ttft_na_reason',
+                              'TTFT not stored: the log schema has no time-to-first-token column',
+                            )}
+                          />
+                        </td>
+                        <td className='strong'>{r.model_name || '—'}</td>
+                        <td className='mono muted'>
+                          {r.channel_name ? (
+                            r.channel_name
+                          ) : r.channel ? (
+                            `#${r.channel}`
+                          ) : (
+                            <NotAvailable
+                              reason={tr(
+                                'console.log.upstream_na_reason',
+                                'upstream channel id not recorded on this log row',
+                              )}
+                            />
+                          )}
+                        </td>
+                        <td className='mono muted'>{r.token_name || '—'}</td>
+                        <td className='mono muted'>
+                          {fmtTok(r.prompt_tokens, r.completion_tokens)}
+                        </td>
+                        <td className='mono'>{fmtCost(r.quota)}</td>
+                        <td>
+                          <span className={o.cls}>
+                            {tr(`console.log.outcome_${o.label}`, o.label)}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}

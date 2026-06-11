@@ -37,6 +37,11 @@ FROM debian:bookworm-slim
 # 3.7.9-2+deb12u7, pulled in transitively by wget) — without it the GHA layer
 # cache can pin an older, CVE-flagged package set. Keep this so the Trivy gate
 # stays green on base-image CVEs.
+# SECURITY_REFRESH below busts the GHA layer cache: a cached RUN layer keeps
+# the package set frozen at cache time, so a CVE fixed upstream (e.g.
+# CVE-2026-45447 libssl3 deb12u2) never reaches the image until the
+# instruction text changes. Bump the date whenever Trivy flags a fixed CVE.
+ARG SECURITY_REFRESH=2026-06-10
 RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends ca-certificates tzdata libasan8 wget \

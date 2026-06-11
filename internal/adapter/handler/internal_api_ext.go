@@ -12,9 +12,16 @@ import (
 	"github.com/LurusTech/lurus-hub/internal/app"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 var usernameRegexp = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+
+// resolveAccountByZitadelSub resolves a Zitadel OIDC subject to its
+// lurus-platform account. Indirected through a package var (defaulting to the
+// gRPC-with-HTTP-fallback resolver) so provisioning tests can stub the platform
+// dependency without a live identity service. Production keeps the default.
+var resolveAccountByZitadelSub = common.GetAccountByZitadelSubGRPC
 
 // InternalLogin is no longer supported — auth is delegated to Zitadel.
 // POST /internal/auth/login
@@ -292,21 +299,39 @@ func InternalProvisionUser(c *gin.Context) {
 		tenantId = "default"
 	}
 
+	// Best-effort resolve the platform account for this Zitadel subject so the
+	// provisioned user + token link to the unified wallet (the relay settlement
+	// path in quota.go engages only when token.IdentityAccountID > 0). FAIL-OPEN:
+	// a resolution miss or error must NEVER block provisioning — an identity
+	// platform outage cannot be allowed to become a login outage, mirroring every
+	// other newhub→platform caller. An unlinked user is created instead and
+	// self-heals on the next provision (below) or via the
+	// /internal/admin/backfill-token-accounts endpoint.
+	var linkedAccountID int64
+	if acct, rerr := resolveAccountByZitadelSub(c.Request.Context(), req.ZitadelSub); rerr != nil {
+		common.SysLog(fmt.Sprintf("provision: account resolve errored for zitadel_sub=%s — creating UNLINKED user (fail-open): %v", req.ZitadelSub, rerr))
+	} else if acct == nil || acct.ID <= 0 {
+		common.SysLog(fmt.Sprintf("provision: no platform account for zitadel_sub=%s yet — creating UNLINKED user (fail-open), will self-heal on re-provision", req.ZitadelSub))
+	} else {
+		linkedAccountID = acct.ID
+	}
+
 	// Idempotency: check if mapping already exists
 	existingUser, existingMapping, err := repo.GetUserByZitadelID(req.ZitadelSub, tenantId)
 	if err == nil && existingUser != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"data": gin.H{
-				"user_id":     existingUser.Id,
-				"username":    existingUser.Username,
-				"email":       existingUser.Email,
-				"group":       existingUser.Group,
-				"tenant_id":   tenantId,
-				"is_existing": true,
-				"mapping_id":  existingMapping.Id,
-			},
-		})
+		// Self-heal: a prior provision may have created this user before its
+		// platform account existed (unlinked). If it is now resolvable, backfill
+		// the link onto the user and its zero-account tokens so the wallet path
+		// engages on the next relay. Best-effort — a backfill hiccup must not
+		// fail the idempotent response.
+		if linkedAccountID > 0 && existingUser.LurusAccountID == nil {
+			if healErr := backfillUserAccountLink(existingUser.Id, linkedAccountID); healErr != nil {
+				common.SysLog(fmt.Sprintf("provision: self-heal link failed for user %d (account=%d): %v", existingUser.Id, linkedAccountID, healErr))
+			} else {
+				common.SysLog(fmt.Sprintf("provision: self-healed link for user %d → account %d", existingUser.Id, linkedAccountID))
+			}
+		}
+		respondExistingProvisionedUser(c, existingUser, existingMapping, tenantId)
 		return
 	}
 
@@ -376,9 +401,23 @@ func InternalProvisionUser(c *gin.Context) {
 		Status:      common.UserStatusEnabled,
 		Quota:       req.InitialQuota,
 	}
+	if linkedAccountID > 0 {
+		user.LurusAccountID = &linkedAccountID
+	}
 
 	if err := tx.Create(user).Error; err != nil {
 		tx.Rollback()
+		// Concurrent double-provision: another in-flight request committed the
+		// same identity first — the unique index on users.lurus_account_id (when
+		// linked) or on the identity mapping fires here. Resolve the race into a
+		// clean idempotent response by returning the winner instead of a 500
+		// (mirrors zita_bootstrap.go's GetUserByLurusAccountID race probe). If no
+		// winner exists the failure was not a race and surfaces as the error.
+		if winner, winnerMapping := provisionRaceWinner(req.ZitadelSub, tenantId, linkedAccountID); winner != nil {
+			common.SysLog(fmt.Sprintf("provision: lost create race for zitadel_sub=%s, returning winner user %d", req.ZitadelSub, winner.Id))
+			respondExistingProvisionedUser(c, winner, winnerMapping, tenantId)
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to create user: " + err.Error(),
@@ -441,6 +480,18 @@ func InternalProvisionUser(c *gin.Context) {
 			UnlimitedQuota: req.InitialQuota == 0,
 			Group:          group,
 		}
+		if linkedAccountID > 0 {
+			// Linked to the unified wallet: attribute relay spend to the platform
+			// account (this is what engages quota.go's wallet settlement), and lift
+			// the TOKEN-level quota cap so the token's own RemainQuota can't bind a
+			// wallet-funded user. NOTE: this does NOT by itself make the wallet the
+			// sole gate — the user-level quota check (pre_consume_quota.go:86, on
+			// users.quota) is unchanged and still applies. Making the wallet the
+			// sole blocking gate is the separate BILLING_UNIFIED_ENABLED enablement
+			// gate, which also reconciles user-level quota → wallet balance.
+			token.IdentityAccountID = linkedAccountID
+			token.UnlimitedQuota = true
+		}
 
 		if err := tx.Create(token).Error; err != nil {
 			tx.Rollback()
@@ -488,6 +539,80 @@ func InternalProvisionUser(c *gin.Context) {
 		"success": true,
 		"data":    resp,
 	})
+}
+
+// respondExistingProvisionedUser writes the idempotent "already provisioned"
+// response shared by the mapping-exists fast path and the create-race winner
+// path. mapping may be nil (the race path probes by account and may not re-read
+// the mapping) — mapping_id is then 0.
+func respondExistingProvisionedUser(c *gin.Context, user *repo.User, mapping *repo.UserIdentityMapping, tenantId string) {
+	var mappingID int
+	if mapping != nil {
+		mappingID = mapping.Id
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"user_id":     user.Id,
+			"username":    user.Username,
+			"email":       user.Email,
+			"group":       user.Group,
+			"tenant_id":   tenantId,
+			"is_existing": true,
+			"mapping_id":  mappingID,
+		},
+	})
+}
+
+// backfillUserAccountLink links an existing user to a platform account and
+// propagates the account id onto that user's not-yet-linked tokens. Mirrors the
+// /internal/admin/backfill-token-accounts batch path for the single-user case.
+// Both updates are guarded so this is a no-op once linked (idempotent).
+func backfillUserAccountLink(userID int, accountID int64) error {
+	// Atomic: user link and token propagation commit together or not at all. A
+	// non-transactional two-step would leave the user linked but tokens stranded
+	// on a mid-way failure — and the `lurus_account_id IS NULL` guard above would
+	// then never re-trigger the heal on retry, permanently orphaning the tokens.
+	return repo.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&repo.User{}).
+			Where("id = ? AND lurus_account_id IS NULL", userID).
+			Update("lurus_account_id", accountID).Error; err != nil {
+			return err
+		}
+		// Set unlimited_quota too, matching the fresh-provision linked-token path
+		// (the commit invariant "linked tokens get UnlimitedQuota=true"). Without
+		// it a self-healed token keeps its local RemainQuota cap, so a wallet-funded
+		// user is both wallet-debited AND 402-stranded once that cap drains.
+		return tx.Model(&repo.Token{}).
+			Where("user_id = ? AND (identity_account_id = 0 OR identity_account_id IS NULL)", userID).
+			Updates(map[string]interface{}{"identity_account_id": accountID, "unlimited_quota": true}).Error
+	})
+}
+
+// provisionRaceWinner resolves a concurrent-provision race into the request that
+// committed first. Prefers the account-link probe when linked (the unique index
+// that fires on a same-account race), falling back to the zitadel-sub mapping
+// (the authoritative idempotency key). Returns (nil, nil) when no winner exists,
+// i.e. the create failure was not a race and should surface as an error.
+func provisionRaceWinner(zitadelSub, tenantID string, accountID int64) (*repo.User, *repo.UserIdentityMapping) {
+	if accountID > 0 {
+		// The unique index on users.lurus_account_id is GLOBAL (cross-tenant), so
+		// GetUserByLurusAccountID (which bypasses tenant isolation) can return a
+		// user from a DIFFERENT tenant. Only accept it as our race winner when the
+		// tenant matches — a cross-tenant account collision is NOT our race, and
+		// returning it would leak another tenant's user identity and misroute that
+		// user's LLM spend to the foreign account's wallet. On mismatch, fall
+		// through to the tenant-scoped sub probe (which finds nothing), so the
+		// create error surfaces instead of a false idempotent success.
+		if u, err := repo.GetUserByLurusAccountID(accountID); err == nil && u != nil && u.TenantId == tenantID {
+			_, m, _ := repo.GetUserByZitadelID(zitadelSub, tenantID)
+			return u, m
+		}
+	}
+	if u, m, err := repo.GetUserByZitadelID(zitadelSub, tenantID); err == nil && u != nil {
+		return u, m
+	}
+	return nil, nil
 }
 
 // ===== Token CRUD =====

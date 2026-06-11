@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright (C) 2025 QuantumNous
 
 This program is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ import {
 } from './utils';
 import axios from 'axios';
 import { MESSAGE_ROLES } from '../constants/playground.constants';
+import { setTenantSlug } from './apiMode';
 
 export let API = axios.create({
   baseURL: import.meta.env.VITE_REACT_APP_SERVER_URL
@@ -66,13 +67,73 @@ function patchAPIInstance(instance) {
 
 patchAPIInstance(API);
 
+// Layer C session self-heal. The v2 SPA keeps a *durable* localStorage `user`,
+// but the credential the data APIs actually verify is the *session-scoped* gin
+// session cookie established by POST /api/v2/auth/zita-bootstrap. When the two
+// drift (the console is opened after the session expired) every data call 401s
+// even though the UI still renders as "logged in". Re-establish the session once
+// via the bridge, then replay the original request.
+//
+// `bootstrapInFlight` collapses the burst of parallel 401s a page mount triggers
+// (the dashboard fires user/me + logs; the channels page fires a dozen) into a
+// SINGLE bootstrap — every waiter shares it, then retries.
+let bootstrapInFlight = null;
+
+function ensureSession(instance) {
+  if (!bootstrapInFlight) {
+    bootstrapInFlight = instance
+      .post('/api/v2/auth/zita-bootstrap', {}, { skipErrorHandler: true })
+      .then((res) => {
+        if (res?.data?.success && res.data.data?.id) {
+          // Refresh the canonical user + slug so the shim stays in sync with the
+          // freshly minted session (role/tenant may have changed server-side).
+          localStorage.setItem('user', JSON.stringify(res.data.data));
+          if (res.data.data.tenant_slug) {
+            setTenantSlug(res.data.data.tenant_slug);
+          }
+          return res.data.data;
+        }
+        throw new Error('zita-bootstrap did not establish a session');
+      })
+      .finally(() => {
+        bootstrapInFlight = null;
+      });
+  }
+  return bootstrapInFlight;
+}
+
 function addResponseInterceptor(instance) {
   instance.interceptors.response.use(
     (response) => response,
-    (error) => {
+    async (error) => {
+      const config = error.config;
       // Skip global error handling if explicitly requested by the caller
-      if (error.config && error.config.skipErrorHandler) {
+      if (config && config.skipErrorHandler) {
         return Promise.reject(error);
+      }
+      // 401 self-heal: only when the SPA believes it is logged in (durable
+      // `user` present), the request was not already retried, and the failing
+      // call is not the bridge itself (avoid a heal→heal loop). Re-establish the
+      // session, then replay the original request exactly once. The replay runs
+      // with skipErrorHandler so a second failure surfaces here (single toast),
+      // not twice.
+      if (
+        error.response?.status === 401 &&
+        config &&
+        !config._retriedAfterBootstrap &&
+        !String(config.url || '').includes('zita-bootstrap') &&
+        localStorage.getItem('user')
+      ) {
+        try {
+          await ensureSession(instance);
+          config._retriedAfterBootstrap = true;
+          config.skipErrorHandler = true;
+          return await instance(config);
+        } catch (e) {
+          // Bridge rejected (no platform session / account disabled) or the
+          // replay still failed — fall through to the normal handler below,
+          // which shows the toast or redirects to /login.
+        }
       }
       showError(error);
       return Promise.reject(error);

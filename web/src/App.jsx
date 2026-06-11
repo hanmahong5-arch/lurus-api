@@ -66,6 +66,11 @@ const V2DesignSystem = lazy(() => import('./pages/v2/DesignSystem'));
 const V2States = lazy(() => import('./pages/v2/States'));
 const V2Variants = lazy(() => import('./pages/v2/Variants'));
 const V2AccountDisabled = lazy(() => import('./pages/v2/AccountDisabled'));
+const V2AdminUsers = lazy(() => import('./pages/v2/Admin/Users'));
+const V2AdminSettings = lazy(() => import('./pages/v2/Admin/Settings'));
+const V2CostIntelligence = lazy(
+  () => import('./pages/v2/Admin/CostIntelligence'),
+);
 
 function App() {
   const location = useLocation();
@@ -349,6 +354,9 @@ function App() {
           ['design-system', V2DesignSystem],
           ['states', V2States],
           ['variants', V2Variants],
+          ['admin/users', V2AdminUsers],
+          ['admin/settings', V2AdminSettings],
+          ['admin/cost-intelligence', V2CostIntelligence],
         ].map(([slug, Component]) => (
           <Route
             key={slug}

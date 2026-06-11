@@ -49,7 +49,7 @@ func GetHealthDetailed(c *gin.Context) {
 	}
 
 	// Platform billing service check (via circuit breaker state)
-	if common.BillingUnifiedEnabled {
+	if common.BillingUnifiedEnabled() {
 		if err := common.BillingBreakerAllow(); err != nil {
 			checks["billing"] = "circuit_open"
 		} else {

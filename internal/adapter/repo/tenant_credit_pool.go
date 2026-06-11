@@ -1,8 +1,10 @@
 package repo
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/LurusTech/lurus-hub/internal/domain/entity"
@@ -14,6 +16,7 @@ import (
 // importing the entity package directly (matches Tenant / Token convention).
 type TenantCreditPool = entity.TenantCreditPool
 type TenantCreditPoolDraw = entity.TenantCreditPoolDraw
+type CreditPoolFundEvent = entity.CreditPoolFundEvent
 
 // Re-export pool-related constants from entity.
 const (
@@ -28,6 +31,7 @@ const (
 	PoolDrawReasonTopup      = entity.PoolDrawReasonTopup
 	PoolDrawReasonReset      = entity.PoolDrawReasonReset
 	PoolDrawReasonAdjustment = entity.PoolDrawReasonAdjustment
+	PoolDrawReasonOverdraft  = entity.PoolDrawReasonOverdraft
 )
 
 // Direction constants (int16, separate const block to preserve type).
@@ -110,9 +114,11 @@ func CreateTenantCreditPool(tenantID string, createdByUserID int, maxBalance int
 // PostgreSQL READ COMMITTED is sufficient — the implicit row-level lock
 // during UPDATE serializes concurrent debits. SERIALIZABLE not needed.
 //
-// Use DebitPoolInTx when the caller already owns a transaction (e.g. the
-// post-consume quota path joins this debit with the quota_consume write
-// so a single rollback covers both).
+// Use DebitPoolInTx when the caller already owns a transaction. Note the
+// post-consume quota path does NOT share a transaction with quota_consume —
+// the user quota write may go through Redis/batch paths that have no DB tx.
+// When this returns ErrPoolExhausted the post-consume caller falls back to
+// OverdraftDebitPool so the debit is recorded as debt instead of dropped.
 func DebitPool(poolID int64, tenantID string, amount int64, tokenID int, logID int64) error {
 	if amount <= 0 {
 		return fmt.Errorf("debit amount must be positive, got %d", amount)
@@ -124,12 +130,13 @@ func DebitPool(poolID int64, tenantID string, amount int64, tokenID int, logID i
 }
 
 // DebitPoolInTx is the transactional variant of DebitPool — it does the same
-// conditional-UPDATE-plus-draw-insert but reuses the caller's transaction.
-// This lets the post-consume quota path bind pool debit and quota_consume
-// into a single atomic unit (ADR §7 risk #1: rollback covers both halves so
-// the audit ledger never drifts from the pool balance).
+// conditional-UPDATE-plus-draw-insert but reuses the caller's transaction so
+// the balance update and the draw ledger row commit or roll back together.
+// It does NOT join the user quota_consume write into the same transaction
+// (that write may be Redis-buffered or batched and has no DB tx to share).
 //
 // Callers MUST handle ErrPoolExhausted explicitly — there is no auto-retry.
+// The post-consume path handles it via OverdraftDebitPool.
 func DebitPoolInTx(tx *gorm.DB, poolID int64, tenantID string, amount int64, tokenID int, logID int64) error {
 	if amount <= 0 {
 		return fmt.Errorf("debit amount must be positive, got %d", amount)
@@ -162,6 +169,61 @@ func DebitPoolInTx(tx *gorm.DB, poolID int64, tenantID string, amount int64, tok
 		return fmt.Errorf("debit pool draw insert: %w", err)
 	}
 	return nil
+}
+
+// OverdraftDebitPool unconditionally deducts amount from the pool — the
+// balance is allowed to go negative — and records a `relay_overdraft` draw
+// row in the same transaction. Returns the post-debit balance.
+//
+// This is the P0-3 fix for the post-consume path: when DebitPool returns
+// ErrPoolExhausted the upstream tokens are already burned and the user quota
+// already charged, so dropping the pool debit (the old log-only behaviour)
+// silently breaks `seed − Σdraws == balance`. Recording the debt keeps the
+// conservation law unconditional: the negative balance keeps the relay gate
+// closed (IsExhausted ⇒ balance <= 0) and the next topup repays it — no
+// reconciliation job needed.
+func OverdraftDebitPool(poolID int64, tenantID string, amount int64, tokenID int, logID int64) (int64, error) {
+	if amount <= 0 {
+		return 0, fmt.Errorf("overdraft debit amount must be positive, got %d", amount)
+	}
+
+	var newBalance int64
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&TenantCreditPool{}).
+			Where("id = ?", poolID).
+			Updates(map[string]interface{}{
+				"current_balance": gorm.Expr("current_balance - ?", amount),
+				"updated_at":      time.Now(),
+			})
+		if result.Error != nil {
+			return fmt.Errorf("overdraft debit pool update: %w", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return fmt.Errorf("overdraft debit: pool %d not found", poolID)
+		}
+
+		var pool TenantCreditPool
+		if err := tx.Select("current_balance").Where("id = ?", poolID).First(&pool).Error; err != nil {
+			return fmt.Errorf("overdraft debit readback: %w", err)
+		}
+		newBalance = pool.CurrentBalance
+
+		draw := &TenantCreditPoolDraw{
+			PoolID:    poolID,
+			TenantID:  tenantID,
+			TokenID:   tokenID,
+			LogID:     logID,
+			Direction: PoolDrawDirectionDebit,
+			Amount:    amount,
+			Reason:    PoolDrawReasonOverdraft,
+			CreatedAt: time.Now(),
+		}
+		if err := tx.Create(draw).Error; err != nil {
+			return fmt.Errorf("overdraft debit draw insert: %w", err)
+		}
+		return nil
+	})
+	return newBalance, err
 }
 
 // TopupPool atomically increments the pool balance and writes a credit draw
@@ -256,6 +318,161 @@ func ListPoolDraws(poolID int64, offset int, limit int) ([]*TenantCreditPoolDraw
 	}
 
 	return draws, total, nil
+}
+
+// ErrFundEventExists is returned by FundPoolIdempotent when the event_id was
+// already processed. The caller should treat this as a successful replay and
+// return the previously-recorded new_balance to the caller without re-crediting.
+var ErrFundEventExists = errors.New("fund event already processed (idempotent replay)")
+
+// FundPoolIdempotent atomically credits a tenant pool funded by an external
+// platform BillingOutbox event. Idempotency is enforced via a UNIQUE constraint
+// on credit_pool_fund_events.event_id:
+//
+//   - If event_id was already processed, the existing CreditPoolFundEvent is
+//     returned alongside ErrFundEventExists — caller returns 200 with that row's
+//     data, not an error to the caller of the endpoint.
+//   - Otherwise: TopupPool is called inside a transaction, then a fund event row
+//     is inserted. If the insert fails with a unique-constraint violation (race
+//     replay), the function re-fetches and returns the existing row with
+//     ErrFundEventExists so the caller still returns 200.
+//
+// The function does NOT call DebitWalletGRPC — the wallet debit happened on the
+// platform side before the BillingOutbox event was emitted. This is a pure
+// credit to the local pool.
+//
+// amount must be > 0. Returns (fundEvent, nil) on first write,
+// (existingEvent, ErrFundEventExists) on replay.
+func FundPoolIdempotent(
+	ctx context.Context,
+	poolID int64, tenantID string, amount int64,
+	eventID string, source string, actorUserID int,
+) (*CreditPoolFundEvent, error) {
+	if amount <= 0 {
+		return nil, fmt.Errorf("fund amount must be positive, got %d: pass a value > 0", amount)
+	}
+	if eventID == "" {
+		return nil, fmt.Errorf("event_id is required for idempotent fund: provide the BillingOutbox event ID")
+	}
+
+	// Fast-path: check if already processed before entering the transaction.
+	// The unique-constraint is the authoritative guard; this pre-check merely
+	// avoids the TopupPool write on obvious replays.
+	var existing CreditPoolFundEvent
+	if err := DB.WithContext(ctx).Where("event_id = ?", eventID).First(&existing).Error; err == nil {
+		return &existing, ErrFundEventExists
+	}
+
+	var funded *CreditPoolFundEvent
+	txErr := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Credit the pool balance (enforces ceiling via ErrPoolWouldExceedCeiling).
+		newBalance, err := topupPoolInTx(tx, poolID, tenantID, amount, actorUserID, PoolDrawReasonTopup)
+		if err != nil {
+			return err
+		}
+
+		now := time.Now()
+		event := &CreditPoolFundEvent{
+			EventID:    eventID,
+			TenantID:   tenantID,
+			PoolID:     poolID,
+			Amount:     amount,
+			NewBalance: newBalance,
+			Source:     source,
+			CreatedAt:  now,
+		}
+		if insertErr := tx.Create(event).Error; insertErr != nil {
+			// Unique-constraint violation from a concurrent replay: fetch the
+			// winner's row and surface ErrFundEventExists to the caller.
+			if isUniqueViolation(insertErr) {
+				var race CreditPoolFundEvent
+				if fetchErr := tx.Where("event_id = ?", eventID).First(&race).Error; fetchErr != nil {
+					return fmt.Errorf("fund event insert conflict and re-fetch failed: %w", fetchErr)
+				}
+				funded = &race
+				// Signal replay to the outer scope via a sentinel that we handle below.
+				return ErrFundEventExists
+			}
+			return fmt.Errorf("fund event insert: %w", insertErr)
+		}
+
+		funded = event
+		return nil
+	})
+
+	if txErr != nil {
+		if errors.Is(txErr, ErrFundEventExists) {
+			// Re-fetch outside the rolled-back TX so we return a clean row.
+			if funded != nil {
+				return funded, ErrFundEventExists
+			}
+			var race CreditPoolFundEvent
+			if err := DB.WithContext(ctx).Where("event_id = ?", eventID).First(&race).Error; err != nil {
+				return nil, fmt.Errorf("fund event replay re-fetch: %w", err)
+			}
+			return &race, ErrFundEventExists
+		}
+		return nil, txErr
+	}
+
+	return funded, nil
+}
+
+// topupPoolInTx is the transactional core of TopupPool extracted so that
+// FundPoolIdempotent can participate in the same DB.Transaction block.
+// Returns the new balance after crediting.
+func topupPoolInTx(tx *gorm.DB, poolID int64, tenantID string, amount int64, actorUserID int, reason string) (int64, error) {
+	result := tx.Model(&TenantCreditPool{}).
+		Where(
+			"id = ? AND (max_balance = ? OR current_balance + ? <= max_balance)",
+			poolID, PoolMaxBalanceUnlimited, amount,
+		).
+		Updates(map[string]interface{}{
+			"current_balance": gorm.Expr("current_balance + ?", amount),
+			"updated_at":      time.Now(),
+		})
+	if result.Error != nil {
+		return 0, fmt.Errorf("fund pool balance update: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return 0, ErrPoolWouldExceedCeiling
+	}
+
+	var pool TenantCreditPool
+	if err := tx.Select("current_balance").Where("id = ?", poolID).First(&pool).Error; err != nil {
+		return 0, fmt.Errorf("fund pool readback: %w", err)
+	}
+
+	draw := &TenantCreditPoolDraw{
+		PoolID:      poolID,
+		TenantID:    tenantID,
+		Direction:   PoolDrawDirectionCredit,
+		Amount:      amount,
+		Reason:      reason,
+		ActorUserID: actorUserID,
+		CreatedAt:   time.Now(),
+	}
+	if err := tx.Create(draw).Error; err != nil {
+		return 0, fmt.Errorf("fund pool draw insert: %w", err)
+	}
+
+	return pool.CurrentBalance, nil
+}
+
+// isUniqueViolation reports whether a DB error is a UNIQUE constraint violation
+// across both PostgreSQL (error code 23505) and SQLite ("UNIQUE constraint").
+// Avoids importing the pq driver directly — string matching is sufficient for
+// this internal guard.
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	// PostgreSQL driver wraps with "ERROR: duplicate key value violates unique constraint"
+	// SQLite driver: "UNIQUE constraint failed: ..."
+	return strings.Contains(s, "duplicate key value") ||
+		strings.Contains(s, "UNIQUE constraint failed") ||
+		strings.Contains(s, "23505")
 }
 
 // nextResetAt computes the next scheduled reset timestamp for a pool.

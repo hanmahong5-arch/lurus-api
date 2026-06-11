@@ -160,7 +160,8 @@ type rawMonthRow struct {
 }
 
 // aggregateInvoiceMonths runs the per-month GROUP BY depending on whether
-// we are connected to PostgreSQL or SQLite.
+// we are connected to PostgreSQL or SQLite. The SQLite arm exists only for
+// the hermetic glebarez unit-test tier; runtime is always PostgreSQL.
 func aggregateInvoiceMonths(userID int, tenantID string, fromTS, toTS int64) ([]invoiceMonthBucket, error) {
 	var rows []rawMonthRow
 

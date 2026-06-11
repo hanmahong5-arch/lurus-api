@@ -1,266 +1,98 @@
-# Incident Response Runbook / 事件响应手册
+# Incident Response Runbook
 
-> Service: lurus-api | Namespace: lurus-system | On-call: Anita
+> Service lurus-api · Namespace lurus-system · On-call: Anita. All `kubectl` via `ssh root@100.98.57.55`.
 
----
-
-## 1. Health Checks
-
-### Quick Status
+## Health checks
 
 ```bash
-# External (public endpoint)
-curl -s -o /dev/null -w "%{http_code}" https://api.lurus.cn/api/status
-
-# Internal (from cluster)
-ssh root@100.98.57.55 "kubectl exec -n lurus-system deploy/lurus-api -- wget -qO- http://localhost:3000/api/status"
-
-# Pod status
-ssh root@100.98.57.55 "kubectl get pods -n lurus-system -l app=lurus-api -o wide"
+curl -s -o /dev/null -w "%{http_code}" https://api.lurus.cn/api/status         # expect 200
+kubectl exec -n lurus-system deploy/lurus-api -- wget -qO- http://localhost:3000/api/status
+kubectl get pods -n lurus-system -l app=lurus-api -o wide                       # expect Running 1/1
 ```
+Probes: readiness 5s, liveness 15s, both `/api/status`.
 
-### Expected Response
-
-- `/api/status` → HTTP 200
-- Pod status → `Running`, `READY 1/1`
-- Readiness probe: every 5s at `/api/status`
-- Liveness probe: every 15s at `/api/status`
-
----
-
-## 2. Triage Decision Tree
+## Triage decision tree
 
 ```
 Service unreachable?
-├── YES → Check Pod status (Section 3)
-│   ├── CrashLoopBackOff → Check logs (Section 4)
-│   ├── OOMKilled → Increase memory limit
-│   ├── ImagePullBackOff → Check GHCR auth / image tag
-│   └── Pending → Check node resources / scheduling
-│
-├── 5xx errors → Check application logs (Section 4)
-│   ├── DB connection error → Database runbook
-│   ├── Redis connection error → Check Redis pod
-│   ├── Panic/goroutine crash → Check SafeGo logs, restart pod
-│   └── Upstream LLM timeout → Check channel status
-│
-└── Slow responses → Check resource usage (Section 5)
-    ├── High CPU → Profile with pprof
-    ├── High memory → Check for leaks, increase limit
-    └── High DB latency → Check pg_stat_activity
+├── Pod issue → CrashLoopBackOff (logs) / OOMKilled (↑mem) / ImagePullBackOff (GHCR/tag) / Pending (node resources)
+├── 5xx → app logs → DB conn error (database runbook) / Redis conn / panic (SafeGo, restart) / upstream LLM timeout (channel status)
+└── Slow → resources → high CPU (pprof) / high mem (leak, ↑limit) / high DB latency (pg_stat_activity)
 ```
 
----
-
-## 3. Pod Issues
-
-### CrashLoopBackOff
+## Pod issues
 
 ```bash
-# Check why pod is crashing
-ssh root@100.98.57.55 "kubectl describe pod -n lurus-system -l app=lurus-api"
-ssh root@100.98.57.55 "kubectl logs -n lurus-system deploy/lurus-api --previous"
-
-# Common causes:
-# - DB unreachable at startup → check SQL_DSN, network
-# - Missing required env vars → check secrets
-# - Failed migration → check DB schema
+# CrashLoopBackOff (causes: DB unreachable at startup / missing env / failed migration)
+kubectl describe pod -n lurus-system -l app=lurus-api
+kubectl logs -n lurus-system deploy/lurus-api --previous
+# OOMKilled
+kubectl top pod -n lurus-system -l app=lurus-api
+kubectl set resources deployment/lurus-api --limits=memory=2Gi -n lurus-system   # temp
+# ImagePullBackOff
+kubectl describe pod -n lurus-system -l app=lurus-api | grep -A5 'Events'
+kubectl get secret ghcr-secret -n lurus-system -o yaml
 ```
 
-### OOMKilled
+## Logs
 
 ```bash
-# Check current memory usage
-ssh root@100.98.57.55 "kubectl top pod -n lurus-system -l app=lurus-api"
-
-# Increase memory limit (temporary)
-ssh root@100.98.57.55 "kubectl set resources deployment/lurus-api \
-  --limits=memory=2Gi -n lurus-system"
+kubectl logs -n lurus-system deploy/lurus-api --tail=200
+kubectl logs -n lurus-system deploy/lurus-api | grep -i 'error\|panic\|fatal'
+kubectl logs -n lurus-system deploy/lurus-api | grep 'relay'   # or 'database'
 ```
 
-### ImagePullBackOff
-
-```bash
-# Check image exists
-ssh root@100.98.57.55 "kubectl describe pod -n lurus-system -l app=lurus-api | grep -A5 'Events'"
-
-# Verify GHCR credentials
-ssh root@100.98.57.55 "kubectl get secret ghcr-secret -n lurus-system -o yaml"
-```
-
----
-
-## 4. Application Logs
-
-### Log Locations
-
-```bash
-# Structured logs (slog)
-ssh root@100.98.57.55 "kubectl logs -n lurus-system deploy/lurus-api --tail=200"
-
-# Filter errors
-ssh root@100.98.57.55 "kubectl logs -n lurus-system deploy/lurus-api | grep -i 'error\|panic\|fatal'"
-
-# Filter by component
-ssh root@100.98.57.55 "kubectl logs -n lurus-system deploy/lurus-api | grep 'relay'"
-ssh root@100.98.57.55 "kubectl logs -n lurus-system deploy/lurus-api | grep 'database'"
-```
-
-### Common Error Patterns
-
-| Log Pattern | Meaning | Action |
+| Log pattern | Meaning | Action |
 |-------------|---------|--------|
-| `failed to initialize database` | DB unreachable at startup | Check DB host, credentials, network |
-| `JWKS fetch failed` | Can't reach Zitadel JWKS | Check auth.lurus.cn, network |
-| `channel error` | Upstream LLM provider failed | Check channel config, provider status |
-| `quota exceeded` | User/tenant over quota limit | Check billing, adjust quota |
-| `panic recovered by SafeGo` | Goroutine panic caught | Check stack trace, fix root cause |
+| `failed to initialize database` | DB unreachable at startup | check DB host/creds/network |
+| `JWKS fetch failed` | can't reach Zitadel JWKS | check auth.lurus.cn/network |
+| `channel error` | upstream LLM failed | check channel config / provider |
+| `quota exceeded` | over quota | check billing, adjust quota |
+| `panic recovered by SafeGo` | goroutine panic caught | check stack trace, fix root cause |
 
----
-
-## 5. Resource Monitoring
-
-### Current Usage
+## Resource monitoring
 
 ```bash
-# Pod CPU/memory
-ssh root@100.98.57.55 "kubectl top pod -n lurus-system"
-
-# Node resources
-ssh root@100.98.57.55 "kubectl top node"
-```
-
-### pprof (Debug Mode)
-
-If `DEBUG=true` or pprof endpoint enabled:
-
-```bash
-# CPU profile (30s)
-curl -o cpu.prof http://localhost:3000/debug/pprof/profile?seconds=30
-go tool pprof cpu.prof
-
-# Memory profile
-curl -o mem.prof http://localhost:3000/debug/pprof/heap
-go tool pprof mem.prof
-
-# Goroutine dump
+kubectl top pod -n lurus-system; kubectl top node
+# pprof (DEBUG=true / ENABLE_PPROF):
+curl -o cpu.prof http://localhost:3000/debug/pprof/profile?seconds=30 && go tool pprof cpu.prof
+curl -o mem.prof http://localhost:3000/debug/pprof/heap && go tool pprof mem.prof
 curl http://localhost:3000/debug/pprof/goroutine?debug=2
 ```
 
-### Database Connections
-
 ```sql
--- Active connections
-SELECT count(*) FROM pg_stat_activity WHERE datname = 'lurusapi';
-
--- Long-running queries
-SELECT pid, now() - pg_stat_activity.query_start AS duration, query
-FROM pg_stat_activity
-WHERE state = 'active' AND datname = 'lurusapi'
-ORDER BY duration DESC;
-
--- Kill a stuck query
+SELECT count(*) FROM pg_stat_activity WHERE datname='lurusapi';
+SELECT pid, now()-query_start AS duration, query FROM pg_stat_activity WHERE state='active' AND datname='lurusapi' ORDER BY duration DESC;
 SELECT pg_terminate_backend(<pid>);
 ```
 
----
+## Common scenarios
 
-## 6. Common Scenarios
+- **All relay failing**: check channel status (admin) → verify upstream key → `grep "channel error"` → test direct upstream from pod (`kubectl exec ... wget --header='Authorization: Bearer <key>' https://api.openai.com/v1/models`) → enable backup channels / notify.
+- **High latency**: `kubectl top pod` → `pg_stat_statements` → `redis-cli ping` → check MeiliSearch reachable → pprof if sustained.
+- **Tenant login broken**: `curl https://auth.lurus.cn/oauth/v2/keys` → verify OIDC config (client ID, redirect URI, issuer) → check JWT validation errors → verify tenant in `tenants` table → test callback with `curl -v`.
 
-### Scenario: All Relay Requests Failing
+## Escalation
 
-1. Check channel status in admin panel
-2. Verify upstream provider API key validity
-3. Check channel error logs: `kubectl logs ... | grep "channel error"`
-4. Test direct upstream connection from pod:
-   ```bash
-   ssh root@100.98.57.55 "kubectl exec -n lurus-system deploy/lurus-api -- \
-     wget -qO- --header='Authorization: Bearer <key>' https://api.openai.com/v1/models"
-   ```
-5. If provider outage → enable backup channels or notify users
+| Sev | Criteria | Response |
+|-----|----------|----------|
+| P0 | Service down, all users | Immediate; rollback if recent deploy |
+| P1 | Major feature (relay/auth), >50% users | Within 1h; fix or rollback |
+| P2 | Single tenant / degraded | Within 4h |
+| P3 | Minor, workaround exists | Next business day |
 
-### Scenario: High Latency
+On-call: Anita (all incidents); Infrastructure (DB host, K3s node) for P0/P1 infra.
 
-1. Check pod resources: `kubectl top pod`
-2. Check DB query latency: `pg_stat_statements`
-3. Check Redis connectivity: `redis-cli ping`
-4. Check if MeiliSearch is reachable (search-heavy requests)
-5. Profile with pprof if sustained
-
-### Scenario: Tenant Login Broken
-
-1. Check Zitadel availability: `curl https://auth.lurus.cn/oauth/v2/keys`
-2. Check OIDC config matches: Client ID, redirect URI, issuer
-3. Check app logs for JWT validation errors
-4. Verify tenant record exists in `tenants` table
-5. Test callback flow manually with `curl -v`
-
----
-
-## 7. Escalation
-
-| Severity | Criteria | Response |
-|----------|----------|----------|
-| P0 | Service completely down, all users affected | Immediate. Rollback if recent deploy. |
-| P1 | Major feature broken (relay, auth), >50% users affected | Within 1 hour. Investigate and fix or rollback. |
-| P2 | Single tenant affected, degraded performance | Within 4 hours. |
-| P3 | Minor issue, workaround available | Next business day. |
-
-### Escalation Contacts
-
-| Role | Contact | When |
-|------|---------|------|
-| On-call (Anita) | Primary | All incidents |
-| Infrastructure | DB host, K3s node | P0/P1 infra issues |
-
----
-
-## 8. Postmortem Template
-
-After any P0/P1 incident, create `doc/postmortems/YYYY-MM-DD-title.md`:
-
-```markdown
-# Incident: <title>
-**Date**: YYYY-MM-DD
-**Duration**: HH:MM - HH:MM (X minutes)
-**Severity**: P0/P1
-**Impact**: <who was affected, how>
-
-## Timeline
-- HH:MM — <event>
-- HH:MM — <event>
-
-## Root Cause
-<what caused the incident>
-
-## Resolution
-<what fixed it>
-
-## Action Items
-- [ ] <preventive measure>
-- [ ] <monitoring improvement>
-```
-
----
-
-## 9. Recovery Commands (Quick Reference)
+## Recovery commands
 
 ```bash
-# Restart pod
-ssh root@100.98.57.55 "kubectl rollout restart deployment/lurus-api -n lurus-system"
-
-# Scale to 0 (emergency stop)
-ssh root@100.98.57.55 "kubectl scale deployment/lurus-api --replicas=0 -n lurus-system"
-
-# Scale back up
-ssh root@100.98.57.55 "kubectl scale deployment/lurus-api --replicas=1 -n lurus-system"
-
-# Rollback to previous version
-ssh root@100.98.57.55 "kubectl rollout undo deployment/lurus-api -n lurus-system"
-
-# Force delete stuck pod
-ssh root@100.98.57.55 "kubectl delete pod <pod-name> -n lurus-system --force --grace-period=0"
-
-# Check all resources in namespace
-ssh root@100.98.57.55 "kubectl get all -n lurus-system"
+kubectl rollout restart deployment/lurus-api -n lurus-system
+kubectl scale deployment/lurus-api --replicas=0 -n lurus-system     # emergency stop; --replicas=1 to resume
+kubectl rollout undo deployment/lurus-api -n lurus-system
+kubectl delete pod <pod> -n lurus-system --force --grace-period=0
+kubectl get all -n lurus-system
 ```
+
+## Postmortem (after P0/P1)
+
+Create `doc/postmortems/YYYY-MM-DD-title.md` with: Date, Duration, Severity, Impact, Timeline, Root Cause, Resolution, Action Items.

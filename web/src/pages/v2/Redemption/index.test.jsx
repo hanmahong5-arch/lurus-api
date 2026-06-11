@@ -68,6 +68,24 @@ vi.mock('../../../components/common/ConfirmDialog', () => ({
       : null,
 }));
 
+// Mirror i18next's en behaviour: return the English defaultValue (2nd arg)
+// with {{var}} interpolation, falling back to the key when no default given.
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key, fallback, opts) => {
+      const vars =
+        typeof fallback === 'object' && fallback !== null ? fallback : opts;
+      let out = typeof fallback === 'string' ? fallback : key;
+      if (vars) {
+        for (const [k, v] of Object.entries(vars)) {
+          out = out.split(`{{${k}}}`).join(String(v));
+        }
+      }
+      return out;
+    },
+  }),
+}));
+
 import HFRedemption from './index';
 import { API, showError, showSuccess } from '../../../helpers';
 
@@ -187,7 +205,7 @@ describe('Redemption page', () => {
       expect(screen.getByTestId('redemption-keys-list')).toBeDefined();
     });
 
-    expect(showSuccess).toHaveBeenCalledWith('兑换码生成成功');
+    expect(showSuccess).toHaveBeenCalledWith('Redemption codes generated');
 
     // List should be refreshed — row 10 visible.
     await waitFor(() => {
@@ -221,7 +239,7 @@ describe('Redemption page', () => {
       expect(API.delete).toHaveBeenCalledWith(`/api/v2/acme/redemptions/5`);
     });
 
-    expect(showSuccess).toHaveBeenCalledWith('兑换码已删除');
+    expect(showSuccess).toHaveBeenCalledWith('Redemption code deleted');
 
     // After delete, list is refreshed and empty state shown.
     await waitFor(() => {

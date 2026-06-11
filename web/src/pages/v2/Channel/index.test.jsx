@@ -65,8 +65,22 @@ vi.mock('../../../components/common/ConfirmDialog', () => ({
       : null,
 }));
 
+// Mirror i18next's en behaviour: return the English defaultValue (2nd arg)
+// with {{var}} interpolation, falling back to the key when no default given.
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (k, _opts) => k }),
+  useTranslation: () => ({
+    t: (key, fallback, opts) => {
+      const vars =
+        typeof fallback === 'object' && fallback !== null ? fallback : opts;
+      let out = typeof fallback === 'string' ? fallback : key;
+      if (vars) {
+        for (const [k, v] of Object.entries(vars)) {
+          out = out.split(`{{${k}}}`).join(String(v));
+        }
+      }
+      return out;
+    },
+  }),
 }));
 
 import HFChannel from './index';
@@ -126,9 +140,7 @@ describe('channel test button', () => {
     });
 
     await waitFor(() => {
-      expect(showSuccess).toHaveBeenCalledWith(
-        expect.stringContaining('渠道延迟 {{ms}}ms'),
-      );
+      expect(showSuccess).toHaveBeenCalledWith('Channel latency 137ms');
     });
   });
 
@@ -230,5 +242,135 @@ describe('sync upstream models modal', () => {
     await waitFor(() => {
       expect(showError).toHaveBeenCalled();
     });
+  });
+});
+
+// ─── honesty: unwired metric columns render n/a, not silent — ──────────────────
+
+describe('channel metric columns', () => {
+  it('renders n/a cells (with a reason) for qps / latency / cost', async () => {
+    const ch = makeChannel(1, 'Main');
+    API.get.mockResolvedValue(mockListResponse([ch]));
+
+    render(React.createElement(HFChannel));
+    await waitFor(() => screen.getByText('Main'));
+
+    const naCells = screen.getAllByTestId('na-cell');
+    // qps + p50/p95 + cost·1h = 3 honest n/a cells in the row
+    expect(naCells.length).toBeGreaterThanOrEqual(3);
+    expect(
+      naCells.some((c) =>
+        /metrics backend/i.test(c.getAttribute('title') || ''),
+      ),
+    ).toBe(true);
+  });
+});
+
+// ─── clone channel ────────────────────────────────────────────────────────────
+
+describe('clone channel', () => {
+  it('opens a prefilled create modal and POSTs a new channel', async () => {
+    const ch = makeChannel(99, 'Cloneable');
+    API.get.mockResolvedValue(mockListResponse([ch]));
+    API.post.mockResolvedValue({ data: { success: true } });
+
+    render(React.createElement(HFChannel));
+    await waitFor(() => screen.getByText('Cloneable'));
+
+    const expandBtn = await waitFor(() =>
+      screen.getAllByRole('button').find((b) => b.textContent === '▸'),
+    );
+    fireEvent.click(expandBtn);
+
+    const cloneBtn = await waitFor(() => screen.getByTestId('clone-btn-99'));
+    fireEvent.click(cloneBtn);
+
+    // Modal opens in clone mode with the name pre-filled (" copy" suffix).
+    await waitFor(() => screen.getByText(/Clone · Cloneable/));
+    expect(screen.getByDisplayValue('Cloneable copy')).toBeTruthy();
+
+    // Submit → POST (create), not PUT (edit).
+    fireEvent.click(screen.getByText('create channel'));
+    await waitFor(() => {
+      expect(API.post).toHaveBeenCalledWith(
+        '/api/v2/acme/channels',
+        expect.objectContaining({ name: 'Cloneable copy' }),
+      );
+    });
+  });
+});
+
+// ─── batch test all enabled ───────────────────────────────────────────────────
+
+describe('test all enabled channels', () => {
+  it('tests only enabled channels with bounded concurrency', async () => {
+    const channels = [
+      makeChannel(1, 'A'),
+      makeChannel(2, 'B'),
+      { ...makeChannel(3, 'C'), status: 2 }, // disabled — must be skipped
+    ];
+    API.get.mockResolvedValue(mockListResponse(channels));
+    API.post.mockResolvedValue({ data: { success: true, latency_ms: 100 } });
+
+    render(React.createElement(HFChannel));
+    await waitFor(() => screen.getByText('A'));
+
+    fireEvent.click(screen.getByTestId('batch-test-all-btn'));
+
+    await waitFor(() => {
+      const testCalls = API.post.mock.calls.filter(([u]) =>
+        /\/channels\/\d+\/test$/.test(u),
+      );
+      expect(testCalls.length).toBe(2);
+    });
+    expect(API.post).toHaveBeenCalledWith('/api/v2/acme/channels/1/test', {});
+    expect(API.post).toHaveBeenCalledWith('/api/v2/acme/channels/2/test', {});
+  });
+});
+
+// ─── filters ──────────────────────────────────────────────────────────────────
+
+describe('channel filters', () => {
+  it('exposes keyword/group/status filters and sends keyword to the backend', async () => {
+    const ch = makeChannel(1, 'Main');
+    API.get.mockResolvedValue(mockListResponse([ch]));
+
+    render(React.createElement(HFChannel));
+    await waitFor(() => screen.getByText('Main'));
+
+    expect(screen.getByTestId('channel-filter-keyword')).toBeTruthy();
+    expect(screen.getByTestId('channel-filter-group')).toBeTruthy();
+    expect(screen.getByTestId('channel-filter-status')).toBeTruthy();
+
+    fireEvent.change(screen.getByTestId('channel-filter-keyword'), {
+      target: { value: 'openai' },
+    });
+    fireEvent.click(screen.getByText('search'));
+
+    await waitFor(() => {
+      const calls = API.get.mock.calls.map(([u]) => u);
+      expect(calls.some((u) => u.includes('keyword=openai'))).toBe(true);
+    });
+  });
+
+  it('status filter hides non-matching channels client-side', async () => {
+    const channels = [
+      makeChannel(1, 'EnabledChan'),
+      { ...makeChannel(2, 'DisabledChan'), status: 2 },
+    ];
+    API.get.mockResolvedValue(mockListResponse(channels));
+
+    render(React.createElement(HFChannel));
+    await waitFor(() => screen.getByText('EnabledChan'));
+    expect(screen.getByText('DisabledChan')).toBeTruthy();
+
+    fireEvent.change(screen.getByTestId('channel-filter-status'), {
+      target: { value: 'disabled' },
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('EnabledChan')).toBeNull();
+    });
+    expect(screen.getByText('DisabledChan')).toBeTruthy();
   });
 });

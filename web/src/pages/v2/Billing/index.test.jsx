@@ -49,6 +49,24 @@ vi.mock('../../../components/hifi/WIPBanner', () => ({
     ),
 }));
 
+// Mirror i18next's en behaviour: return the English defaultValue (2nd arg)
+// with {{var}} interpolation, falling back to the key when no default given.
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key, fallback, opts) => {
+      const vars =
+        typeof fallback === 'object' && fallback !== null ? fallback : opts;
+      let out = typeof fallback === 'string' ? fallback : key;
+      if (vars) {
+        for (const [k, v] of Object.entries(vars)) {
+          out = out.split(`{{${k}}}`).join(String(v));
+        }
+      }
+      return out;
+    },
+  }),
+}));
+
 import HFBilling from './index';
 import { API, showError } from '../../../helpers';
 
@@ -179,5 +197,31 @@ describe('Billing page', () => {
     const payLink = screen.getByTestId('billing-edit-payment');
     expect(payLink.tagName.toLowerCase()).toBe('a');
     expect(payLink.href).toContain('identity.lurus.cn');
+  });
+
+  // 4. Platform summary 503 → honest "billing temporarily unavailable" banner,
+  //    while the tenant-local invoices table still renders (allSettled isolation).
+  it('shows an honest platform-down banner when billing summary is unreachable', async () => {
+    API.get.mockImplementation((url) => {
+      if (url.includes('/billing/invoices')) {
+        return Promise.resolve({
+          data: { success: true, data: { items: fakeInvoices } },
+        });
+      }
+      // summary call rejects like a 503 from the platform billing service
+      return Promise.reject(new Error('503 Service Unavailable'));
+    });
+
+    render(<HFBilling />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('billing-platform-down')).toBeTruthy();
+    });
+    expect(screen.getByTestId('billing-platform-down').textContent).toMatch(
+      /temporarily unavailable/i,
+    );
+
+    // Invoices remain visible despite the summary outage.
+    expect(screen.getByText('2026-05')).toBeTruthy();
   });
 });

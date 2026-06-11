@@ -26,10 +26,29 @@
   --hf-err: #b3392b;
   --hf-info: #2c5fb0;
 
-  --hf-display: 'Fraunces', Georgia, 'Times New Roman', serif;
-  --hf-sans: 'Inter Tight', -apple-system, BlinkMacSystemFont, system-ui,
-    sans-serif;
-  --hf-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  /* Latin webfonts (self-hosted, see index.css) followed by CJK system-font
+   * fallbacks — Fraunces / Inter Tight carry no Chinese glyphs, so without the
+   * CJK tail the console's Chinese text silently falls back to a serif/system
+   * default. We do NOT self-host a CJK face (multi-MB); the system stack
+   * (macOS PingFang / Windows YaHei / Linux Noto) renders Chinese cleanly. */
+  --hf-display: 'Fraunces', 'Songti SC', 'Source Han Serif SC', 'Noto Serif SC',
+    Georgia, 'Times New Roman', serif;
+  --hf-sans: 'Inter Tight', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC',
+    -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --hf-mono: 'JetBrains Mono', 'PingFang SC', 'Microsoft YaHei',
+    'IBM Plex Mono', ui-monospace, Menlo, monospace;
+
+  /* Spacing scale — collapses the 7 ad-hoc gap/padding values scattered across
+   * the v2 pages (4/8/10/12/14/20/24/28/32) onto a single rhythm. Pages should
+   * reference these (or the .hf-page-body / .hf-grid helpers below) instead of
+   * inlining pixel values. */
+  --hf-sp-1: 4px;
+  --hf-sp-2: 8px;
+  --hf-sp-3: 12px;
+  --hf-sp-4: 16px;
+  --hf-sp-5: 20px;
+  --hf-sp-6: 24px;
+  --hf-sp-7: 32px;
 }
 
 [data-theme='dark'] {
@@ -482,6 +501,31 @@
 .hf-body {
   overflow: auto;
   min-height: 0;
+}
+
+/* ── Canonical layout rhythm ─────────────────────────────────────────────
+ * Pages historically inlined page padding (24/28/20/12) and grid gaps
+ * (8/10/14/24) ad hoc; these helpers give every page one shared rhythm.
+ *   .hf-page-body  — the scrolling body wrapper of a console page
+ *   .hf-grid       — a flex/grid row of panels with a consistent gutter
+ *   .hf .panel.pad — opt-in panel inner padding (base .panel stays unpadded
+ *                    so full-bleed tables and custom layouts are unaffected)
+ *   .hf-stack      — vertical stack of panels with consistent spacing
+ */
+.hf-page-body {
+  padding: var(--hf-sp-6) var(--hf-sp-7);
+}
+.hf-grid {
+  display: grid;
+  gap: var(--hf-sp-4);
+}
+.hf-stack > * + * {
+  margin-top: var(--hf-sp-4);
+}
+.hf .panel.pad,
+.hf .panel-paper.pad,
+.hf .panel-sunken.pad {
+  padding: var(--hf-sp-5);
 }
 
 .hf-page-head {

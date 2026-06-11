@@ -30,7 +30,7 @@ import { useTranslation } from 'react-i18next';
 // card — the `.hf` class is what activates the hi-fi CSS variables/shared
 // classes (HFShell itself relies on the same `<div className='hf …'>` root).
 const AccountDisabled = () => {
-  const { t } = useTranslation();
+  const { t: tr } = useTranslation();
   return (
     <div
       className='hf'
@@ -54,14 +54,15 @@ const AccountDisabled = () => {
           ⊘
         </div>
         <div className='lbl' style={{ marginBottom: 10 }}>
-          account · suspended
+          {tr('console.account.badge', 'account · suspended')}
         </div>
         <h1 className='display' style={{ fontSize: 28, margin: 0 }}>
-          {t('账户已被禁用')}
+          {tr('console.account.title', 'Account disabled')}
         </h1>
         <div className='sub muted' style={{ marginTop: 10, fontSize: 13 }}>
-          {t(
-            '您的账户当前处于禁用状态，无法访问此服务。如需恢复访问，请联系系统管理员。',
+          {tr(
+            'console.account.body',
+            'Your account is currently disabled and cannot access this service. To restore access, please contact the system administrator.',
           )}
         </div>
         <div
@@ -79,7 +80,7 @@ const AccountDisabled = () => {
               window.location.href = 'mailto:support@lurus.cn';
             }}
           >
-            {t('联系管理员')}
+            {tr('console.account.contact_admin', 'Contact administrator')}
           </button>
           <button
             type='button'
@@ -88,7 +89,7 @@ const AccountDisabled = () => {
               window.location.href = '/api/v2/auth/zita-logout';
             }}
           >
-            {t('切换账号')}
+            {tr('console.account.switch_account', 'Switch account')}
           </button>
         </div>
       </div>

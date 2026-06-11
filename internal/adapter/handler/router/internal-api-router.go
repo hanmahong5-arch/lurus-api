@@ -127,6 +127,7 @@ func SetInternalApiRouter(router *gin.Engine) {
 	adminGroup.Use(middleware.RequireScope(repo.ScopeAdmin))
 	{
 		adminGroup.POST("/backfill-token-accounts", handler.InternalBackfillTokenAccountIDs)
+		adminGroup.GET("/convergence-stats", handler.InternalConvergenceStats)
 	}
 
 	// Provisioning API — Reseller sub-tenant key issuance / revocation
@@ -137,5 +138,30 @@ func SetInternalApiRouter(router *gin.Engine) {
 		provisioningGroup.POST("/tenants/:slug/keys", handler.CreateProvisionedKey)
 		provisioningGroup.GET("/tenants/:slug/keys", handler.ListProvisionedKeys)
 		provisioningGroup.DELETE("/tenants/:slug/keys/:key_id", handler.RevokeProvisionedKey)
+	}
+
+	// Platform BillingOutbox supply endpoint — SEAM S1 model (b).
+	// Scope: balance:write — platform's internal key already carries this scope
+	// for wallet operations; no new key rotation required.
+	// Idempotency: enforced via UNIQUE(event_id) in credit_pool_fund_events (migration 019).
+	poolFundGroup := internalGroup.Group("/v1/provisioning")
+	poolFundGroup.Use(middleware.RequireScope(repo.ScopeBalanceWrite))
+	{
+		poolFundGroup.POST("/tenants/:slug/credit-pool/fund", handler.InternalFundCreditPool)
+	}
+
+	// PIPL §47 account erasure — platform calls POST after the deletion
+	// cooling-off period expires (newhub has no NATS consumer; trigger is
+	// internal HTTP, SEAM S1 pattern). Idempotent via UNIQUE(event_id) in
+	// privacy_erasure_requests (migration 020).
+	privacyEraseGroup := internalGroup.Group("/v1/privacy")
+	privacyEraseGroup.Use(middleware.RequireScope(repo.ScopeUserDelete))
+	{
+		privacyEraseGroup.POST("/erase", handler.InternalPrivacyErase)
+	}
+	privacyReadGroup := internalGroup.Group("/v1/privacy")
+	privacyReadGroup.Use(middleware.RequireScope(repo.ScopeUserRead))
+	{
+		privacyReadGroup.GET("/erase/:event_id", handler.InternalGetPrivacyErasure)
 	}
 }

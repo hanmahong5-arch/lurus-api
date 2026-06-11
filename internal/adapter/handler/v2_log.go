@@ -84,6 +84,8 @@ func GetLogsV2(c *gin.Context) {
 	startTime, _ := strconv.ParseInt(c.DefaultQuery("start_time", "0"), 10, 64)
 	endTime, _ := strconv.ParseInt(c.DefaultQuery("end_time", "0"), 10, 64)
 	tokenName := c.Query("token_name")
+	// Live-tail cursor: when present, return only rows newer than this id.
+	afterID, _ := strconv.Atoi(c.DefaultQuery("after_id", "0"))
 
 	if page < 1 {
 		page = 1
@@ -103,6 +105,7 @@ func GetLogsV2(c *gin.Context) {
 		StartTime:  startTime,
 		EndTime:    endTime,
 		TokenName:  tokenName,
+		AfterID:    afterID,
 		Offset:     offset,
 		Limit:      pageSize,
 	}

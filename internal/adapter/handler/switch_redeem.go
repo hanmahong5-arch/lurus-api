@@ -232,10 +232,8 @@ func SwitchRedeemAnonymous(c *gin.Context) {
 // isolation. Anonymous redeem has no tenant context (caller is unauth'd);
 // repo.Redeem still enforces tenant ownership at the time of mark-used.
 func findRedemptionByKey(key string) (*repo.Redemption, error) {
-	keyCol := "`key`"
-	if common.UsingPostgreSQL {
-		keyCol = `"key"`
-	}
+	// PG-only runtime; the SQLite test tier also accepts double-quoted identifiers.
+	keyCol := `"key"`
 	r := &repo.Redemption{}
 	err := repo.WithoutTenantIsolation(repo.DB).Where(keyCol+" = ?", key).First(r).Error
 	return r, err

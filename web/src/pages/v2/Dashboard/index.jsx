@@ -17,8 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import HFShell from '../../../components/hifi/HFShell';
-import { API, showError } from '../../../helpers';
+import { API } from '../../../helpers';
+import { QUOTA_PER_USD, quotaToUSD } from '../../../helpers/formatting';
 import {
   computeQPS,
   computeLatencyP50,
@@ -33,8 +35,6 @@ import {
   DASHBOARD_REALTIME_WINDOW_SECONDS,
 } from './kpis';
 
-const QUOTA_PER_USD = 500_000;
-
 const useTenantSlug = () => {
   const [slug, setSlug] = useState('default');
   useEffect(() => {
@@ -45,8 +45,6 @@ const useTenantSlug = () => {
   }, []);
   return slug;
 };
-
-const quotaToUSD = (q) => (q / QUOTA_PER_USD).toFixed(2);
 
 const fmtTs = (ts) => {
   if (!ts) return '—';
@@ -71,6 +69,7 @@ const fmtTs = (ts) => {
 const RELAY_BASE_URL = 'https://api.lurus.cn/v1';
 
 const OnboardingCurlBlock = ({ username, tenantSlug }) => {
+  const { t } = useTranslation();
   const navigateToTokens = (e) => {
     e.preventDefault();
     window.location.href = '/console/v2/token';
@@ -85,7 +84,7 @@ const OnboardingCurlBlock = ({ username, tenantSlug }) => {
   return (
     <div
       role='region'
-      aria-label='get started'
+      aria-label={t('console.dashboard.onboarding_label', 'get started')}
       style={{
         margin: '14px 24px 0',
         padding: '18px 22px',
@@ -98,11 +97,13 @@ const OnboardingCurlBlock = ({ username, tenantSlug }) => {
         className='lbl'
         style={{ fontSize: 11, marginBottom: 8, color: 'var(--hf-accent)' }}
       >
-        get started — first relay call
+        {t(
+          'console.dashboard.onboarding_label',
+          'get started — first relay call',
+        )}
       </div>
       <div className='display' style={{ fontSize: 18, marginBottom: 10 }}>
-        You have <strong>0 tokens</strong> in tenant <code>{tenantSlug}</code>.
-        Create one to make your first call.
+        {t('console.dashboard.onboarding_title', { slug: tenantSlug })}
       </div>
       <div
         style={{
@@ -118,13 +119,16 @@ const OnboardingCurlBlock = ({ username, tenantSlug }) => {
           className='btn primary'
           style={{ textDecoration: 'none', padding: '6px 14px' }}
         >
-          + create token
+          {t('console.dashboard.onboarding_create', '+ create token')}
         </a>
         <span
           className='mono muted'
           style={{ fontSize: 11, alignSelf: 'center' }}
         >
-          then paste it into the snippet below
+          {t(
+            'console.dashboard.onboarding_paste',
+            'then paste it into the snippet below',
+          )}
         </span>
       </div>
       <pre
@@ -149,6 +153,7 @@ const OnboardingCurlBlock = ({ username, tenantSlug }) => {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 const HFDashboard = () => {
+  const { t } = useTranslation();
   const tenantSlug = useTenantSlug();
 
   const [me, setMe] = useState(null);
@@ -161,19 +166,27 @@ const HFDashboard = () => {
     const startTime =
       Math.floor(Date.now() / 1000) - DASHBOARD_REALTIME_WINDOW_SECONDS;
     try {
+      // skipErrorHandler: a stale/absent session must NOT stack a red toast on
+      // mount. The page degrades gracefully on its own — KPIs fall back to '—'
+      // and the onboarding / empty states render — so a failed fetch is a calm
+      // empty dashboard, not an error wall.
       const [meRes, logsRes] = await Promise.all([
-        API.get(`/api/v2/${tenantSlug}/user/me`),
+        API.get(`/api/v2/${tenantSlug}/user/me`, { skipErrorHandler: true }),
         API.get(
           `/api/v2/${tenantSlug}/logs?page=1&page_size=200&start_time=${startTime}`,
+          { skipErrorHandler: true },
         ),
       ]);
       if (meRes?.data?.success) setMe(meRes.data.data);
       if (logsRes?.data?.success) {
-        const items = logsRes.data.data?.items ?? logsRes.data.data ?? [];
+        // GET /logs returns { logs: [...] }; tolerate { items } / bare array
+        // too. The prior code read only `.items`, so the 5-min realtime KPIs
+        // were always empty against the real backend.
+        const items = logsRes.data.data?.logs ?? logsRes.data.data?.items ?? [];
         setLogs(Array.isArray(items) ? items : []);
       }
     } catch (e) {
-      showError('Failed to load dashboard data');
+      // Intentionally silent — the degraded empty state IS the UX here.
     } finally {
       setLoading(false);
     }
@@ -213,13 +226,16 @@ const HFDashboard = () => {
         <>
           <span className='muted mono' style={{ fontSize: 11 }}>
             {loading
-              ? 'loading…'
+              ? t('console.common.loading')
               : me
-                ? `${me.request_count ?? 0} requests · $${spendUSD?.toFixed(2) ?? '—'} spent`
+                ? t('console.dashboard.actions_stats', {
+                    requests: me.request_count ?? 0,
+                    spent: spendUSD?.toFixed(2) ?? '—',
+                  })
                 : ''}
           </span>
           <button type='button' className='btn' onClick={fetchData}>
-            refresh
+            {t('console.common.refresh')}
           </button>
         </>
       }
@@ -230,41 +246,47 @@ const HFDashboard = () => {
       <div className='hf-page-head'>
         <div>
           <div className='lbl' style={{ marginBottom: 6 }}>
-            at a glance
+            {t('console.dashboard.at_a_glance')}
           </div>
           <h1>
             {loading ? (
-              'Loading…'
+              t('console.common.loading')
             ) : me ? (
               <>
-                {me.display_name || me.username || 'Your workspace'}{' '}
+                {me.display_name ||
+                  me.username ||
+                  t('console.dashboard.your_workspace')}{' '}
                 <span className='muted' style={{ fontWeight: 400 }}>
-                  · {remainUSD} remaining
+                  {t('console.dashboard.remaining_suffix', {
+                    amount: remainUSD,
+                  })}
                 </span>
               </>
             ) : (
-              'Dashboard'
+              t('console.dashboard.title_fallback')
             )}
           </h1>
           <div className='sub'>
             {me
-              ? `${me.token_count ?? 0} active tokens · ${me.request_count ?? 0} total requests`
-              : 'Usage overview for your workspace'}
+              ? t('console.dashboard.sub_stats', {
+                  tokens: me.token_count ?? 0,
+                  requests: me.request_count ?? 0,
+                })
+              : t('console.dashboard.sub_fallback')}
           </div>
         </div>
       </div>
 
       <div
+        className='hf-grid'
         style={{
-          padding: 24,
-          display: 'grid',
+          padding: 'var(--hf-sp-6)',
           gridTemplateColumns: 'repeat(12, 1fr)',
-          gap: 14,
         }}
       >
         {/* ── KPI: Total spend (real) ── */}
         <div className='panel' style={{ gridColumn: 'span 3', padding: 18 }}>
-          <div className='lbl'>total spend</div>
+          <div className='lbl'>{t('console.dashboard.total_spend')}</div>
           <div className='display' style={{ fontSize: 32, marginTop: 4 }}>
             {loading ? '…' : me ? `$${spendUSD.toFixed(2)}` : '—'}
           </div>
@@ -277,14 +299,14 @@ const HFDashboard = () => {
             }}
           >
             <span className='mono muted' style={{ fontSize: 10 }}>
-              all time · quota units
+              {t('console.dashboard.all_time_quota')}
             </span>
           </div>
         </div>
 
         {/* ── KPI: Remaining quota (real) ── */}
         <div className='panel' style={{ gridColumn: 'span 3', padding: 18 }}>
-          <div className='lbl'>remaining quota</div>
+          <div className='lbl'>{t('console.dashboard.remaining_quota')}</div>
           <div className='display' style={{ fontSize: 32, marginTop: 4 }}>
             {loading ? '…' : (remainUSD ?? '—')}
           </div>
@@ -298,15 +320,15 @@ const HFDashboard = () => {
           >
             <span className='mono muted' style={{ fontSize: 10 }}>
               {me && me.remaining_quota >= 0
-                ? 'until top-up'
-                : 'unlimited plan'}
+                ? t('console.dashboard.until_topup')
+                : t('console.dashboard.unlimited_plan')}
             </span>
           </div>
         </div>
 
         {/* ── KPI: Total requests (real) ── */}
         <div className='panel' style={{ gridColumn: 'span 3', padding: 18 }}>
-          <div className='lbl'>total requests</div>
+          <div className='lbl'>{t('console.dashboard.total_requests')}</div>
           <div className='display' style={{ fontSize: 32, marginTop: 4 }}>
             {loading
               ? '…'
@@ -323,14 +345,14 @@ const HFDashboard = () => {
             }}
           >
             <span className='mono muted' style={{ fontSize: 10 }}>
-              all time
+              {t('console.dashboard.all_time')}
             </span>
           </div>
         </div>
 
         {/* ── KPI: Active tokens (real) ── */}
         <div className='panel' style={{ gridColumn: 'span 3', padding: 18 }}>
-          <div className='lbl'>active tokens</div>
+          <div className='lbl'>{t('console.dashboard.active_tokens')}</div>
           <div className='display' style={{ fontSize: 32, marginTop: 4 }}>
             {loading ? '…' : me ? (me.token_count ?? 0) : '—'}
           </div>
@@ -343,14 +365,14 @@ const HFDashboard = () => {
             }}
           >
             <span className='mono muted' style={{ fontSize: 10 }}>
-              in this workspace
+              {t('console.dashboard.in_workspace')}
             </span>
           </div>
         </div>
 
         {/* ── KPI: QPS (derived from last 5min of logs) ── */}
         <div className='panel' style={{ gridColumn: 'span 4', padding: 18 }}>
-          <div className='lbl'>qps</div>
+          <div className='lbl'>{t('console.dashboard.qps')}</div>
           <div
             className='display'
             style={{
@@ -370,14 +392,14 @@ const HFDashboard = () => {
             }}
           >
             {hasRealtimeData
-              ? 'last 5 min · req/s'
-              : 'no traffic in last 5 min'}
+              ? t('console.dashboard.qps_active')
+              : t('console.dashboard.qps_idle')}
           </div>
         </div>
 
         {/* ── KPI: Latency P50/P95/P99 (P99 anchors the SLO) ── */}
         <div className='panel' style={{ gridColumn: 'span 4', padding: 18 }}>
-          <div className='lbl'>latency · ms</div>
+          <div className='lbl'>{t('console.dashboard.latency_ms')}</div>
           <div
             style={{
               marginTop: 6,
@@ -424,14 +446,14 @@ const HFDashboard = () => {
             }}
           >
             {p99 != null
-              ? 'percentiles · last 5 min · p99 anchors SLO'
-              : 'awaiting requests with latency data'}
+              ? t('console.dashboard.latency_active')
+              : t('console.dashboard.latency_idle')}
           </div>
         </div>
 
         {/* ── KPI: Error rate (derived from log type 5 share) ── */}
         <div className='panel' style={{ gridColumn: 'span 4', padding: 18 }}>
-          <div className='lbl'>error rate</div>
+          <div className='lbl'>{t('console.dashboard.error_rate')}</div>
           <div
             className='display'
             style={{
@@ -455,8 +477,8 @@ const HFDashboard = () => {
             }}
           >
             {hasRealtimeData
-              ? 'last 5 min · err / consume+err'
-              : 'no traffic in last 5 min'}
+              ? t('console.dashboard.error_rate_active')
+              : t('console.dashboard.qps_idle')}
           </div>
         </div>
 
@@ -471,17 +493,19 @@ const HFDashboard = () => {
             }}
           >
             <div>
-              <div className='lbl'>cost by model · last 5 min</div>
+              <div className='lbl'>{t('console.dashboard.cost_by_model')}</div>
               <div className='display' style={{ fontSize: 18, marginTop: 2 }}>
                 {costByModel.length > 0
-                  ? `${costByModel.length} model${costByModel.length === 1 ? '' : 's'} active`
-                  : 'No consume traffic yet'}
+                  ? t('console.dashboard.models_active', {
+                      count: costByModel.length,
+                    })
+                  : t('console.dashboard.no_consume')}
               </div>
             </div>
             <span className='faint mono' style={{ fontSize: 10 }}>
               {costByModel.length > 0
-                ? 'derived from /logs'
-                : 'awaiting traffic'}
+                ? t('console.dashboard.derived_logs')
+                : t('console.dashboard.awaiting_traffic')}
             </span>
           </div>
           {costByModel.length === 0 && (
@@ -494,7 +518,7 @@ const HFDashboard = () => {
                 textAlign: 'center',
               }}
             >
-              once a relay call is consumed, the model breakdown lands here.
+              {t('console.dashboard.cost_empty')}
             </div>
           )}
           {costByModel.length > 0 && (
@@ -527,7 +551,10 @@ const HFDashboard = () => {
                           {row.model}
                         </span>
                         <span className='mono muted' style={{ fontSize: 10 }}>
-                          ${usd} · {row.requestCount} req
+                          ${usd} ·{' '}
+                          {t('console.dashboard.req_suffix', {
+                            n: row.requestCount,
+                          })}
                         </span>
                       </div>
                       <div
@@ -561,16 +588,16 @@ const HFDashboard = () => {
         {/* ── Recent activity table ── */}
         <div className='panel' style={{ gridColumn: 'span 5', padding: 18 }}>
           <div className='lbl' style={{ marginBottom: 10 }}>
-            recent activity
+            {t('console.dashboard.recent_activity')}
           </div>
           {loading && (
             <div className='muted' style={{ fontSize: 12 }}>
-              Loading…
+              {t('console.common.loading')}
             </div>
           )}
           {!loading && recentLogs.length === 0 && (
             <div className='muted' style={{ fontSize: 12 }}>
-              No recent requests found.
+              {t('console.dashboard.no_recent')}
             </div>
           )}
           {!loading && recentLogs.length > 0 && (
@@ -585,16 +612,16 @@ const HFDashboard = () => {
                 }}
               >
                 <span className='lbl' style={{ fontSize: 10 }}>
-                  time
+                  {t('console.dashboard.col_time')}
                 </span>
                 <span className='lbl' style={{ fontSize: 10 }}>
-                  model
+                  {t('console.dashboard.col_model')}
                 </span>
                 <span
                   className='lbl'
                   style={{ fontSize: 10, textAlign: 'right' }}
                 >
-                  cost
+                  {t('console.dashboard.col_cost')}
                 </span>
               </div>
               {recentLogs.map((log, i) => {

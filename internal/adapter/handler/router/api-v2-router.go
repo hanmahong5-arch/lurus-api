@@ -12,6 +12,12 @@ import (
 // Admin operations use AdminJWTAuth; billing uses ZitadelAuth.
 func SetApiV2Router(router *gin.Engine) {
 	apiV2 := router.Group("/api/v2")
+	// Non-blocking SDK identity injector: resolves the lurus_session cookie
+	// (set by the platform SDK bridge) into the context so middleware.UserAuth
+	// / AdminAuth can admit SDK-authenticated console users whose only
+	// credential is that cookie. Never aborts — public routes (switch, oauth)
+	// and bearer/session paths are unaffected (ADR-0011 Layer C).
+	apiV2.Use(middleware.OptionalZitaIdentity())
 	{
 		// ================================================================
 		// OAuth / Zitadel Routes (public — handles redirects & callbacks)
@@ -83,6 +89,7 @@ func SetApiV2Router(router *gin.Engine) {
 		{
 			tenantTokens.GET("", handler.ListTokensV2)
 			tenantTokens.POST("", handler.CreateTokenV2)
+			tenantTokens.POST("/batch-delete", handler.DeleteTokensV2)
 			tenantTokens.PUT("/:id", handler.UpdateTokenV2)
 			tenantTokens.DELETE("/:id", handler.DeleteTokenV2)
 			tenantTokens.POST("/:id/rotate", handler.RotateTokenV2)
@@ -114,6 +121,9 @@ func SetApiV2Router(router *gin.Engine) {
 			tenantLogs.GET("", handler.GetLogsV2)
 			tenantLogs.GET("/all", handler.GetAllLogsV2)
 			tenantLogs.GET("/cluster", handler.GetLogClusterV2)
+			// Aggregate header (RPM/TPM/total requests/total quota) over the
+			// active filters — mirrors GetLogsV2's filter shape.
+			tenantLogs.GET("/stat", handler.GetLogStatV2)
 			// Wave 3 Phase 2 (2026-05-20): CSV export with streaming writer
 			// and a 50k-row hard cap (clamped silently above that).
 			tenantLogs.GET("/export", handler.ExportLogsV2)
@@ -260,6 +270,21 @@ func SetApiV2Router(router *gin.Engine) {
 				mappingRoute.DELETE("/:id", handler.DeleteUserMappingV2)
 			}
 
+			// Platform user management (deferred backlog round 2). Create is
+			// deferred (needs a password/invite flow) — the UI greys it.
+			adminUsers := adminRoute.Group("/users")
+			{
+				adminUsers.GET("", handler.ListAdminUsersV2)
+				adminUsers.PUT("/:id", handler.UpdateAdminUserV2)
+				adminUsers.DELETE("/:id", handler.DeleteAdminUserV2)
+			}
+
+			// System options panels (read + one-key-per-call write). Thin
+			// wrappers over GetOptions/UpdateOption (secret filtering + per-key
+			// validation + audit live there).
+			adminRoute.GET("/options", handler.ListAdminOptionsV2)
+			adminRoute.PUT("/options", handler.UpdateAdminOptionV2)
+
 			adminRoute.GET("/stats", handler.GetSystemStatsV2)
 			adminRoute.POST("/switch/presets", handler.CreateSwitchPreset)
 			// Phase D Track 2.3: white-label HMAC key derivation for Switch
@@ -275,6 +300,8 @@ func SetApiV2Router(router *gin.Engine) {
 				govRoute.GET("/fingerprints", handler.GetGovernanceFingerprintStats)
 				govRoute.GET("/latency", handler.GetGovernanceLatencyStats)
 				govRoute.GET("/efficiency", handler.GetGovernanceEfficiencyStats)
+				// Phase 1: cost-aware-routing savings analyzer (read-only).
+				govRoute.GET("/savings", handler.GetGovernanceSavings)
 			}
 			adminRoute.GET("/audit/events", middleware.CriticalRateLimit(), handler.GetAuditEvents)
 			adminRoute.GET("/audit/actions", handler.ListAuditActionsV2)

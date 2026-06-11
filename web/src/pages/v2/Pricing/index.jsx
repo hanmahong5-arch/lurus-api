@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import HFShell from '../../../components/hifi/HFShell';
 import { API, showError, showSuccess } from '../../../helpers';
 import useFormDraft from '../../../hooks/common/useFormDraft';
@@ -39,6 +40,8 @@ const useTenantSlug = () => {
 
 const PricingPage = () => {
   const tenantSlug = useTenantSlug();
+  // Aliased to `tr` per the v2 console convention (avoids shadowing).
+  const { t: tr } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pricing, setPricing] = useState([]);
@@ -70,10 +73,16 @@ const PricingPage = () => {
         );
       })
       .catch((err) => {
-        const msg = err?.response?.data?.message ?? '加载定价数据失败';
+        const msg =
+          err?.response?.data?.message ??
+          tr('console.pricing.load_failed', 'Failed to load pricing data');
         showError(msg);
       })
       .finally(() => setLoading(false));
+    // `tr` intentionally omitted: its identity is not stable under the test
+    // i18n mock and would re-trigger the fetch on every render; the fetch
+    // must run only on slug change / explicit refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantSlug, fetchTick]);
 
   // Merge server rows with in-progress edits for display.
@@ -124,11 +133,13 @@ const PricingPage = () => {
     try {
       const res = await API.post(`/api/v2/${tenantSlug}/pricing`, batch);
       const count = res?.data?.data?.updated_count ?? batch.length;
-      showSuccess(`已保存 ${count} 条定价更改`);
+      showSuccess(tr('console.pricing.toast_saved', { count }));
       clearEdits();
       refreshList();
     } catch (err) {
-      const msg = err?.response?.data?.message ?? '保存定价失败';
+      const msg =
+        err?.response?.data?.message ??
+        tr('console.pricing.save_failed', 'Failed to save pricing');
       showError(msg);
     } finally {
       setSaving(false);
@@ -138,12 +149,15 @@ const PricingPage = () => {
   return (
     <HFShell
       active='pricing'
-      crumbs={['平台', '定价管理']}
+      crumbs={[
+        tr('console.pricing.crumb_section', 'platform'),
+        tr('console.pricing.crumb', 'pricing'),
+      ]}
       actions={
         <>
           {loading && (
             <span className='muted mono' style={{ fontSize: 11 }}>
-              加载中…
+              {tr('console.common.loading', 'loading…')}
             </span>
           )}
           <button
@@ -153,7 +167,9 @@ const PricingPage = () => {
             data-testid='pricing-save'
             onClick={handleSave}
           >
-            {saving ? '保存中…' : '保存'}
+            {saving
+              ? tr('console.pricing.saving', 'saving…')
+              : tr('console.common.save', 'save')}
           </button>
         </>
       }
@@ -161,10 +177,15 @@ const PricingPage = () => {
       <div className='hf-page-head'>
         <div>
           <div className='lbl' style={{ marginBottom: 6 }}>
-            定价管理
+            {tr('console.pricing.title', 'pricing management')}
           </div>
-          <h1>模型定价</h1>
-          <div className='sub'>供应商成本 · 分组倍率 · 计费类型</div>
+          <h1>{tr('console.pricing.heading', 'Model pricing')}</h1>
+          <div className='sub'>
+            {tr(
+              'console.pricing.subtitle',
+              'vendor cost · group ratios · billing type',
+            )}
+          </div>
         </div>
       </div>
 
@@ -182,7 +203,7 @@ const PricingPage = () => {
           className={`btn${!vendorFilter ? ' primary' : ''}`}
           onClick={() => setVendorFilter('')}
         >
-          全部
+          {tr('console.pricing.all_vendors', 'all')}
         </button>
         {vendors.map((v) => (
           <button
@@ -206,24 +227,35 @@ const PricingPage = () => {
               alignItems: 'baseline',
             }}
           >
-            <div className='lbl'>模型列表</div>
+            <div className='lbl'>
+              {tr('console.pricing.model_list', 'model list')}
+            </div>
             <span
               className='muted mono'
               style={{ fontSize: 10, marginLeft: 'auto' }}
             >
-              {filteredPricing.length} 个模型
+              {tr('console.pricing.model_count', {
+                count: filteredPricing.length,
+              })}
             </span>
           </div>
           <table className='t' data-testid='pricing-table'>
             <thead>
               <tr>
-                <th>模型名称</th>
-                <th>供应商</th>
-                <th>计费类型</th>
-                <th>模型倍率</th>
-                <th>完成倍率</th>
-                <th>模型单价</th>
-                <th>启用分组</th>
+                <th>{tr('console.pricing.th_model_name', 'model name')}</th>
+                <th>{tr('console.pricing.th_vendor', 'vendor')}</th>
+                <th>{tr('console.pricing.th_quota_type', 'billing type')}</th>
+                <th>{tr('console.pricing.th_model_ratio', 'model ratio')}</th>
+                <th>
+                  {tr(
+                    'console.pricing.th_completion_ratio',
+                    'completion ratio',
+                  )}
+                </th>
+                <th>{tr('console.pricing.th_model_price', 'model price')}</th>
+                <th>
+                  {tr('console.pricing.th_enable_groups', 'enabled groups')}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -235,7 +267,12 @@ const PricingPage = () => {
                   <td>{row.vendor ?? '—'}</td>
                   <td>
                     <span className='tag'>
-                      {row.quota_type === 1 ? '单价计费' : '倍率计费'}
+                      {row.quota_type === 1
+                        ? tr(
+                            'console.pricing.quota_type_price',
+                            'per-call price',
+                          )
+                        : tr('console.pricing.quota_type_ratio', 'ratio-based')}
                     </span>
                   </td>
                   <td>
@@ -332,7 +369,7 @@ const PricingPage = () => {
                     className='muted'
                     style={{ textAlign: 'center', padding: 24 }}
                   >
-                    暂无数据
+                    {tr('console.common.no_data', 'no data')}
                   </td>
                 </tr>
               )}
@@ -344,7 +381,10 @@ const PricingPage = () => {
         {Object.keys(groupRatio).length > 0 && (
           <div className='panel' style={{ marginTop: 18, padding: 18 }}>
             <div className='lbl' style={{ marginBottom: 10 }}>
-              分组倍率（只读）
+              {tr(
+                'console.pricing.group_ratio_readonly',
+                'group ratios (read-only)',
+              )}
             </div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               {Object.entries(groupRatio).map(([group, ratio]) => (

@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import HFShell from '../../../components/hifi/HFShell';
 import { API, showError } from '../../../helpers';
 
@@ -46,41 +47,65 @@ const fmtCNY = (v) =>
       })
     : '—';
 
-const fmtQuota = (v) =>
-  typeof v === 'number' ? (v / QUOTA_PER_USD).toFixed(4) + ' USD eq.' : '—';
+// `usdEq` is the translated "USD eq." unit suffix — resolved at render time
+// because module scope has no i18n context.
+const fmtQuota = (v, usdEq) =>
+  typeof v === 'number' ? (v / QUOTA_PER_USD).toFixed(4) + ' ' + usdEq : '—';
 
 const HFBilling = () => {
   const tenantSlug = useTenantSlug();
+  // Aliased to `tr` per the v2 console convention (avoids shadowing).
+  const { t: tr } = useTranslation();
 
   const [invoices, setInvoices] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [recharging, setRecharging] = useState(false);
+  // True when the platform billing service is unreachable (e.g. 503). Surfaced
+  // as an honest banner instead of silently rendering "—" as if zero-balance.
+  const [platformDown, setPlatformDown] = useState(false);
 
   const fetchAll = useCallback(async () => {
     if (!tenantSlug) return;
     setLoading(true);
+    setPlatformDown(false);
     try {
-      const [invRes, sumRes] = await Promise.all([
+      // allSettled so a platform-summary 503 doesn't also blank the invoices
+      // table. summary uses skipErrorHandler so its failure shows the banner,
+      // not a duplicate toast.
+      const [invRes, sumRes] = await Promise.allSettled([
         API.get(`/api/v2/${tenantSlug}/billing/invoices`),
-        API.get('/api/v2/user/billing/summary'),
+        API.get('/api/v2/user/billing/summary', { skipErrorHandler: true }),
       ]);
 
-      if (invRes?.data?.success) {
-        setInvoices(invRes.data.data?.items ?? []);
-      } else {
-        showError(invRes?.data?.message || '加载账单失败');
+      if (invRes.status === 'fulfilled' && invRes.value?.data?.success) {
+        setInvoices(invRes.value.data.data?.items ?? []);
+      } else if (invRes.status === 'fulfilled') {
+        showError(
+          invRes.value?.data?.message ||
+            tr(
+              'console.billing.load_invoices_failed',
+              'Failed to load invoices',
+            ),
+        );
       }
+      // invRes rejected → the global interceptor already toasted it.
 
-      if (sumRes?.data?.success) {
-        setSummary(sumRes.data.data);
+      if (sumRes.status === 'fulfilled' && sumRes.value?.data?.success) {
+        setSummary(sumRes.value.data.data);
+      } else if (sumRes.status === 'rejected') {
+        // Platform billing service unreachable — balance/MTD can't be trusted.
+        setPlatformDown(true);
       }
-      // summary failure is non-fatal: page still works without it
     } catch (_) {
-      // network errors surfaced by API interceptor
+      // unreachable with allSettled; kept as a defensive backstop
     } finally {
       setLoading(false);
     }
+    // `tr` intentionally omitted: its identity is not stable under the test
+    // i18n mock and would re-trigger the fetch on every render; the fetch
+    // must run only on slug change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantSlug]);
 
   useEffect(() => {
@@ -90,18 +115,36 @@ const HFBilling = () => {
   const handleRecharge = async () => {
     setRecharging(true);
     try {
-      const res = await API.post('/api/v2/user/billing/checkout', {
-        amount_cny: 200,
-        payment_method: 'alipay',
-        return_url: window.location.href,
-      });
+      const res = await API.post(
+        '/api/v2/user/billing/checkout',
+        {
+          amount_cny: 200,
+          payment_method: 'alipay',
+          return_url: window.location.href,
+        },
+        { skipErrorHandler: true },
+      );
       if (res?.data?.success && res.data.data?.checkout_url) {
         window.location.href = res.data.data.checkout_url;
       } else {
-        showError(res?.data?.message || '创建充值订单失败');
+        showError(
+          res?.data?.message ||
+            tr(
+              'console.billing.checkout_failed',
+              'Failed to create top-up order',
+            ),
+        );
       }
     } catch (_) {
-      // interceptor handles toast
+      // Checkout reaches the same platform billing service — a failure here is
+      // the same outage. Surface the honest banner rather than only a toast.
+      setPlatformDown(true);
+      showError(
+        tr(
+          'console.billing.service_unavailable',
+          'Billing service temporarily unavailable — please try again later',
+        ),
+      );
     } finally {
       setRecharging(false);
     }
@@ -125,7 +168,10 @@ const HFBilling = () => {
   return (
     <HFShell
       active='billing'
-      crumbs={['my account', 'billing']}
+      crumbs={[
+        tr('console.nav.section_my_account', 'my account'),
+        tr('console.billing.crumb', 'billing'),
+      ]}
       actions={
         <>
           <button
@@ -135,28 +181,74 @@ const HFBilling = () => {
             disabled={recharging}
             data-testid='billing-recharge'
           >
-            {recharging ? '处理中…' : '+ 充值'}
+            {recharging
+              ? tr('console.billing.processing', 'processing…')
+              : tr('console.billing.recharge', '+ top up')}
           </button>
         </>
       }
     >
+      {platformDown && (
+        <div
+          role='alert'
+          data-testid='billing-platform-down'
+          style={{
+            margin: '14px 24px 0',
+            padding: '10px 14px',
+            border: '1px solid var(--hf-err)',
+            borderRadius: 2,
+            background: 'rgba(200,60,60,0.08)',
+            color: 'var(--hf-ink-2)',
+            fontFamily: 'var(--hf-mono)',
+            fontSize: 11,
+            lineHeight: 1.55,
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 2 }}>
+            ⚠{' '}
+            {tr(
+              'console.billing.platform_down_title',
+              'Billing temporarily unavailable',
+            )}
+          </div>
+          <div style={{ opacity: 0.85 }}>
+            {tr(
+              'console.billing.platform_down_body',
+              'The platform billing service is not responding. Balance and spend figures may be missing or stale; top-up is paused. Invoices below are tenant-local and unaffected.',
+            )}
+          </div>
+        </div>
+      )}
       <div className='hf-page-head'>
         <div>
           <div className='lbl' style={{ marginBottom: 6 }}>
-            billing
+            {tr('console.billing.title', 'billing')}
           </div>
           <h1>
             {loading ? '…' : mtdDisplay}{' '}
             <span className='muted' style={{ fontWeight: 400 }}>
-              · this month
+              · {tr('console.billing.this_month', 'this month')}
             </span>
           </h1>
-          <div className='sub'>prepaid balance · api consumption</div>
+          <div className='sub'>
+            {tr(
+              'console.billing.subtitle',
+              'prepaid balance · api consumption',
+            )}
+          </div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 28 }}>
           {[
-            ['balance', balanceDisplay, 'var(--hf-ink)'],
-            ['mtd spend', mtdDisplay, 'var(--hf-accent)'],
+            [
+              tr('console.billing.stat_balance', 'balance'),
+              balanceDisplay,
+              'var(--hf-ink)',
+            ],
+            [
+              tr('console.billing.stat_mtd_spend', 'mtd spend'),
+              mtdDisplay,
+              'var(--hf-accent)',
+            ],
           ].map(([l, v, col], i) => (
             <div key={i}>
               <div className='lbl'>{l}</div>
@@ -187,7 +279,9 @@ const HFBilling = () => {
               borderBottom: '1px solid var(--hf-rule)',
             }}
           >
-            <div className='lbl'>invoices · monthly</div>
+            <div className='lbl'>
+              {tr('console.billing.invoices_monthly', 'invoices · monthly')}
+            </div>
           </div>
 
           {loading ? (
@@ -198,7 +292,7 @@ const HFBilling = () => {
                 color: 'var(--hf-ink-2)',
               }}
             >
-              loading…
+              {tr('console.common.loading', 'loading…')}
             </div>
           ) : invoices.length === 0 ? (
             <div
@@ -208,16 +302,16 @@ const HFBilling = () => {
                 color: 'var(--hf-ink-2)',
               }}
             >
-              no invoice data
+              {tr('console.billing.no_invoices', 'no invoice data')}
             </div>
           ) : (
             <table className='t'>
               <thead>
                 <tr>
-                  <th>period</th>
-                  <th>amount (CNY)</th>
-                  <th>quota used</th>
-                  <th>requests</th>
+                  <th>{tr('console.billing.th_period', 'period')}</th>
+                  <th>{tr('console.billing.th_amount_cny', 'amount (CNY)')}</th>
+                  <th>{tr('console.billing.th_quota_used', 'quota used')}</th>
+                  <th>{tr('console.billing.th_requests', 'requests')}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -230,7 +324,12 @@ const HFBilling = () => {
                         {fmtCNY(inv.amount_cny)}
                       </span>
                     </td>
-                    <td className='mono muted'>{fmtQuota(inv.quota)}</td>
+                    <td className='mono muted'>
+                      {fmtQuota(
+                        inv.quota,
+                        tr('console.billing.usd_eq', 'USD eq.'),
+                      )}
+                    </td>
                     <td className='mono muted'>{inv.request_count ?? '—'}</td>
                     <td>
                       {/* Download PDF — deferred to Phase 2 */}
@@ -239,7 +338,10 @@ const HFBilling = () => {
                         className='btn ghost sm'
                         data-testid={`billing-download-${i}`}
                         disabled
-                        title='invoice PDF generation deferred — see Phase 2 backlog'
+                        title={tr(
+                          'console.billing.pdf_deferred',
+                          'invoice PDF generation deferred — see Phase 2 backlog',
+                        )}
                       >
                         PDF
                       </button>
@@ -255,7 +357,9 @@ const HFBilling = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Payment method — edit deferred */}
           <div className='panel' style={{ padding: 18 }}>
-            <div className='lbl'>payment method</div>
+            <div className='lbl'>
+              {tr('console.billing.payment_method', 'payment method')}
+            </div>
             <div
               className='panel-paper'
               style={{
@@ -283,9 +387,11 @@ const HFBilling = () => {
                 ALI
               </div>
               <div>
-                <div className='mono strong'>支付宝</div>
+                <div className='mono strong'>
+                  {tr('console.billing.alipay', 'Alipay')}
+                </div>
                 <div className='faint mono' style={{ fontSize: 10 }}>
-                  default
+                  {tr('console.billing.default_method', 'default')}
                 </div>
               </div>
             </div>
@@ -298,16 +404,21 @@ const HFBilling = () => {
                 className='btn sm'
                 data-testid='billing-edit-payment'
                 style={{ textDecoration: 'none', display: 'inline-block' }}
-                title='payment method management lives on identity.lurus.cn (Platform) — link out instead'
+                title={tr(
+                  'console.billing.manage_payment_title',
+                  'payment method management lives on identity.lurus.cn (Platform) — link out instead',
+                )}
               >
-                manage payment ↗
+                {tr('console.billing.manage_payment', 'manage payment')} ↗
               </a>
             </div>
           </div>
 
           {/* Spend trend */}
           <div className='panel' style={{ padding: 18 }}>
-            <div className='lbl'>trend · last 6 months</div>
+            <div className='lbl'>
+              {tr('console.billing.trend_title', 'trend · last 6 months')}
+            </div>
             {loading ? (
               <div
                 style={{
@@ -318,7 +429,7 @@ const HFBilling = () => {
                   color: 'var(--hf-ink-2)',
                 }}
               >
-                loading…
+                {tr('console.common.loading', 'loading…')}
               </div>
             ) : (
               <div
@@ -357,7 +468,9 @@ const HFBilling = () => {
           {/* Summary stats from platform */}
           {summary && (
             <div className='panel' style={{ padding: 18 }}>
-              <div className='lbl'>platform summary</div>
+              <div className='lbl'>
+                {tr('console.billing.platform_summary', 'platform summary')}
+              </div>
               <div
                 style={{
                   marginTop: 10,
@@ -370,7 +483,9 @@ const HFBilling = () => {
                   <div
                     style={{ display: 'flex', justifyContent: 'space-between' }}
                   >
-                    <span className='muted'>plan</span>
+                    <span className='muted'>
+                      {tr('console.billing.plan', 'plan')}
+                    </span>
                     <span className='mono strong'>
                       {summary.subscription_plan}
                     </span>
@@ -380,7 +495,9 @@ const HFBilling = () => {
                   <div
                     style={{ display: 'flex', justifyContent: 'space-between' }}
                   >
-                    <span className='muted'>wallet</span>
+                    <span className='muted'>
+                      {tr('console.billing.wallet', 'wallet')}
+                    </span>
                     <span className='mono strong'>
                       {fmtCNY(summary.wallet_balance_cny)}
                     </span>

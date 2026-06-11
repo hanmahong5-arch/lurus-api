@@ -71,6 +71,7 @@ type LogQueryParams struct {
 	EndTime   int64  // Filter logs before this timestamp
 	TokenName string // Filter by token name
 	Username  string // Filter by username
+	AfterID   int    // Cursor: when > 0, return only rows with id strictly greater (live-tail)
 	Offset    int    // Pagination offset
 	Limit     int    // Pagination limit
 }

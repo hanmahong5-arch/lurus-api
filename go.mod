@@ -28,7 +28,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/grafana/pyroscope-go v1.2.7
-	github.com/hanmahong5-arch/zita-sdk-go v0.0.0-20260508070017-e2611da1e01e
+	github.com/hanmahong5-arch/zita-sdk-go v0.1.0
 	github.com/jfreymuth/oggvorbis v1.0.5
 	github.com/jinzhu/copier v0.4.0
 	github.com/joho/godotenv v1.5.1
@@ -57,7 +57,6 @@ require (
 	golang.org/x/mod v0.32.0
 	golang.org/x/net v0.51.0
 	golang.org/x/sync v0.19.0
-	gorm.io/driver/mysql v1.4.3
 	gorm.io/driver/postgres v1.5.11
 	gorm.io/gorm v1.25.12
 )
@@ -114,7 +113,6 @@ require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
-	github.com/go-sql-driver/mysql v1.7.0 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
 	github.com/gomodule/redigo v1.9.2 // indirect
@@ -179,5 +177,3 @@ require (
 )
 
 replace github.com/LurusTech/lurus-proto-go => ../shared/lurus-proto-go
-
-replace github.com/hanmahong5-arch/zita-sdk-go => ../shared/zita-sdk-go

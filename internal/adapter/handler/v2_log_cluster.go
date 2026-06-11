@@ -56,6 +56,8 @@ func GetLogClusterV2(c *gin.Context) {
 	}
 
 	// Build time-bucket expression compatible with SQLite and PostgreSQL.
+	// The SQLite arm exists only for the hermetic glebarez unit-test tier;
+	// runtime is always PostgreSQL.
 	var bucketExpr string
 	if common.UsingPostgreSQL {
 		if bucket == "day" {

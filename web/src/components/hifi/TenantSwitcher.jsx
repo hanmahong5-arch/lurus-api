@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import UsageRing from './UsageRing';
 
 /**
@@ -62,6 +63,18 @@ const MODE_META = {
 // kept here so the switcher has something to render; not used in HFShell flow.
 const DEMO_QUOTA = { used: 0, total: 0, unit: '$' };
 
+// Mode names double as internal identifiers (MODE_META keys, t.mode values) —
+// translate only at render time.
+const MODE_LABEL_KEYS = {
+  Personal: ['mode_personal', 'Personal'],
+  Reseller: ['mode_reseller', 'Reseller'],
+  EndUser: ['mode_enduser', 'EndUser'],
+};
+const modeLabel = (tr, m) => {
+  const pair = MODE_LABEL_KEYS[m];
+  return pair ? tr(`console.component.tenant_switcher.${pair[0]}`, pair[1]) : m;
+};
+
 const TenantSwitcher = ({
   mode: modeProp,
   tenantName: tenantNameProp,
@@ -69,6 +82,7 @@ const TenantSwitcher = ({
   quota: quotaProp,
   onSelect,
 }) => {
+  const { t: tr } = useTranslation();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState(modeProp ?? 'Personal');
   const [tenantName, setTenantName] = useState(tenantNameProp ?? '');
@@ -163,7 +177,7 @@ const TenantSwitcher = ({
             }}
           >
             <span>{meta.glyph}</span>
-            {mode}
+            {modeLabel(tr, mode)}
           </span>
           <span
             style={{
@@ -201,7 +215,9 @@ const TenantSwitcher = ({
                 color: 'var(--hf-ink-4)',
               }}
             >
-              <span>quota</span>
+              <span>
+                {tr('console.component.tenant_switcher.quota_lbl', 'quota')}
+              </span>
               <span
                 style={{
                   color:
@@ -269,7 +285,7 @@ const TenantSwitcher = ({
               borderBottom: '1px solid var(--hf-rule)',
             }}
           >
-            tenants
+            {tr('console.component.tenant_switcher.section_tenants', 'tenants')}
           </div>
           {tenants.map((t) => {
             const tm = MODE_META[t.mode] ?? MODE_META.Personal;
@@ -319,7 +335,7 @@ const TenantSwitcher = ({
                     color: tm.color,
                   }}
                 >
-                  {t.mode}
+                  {modeLabel(tr, t.mode)}
                 </span>
               </div>
             );
@@ -337,7 +353,10 @@ const TenantSwitcher = ({
               borderBottom: '1px solid var(--hf-rule)',
             }}
           >
-            switch mode
+            {tr(
+              'console.component.tenant_switcher.section_switch_mode',
+              'switch mode',
+            )}
           </div>
           <div style={{ display: 'flex', gap: 0 }}>
             {MODES.map((m) => {
@@ -385,7 +404,7 @@ const TenantSwitcher = ({
                       marginTop: 2,
                     }}
                   >
-                    {m}
+                    {modeLabel(tr, m)}
                   </div>
                 </div>
               );
@@ -404,7 +423,10 @@ const TenantSwitcher = ({
             <UsageRing
               used={quota.used}
               total={quota.total}
-              label='quota · month'
+              label={tr(
+                'console.component.tenant_switcher.ring_label',
+                'quota · month',
+              )}
               unit={quota.unit}
               size={72}
             />
@@ -420,7 +442,10 @@ const TenantSwitcher = ({
               textAlign: 'center',
             }}
           >
-            Built on New API · AGPL-3.0
+            {tr(
+              'console.component.tenant_switcher.footer_attribution',
+              'Built on New API · AGPL-3.0',
+            )}
           </div>
         </div>
       )}

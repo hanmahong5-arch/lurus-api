@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import TenantSwitcher from './TenantSwitcher';
 import { API } from '../../helpers';
 import { clearAllDrafts } from '../../hooks/common/useFormDraft';
@@ -86,15 +87,20 @@ const useThemeToggle = () => {
  * for /console/v2/* paths (see PageLayout.jsx).
  */
 
+// Nav labels carry an i18n `key` plus the original English `label` as the
+// t() defaultValue — so a missing translation degrades to readable English,
+// never a bare `console.nav.x` key.
 const NAV_SECTIONS = [
   {
     h: 'workspace',
+    hKey: 'console.nav.section_workspace',
     items: [
       {
         id: 'dashboard',
         href: '/console/v2/dashboard',
         glyph: '▣',
         label: 'Dashboard',
+        key: 'console.nav.dashboard',
         badge: '',
       },
       {
@@ -102,6 +108,7 @@ const NAV_SECTIONS = [
         href: '/console/v2/playground',
         glyph: '◇',
         label: 'Playground',
+        key: 'console.nav.playground',
         badge: '',
       },
       {
@@ -109,18 +116,21 @@ const NAV_SECTIONS = [
         href: '/console/v2/chat',
         glyph: '◌',
         label: 'Chat',
+        key: 'console.nav.chat',
         badge: '',
       },
     ],
   },
   {
     h: 'my account',
+    hKey: 'console.nav.section_my_account',
     items: [
       {
         id: 'tokens',
         href: '/console/v2/token',
         glyph: '⚿',
         label: 'Tokens',
+        key: 'console.nav.tokens',
         badge: '5',
       },
       {
@@ -128,25 +138,42 @@ const NAV_SECTIONS = [
         href: '/console/v2/log',
         glyph: '≣',
         label: 'Usage & logs',
+        key: 'console.nav.logs',
         badge: '',
+      },
+      // Honest placeholder: Midjourney / async-task logs are not ported to v2
+      // yet. Shown greyed so the surface is visibly deferred, not silently gone.
+      {
+        id: 'mj-logs',
+        href: null,
+        glyph: '◷',
+        label: 'MJ / Task logs',
+        key: 'console.nav.mj_logs',
+        badge: '',
+        disabled: true,
+        titleKey: 'console.nav.mj_logs_unavailable',
+        title: 'Midjourney / async task logs not available in v2 yet',
       },
       {
         id: 'billing',
         href: '/console/v2/billing',
         glyph: '$',
         label: 'Billing',
+        key: 'console.nav.billing',
         badge: '$241',
       },
     ],
   },
   {
     h: 'platform · admin',
+    hKey: 'console.nav.section_platform_admin',
     items: [
       {
         id: 'channels',
         href: '/console/v2/channel',
         glyph: '⏚',
         label: 'Channels',
+        key: 'console.nav.channels',
         badge: '8',
       },
       {
@@ -154,6 +181,7 @@ const NAV_SECTIONS = [
         href: '/console/v2/models',
         glyph: '◧',
         label: 'Models',
+        key: 'console.nav.models',
         badge: '54',
       },
       {
@@ -161,6 +189,7 @@ const NAV_SECTIONS = [
         href: '/console/v2/tenants',
         glyph: '◍',
         label: 'Tenants',
+        key: 'console.nav.tenants',
         badge: '',
       },
       {
@@ -168,6 +197,7 @@ const NAV_SECTIONS = [
         href: '/console/v2/pricing',
         glyph: '▥',
         label: 'Pricing',
+        key: 'console.nav.pricing',
         badge: '',
       },
       {
@@ -175,6 +205,7 @@ const NAV_SECTIONS = [
         href: '/console/v2/redemption',
         glyph: '◈',
         label: 'Redemption',
+        key: 'console.nav.redemption',
         badge: '',
       },
       {
@@ -182,6 +213,33 @@ const NAV_SECTIONS = [
         href: '/console/v2/settings',
         glyph: '✱',
         label: 'Settings',
+        key: 'console.nav.settings',
+        badge: '',
+      },
+      // Cost-aware-routing savings analyzer (Phase 1).
+      {
+        id: 'admin-cost',
+        href: '/console/v2/admin/cost-intelligence',
+        glyph: '◮',
+        label: 'Cost intelligence',
+        key: 'console.nav.cost_intelligence',
+        badge: '',
+      },
+      // Admin surfaces (deferred backlog round 2) — now wired.
+      {
+        id: 'admin-users',
+        href: '/console/v2/admin/users',
+        glyph: '◍',
+        label: 'Users (admin)',
+        key: 'console.nav.admin_users',
+        badge: '',
+      },
+      {
+        id: 'admin-settings',
+        href: '/console/v2/admin/settings',
+        glyph: '⚙',
+        label: 'Admin settings',
+        key: 'console.nav.admin_settings',
         badge: '',
       },
     ],
@@ -311,6 +369,14 @@ const HFShell = ({ active, crumbs = [], actions, children }) => {
   const autoActive = useV2ActiveId();
   const activeId = active != null ? active : autoActive;
   const [theme, toggleTheme] = useThemeToggle();
+  const { t, i18n } = useTranslation();
+  const isZh = (i18n.resolvedLanguage || i18n.language || 'zh').startsWith(
+    'zh',
+  );
+  // Reuse i18next + the LanguageDetector localStorage cache (i18nextLng) — the
+  // same mechanism the v1 LanguageSelector drives, so the choice persists and
+  // is shared across the whole app.
+  const toggleLang = () => i18n.changeLanguage(isZh ? 'en' : 'zh');
   const user = useBridgedUser();
   const tenants = useRealTenants(user);
   const currentSlug = readTenantSlug();
@@ -325,7 +391,9 @@ const HFShell = ({ active, crumbs = [], actions, children }) => {
           <div className='brand-mark' />
           <div>
             <div className='brand-name'>Lurus Hub</div>
-            <div className='brand-tag'>data processing layer</div>
+            <div className='brand-tag'>
+              {t('console.shell.tagline', 'data processing layer')}
+            </div>
           </div>
         </div>
 
@@ -338,7 +406,9 @@ const HFShell = ({ active, crumbs = [], actions, children }) => {
             marginBottom: 14,
           }}
         >
-          <span style={{ color: 'var(--hf-ink-3)' }}>⌕ search anything</span>
+          <span style={{ color: 'var(--hf-ink-3)' }}>
+            ⌕ {t('console.shell.search', 'search anything')}
+          </span>
           <span>
             <span className='kbd'>⌘</span>
             <span className='kbd'>K</span>
@@ -347,16 +417,35 @@ const HFShell = ({ active, crumbs = [], actions, children }) => {
 
         {NAV_SECTIONS.map((s) => (
           <div className='nav-section' key={s.h}>
-            <div className='nav-h'>{s.h}</div>
+            <div className='nav-h'>{t(s.hKey, s.h)}</div>
             {s.items.map((it) => {
               const className = 'nav-i' + (activeId === it.id ? ' active' : '');
               const inner = (
                 <>
                   <span className='nav-glyph'>{it.glyph}</span>
-                  <span>{it.label}</span>
+                  <span>{t(it.key, it.label)}</span>
                   {it.badge && <span className='nav-badge'>{it.badge}</span>}
                 </>
               );
+              // Deferred surfaces render as a non-interactive, greyed entry
+              // carrying an honest reason — never a dead link.
+              if (it.disabled) {
+                return (
+                  <div
+                    key={it.id}
+                    className={className}
+                    data-testid={`nav-disabled-${it.id}`}
+                    aria-disabled='true'
+                    title={t(
+                      it.titleKey,
+                      it.title || 'not available in v2 yet',
+                    )}
+                    style={{ opacity: 0.4, cursor: 'not-allowed' }}
+                  >
+                    {inner}
+                  </div>
+                );
+              }
               return it.href ? (
                 <Link key={it.id} to={it.href} className={className}>
                   {inner}
@@ -400,9 +489,27 @@ const HFShell = ({ active, crumbs = [], actions, children }) => {
             <button
               type='button'
               className='btn ghost'
+              onClick={toggleLang}
+              title={t('console.shell.toggle_language', 'switch language')}
+              aria-label={t('console.shell.toggle_language', 'switch language')}
+              style={{
+                fontSize: 12,
+                padding: '0 8px',
+                fontFamily: 'var(--hf-mono)',
+              }}
+            >
+              {isZh ? 'EN' : '中'}
+            </button>
+            <button
+              type='button'
+              className='btn ghost'
               onClick={toggleTheme}
-              title={theme === 'dark' ? 'switch to light' : 'switch to dark'}
-              aria-label='toggle theme'
+              title={
+                theme === 'dark'
+                  ? t('console.shell.theme_to_light', 'switch to light')
+                  : t('console.shell.theme_to_dark', 'switch to dark')
+              }
+              aria-label={t('console.shell.toggle_theme', 'toggle theme')}
               style={{ fontSize: 14, padding: '0 8px' }}
             >
               {theme === 'dark' ? '☀' : '◐'}
@@ -433,11 +540,21 @@ const HFShell = ({ active, crumbs = [], actions, children }) => {
                       window.location.href = '/login';
                     }
               }
-              title={user ? 'log out' : 'log in'}
-              aria-label={user ? 'log out' : 'log in'}
+              title={
+                user
+                  ? t('console.shell.logout', 'log out')
+                  : t('console.shell.login', 'log in')
+              }
+              aria-label={
+                user
+                  ? t('console.shell.logout', 'log out')
+                  : t('console.shell.login', 'log in')
+              }
               style={{ fontSize: 12, padding: '0 10px' }}
             >
-              {user ? 'logout' : 'login'}
+              {user
+                ? t('console.shell.logout', 'logout')
+                : t('console.shell.login', 'login')}
             </button>
           </div>
         </div>

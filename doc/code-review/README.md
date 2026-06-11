@@ -1,30 +1,20 @@
 # Code Review Archive
 
-> Epic 6 (Code Review & Security Hardening) 已完成，所有问题已修复。
+> Epic 6 (Code Review & Security Hardening) complete — all P0/P1/P2 issues fixed and verified. The full reports (`2026-02-13-adversarial-code-review.md`, `P0-1-git-history-cleanup-guide.md`, and the `archive/2026-02-11-*` set) were distilled into this stub on doc-compaction; reconstruct from git history if needed.
 
-## Latest Review (Active Reference)
+## 2026-02-13 adversarial review — 8 issues, all resolved
 
-- **2026-02-13-adversarial-code-review.md** - 最终对抗性代码审查报告
-  - 发现: 8 issues (2 P0, 3 P1, 3 P2)
-  - 状态: 所有 P0/P1 已修复，P2 已修复
+| ID | Location | Issue | Resolution |
+|----|----------|-------|------------|
+| P0-1 | `deploy/k8s/secrets.yaml` (git history) | DB password / SESSION_SECRET leaked in 5 commits | git history cleaned 2026-02-13 via `git-filter-repo` v2.47.0 (5019 commits rewritten, secrets.yaml re-added as PLACEHOLDER template). Backup branches: `backup-before-filter-repo-20260213` (delete from remote after verify). |
+| P0-2 | `internal/adapter/handler/alipay_test.go` | Single-file `go test alipay_test.go` build-fails (missing pkg context) | Documented: always test at package level (`go test ./internal/adapter/handler/`), never single file. |
+| P1-1 | `internal/app/release_service.go:28` | MinIO bucket hardcoded `"lurus-releases"` | Externalized → `MINIO_RELEASES_BUCKET` env (fallback `lurus-releases`). |
+| P1-2 | `internal/adapter/middleware/cors.go:12` | CORS origins hardcoded | Externalized → `ALLOWED_ORIGINS` env (comma-separated). |
+| P1-3 | `internal/adapter/handler/alipay.go:150` | `"alipay_"` username prefix hardcoded | Extracted to constant in `internal/pkg/constant/oauth.go`. |
+| P2-1 | `internal/` (34 files) | 22 non-test uses of `context.Background()` | Cleaned in 15 files; handlers inherit `c.Request.Context()`, goroutines use `context.WithTimeout`. |
+| P2-2 | `internal/app/release_service.go` | Unimplemented TODO (MinIO presigned URL, GeoIP) | Tracked; not a ship blocker. |
+| P2-3 | `.gitignore` | `secrets.prod.yaml` not ignored | Added `**/secrets.prod.yaml` / `**/secrets-*.yaml` / `*.prod.yaml`. |
 
-- **P0-1-git-history-cleanup-guide.md** - Git 历史清理指南
-  - 状态: 已完成 (git-filter-repo, 5019 commits)
+Security checks passed: SQLi (GORM), XSS (React escape), CSRF (SameSite+CORS), auth (session + Zitadel), RBAC, rate-limit (`middleware/rate-limit.go`), input validation. Outstanding 2FA / password-reentry TODOs in `sensitive_action.go:65,71` (roadmap).
 
-## Historical Reviews (Archive)
-
-旧版审查文档已移至 `archive/` 子目录（仅供参考，已被2026-02-13版本取代）：
-- `archive/2026-02-11-code-review.md` - 初始代码审查
-- `archive/2026-02-11-action-items.md` - Action items (已完成)
-- `archive/2026-02-11-p1-fixes.md` - P1 修复记录
-- `archive/2026-02-11-test-coverage-summary.md` - 测试覆盖摘要
-
-## Status Summary
-
-| Category | Issues Found | Fixed | Status |
-|----------|--------------|-------|--------|
-| P0 (Critical) | 2 | 2 | ✅ Complete |
-| P1 (High) | 3 | 3 | ✅ Complete |
-| P2 (Medium) | 3 | 3 | ✅ Complete |
-
-**所有发现的安全和质量问题已修复并验证。**
+Test commands: see `TESTING.md`. Git-history-cleanup tool reference: `git-filter-repo` / BFG.

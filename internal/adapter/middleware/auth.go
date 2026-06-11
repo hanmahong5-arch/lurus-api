@@ -18,6 +18,7 @@ import (
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	zita "github.com/hanmahong5-arch/zita-sdk-go"
 )
 
 func validUserInfo(username string, role int) bool {
@@ -38,6 +39,38 @@ func authHelper(c *gin.Context, minRole int) {
 	id := session.Get("id")
 	status := session.Get("status")
 	useAccessToken := false
+	if username == nil {
+		// v2 console SDK-bridge path (ADR-0011 Layer C): a user who logged in
+		// through the platform SDK carries a lurus_session COOKIE — not a gin
+		// session or a bearer token. middleware.OptionalZitaIdentity resolves
+		// that cookie into the context ahead of UserAuth; admit the request by
+		// mapping the lurus account to the local newhub user.
+		if zid, ok := zita.IdentityFromContext(c); ok && zid != nil && zid.AccountID > 0 {
+			if user, lookupErr := repo.GetUserByLurusAccountID(zid.AccountID); lookupErr == nil && user != nil &&
+				user.Status == common.UserStatusEnabled && validUserInfo(user.Username, user.Role) {
+				username = user.Username
+				role = user.Role
+				id = user.Id
+				status = user.Status
+				useAccessToken = true
+				c.Set("identity_account_id", zid.AccountID)
+				// Self-heal: persist the resolved identity into the gin session
+				// so later requests skip the SDK round-trip and survive a
+				// transient cookie drop. Best-effort — a save failure must not
+				// block an otherwise-valid login.
+				session.Set("id", user.Id)
+				session.Set("username", user.Username)
+				session.Set("role", user.Role)
+				session.Set("status", user.Status)
+				session.Set("group", user.Group)
+				session.Set("identity_account_id", zid.AccountID)
+				if saveErr := session.Save(); saveErr != nil {
+					logger.LogWarnKV(c.Request.Context(), "sdk identity session self-heal failed",
+						"who", user.Username, "account_id", zid.AccountID, "result", saveErr.Error())
+				}
+			}
+		}
+	}
 	if username == nil {
 		// Check access token
 		accessToken := c.Request.Header.Get("Authorization")

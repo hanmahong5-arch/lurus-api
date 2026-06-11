@@ -163,7 +163,15 @@ func resolveZitadelAccountID(c *gin.Context) (int64, bool) {
 	if _, err := VerifyIDTokenWithJWKS(tokenString, claims); err != nil {
 		return 0, false
 	}
-	if claims.Issuer != zitadelIssuer {
+	// Same multi-issuer set as ZitadelAuth to cover the rebrand alias window.
+	releaseIssuerOK := false
+	for _, accepted := range zitadelIssuers {
+		if claims.Issuer == accepted {
+			releaseIssuerOK = true
+			break
+		}
+	}
+	if !releaseIssuerOK {
 		return 0, false
 	}
 	im, _ := common.UpsertAccountGRPC(c.Request.Context(), claims.Subject, claims.Email, claims.Name, "")

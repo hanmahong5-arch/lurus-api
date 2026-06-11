@@ -24,11 +24,19 @@ const (
 )
 
 // Draw reason enum for TenantCreditPoolDraw.Reason.
+//
+// "relay_overdraft" marks a post-consume debit that landed after the pool was
+// already exhausted: the upstream tokens were burned and the user quota was
+// charged, so the correct action is to record the debt (balance goes
+// negative) rather than drop the debit. Conservation law
+// `seed − Σdraws == balance` holds unconditionally; the relay gate
+// (IsExhausted ⇒ balance <= 0) keeps rejecting until a topup repays the debt.
 const (
 	PoolDrawReasonRelayDebit = "relay_debit"
 	PoolDrawReasonTopup      = "topup"
 	PoolDrawReasonReset      = "reset"
 	PoolDrawReasonAdjustment = "adjustment"
+	PoolDrawReasonOverdraft  = "relay_overdraft"
 )
 
 // TenantCreditPool holds per-tenant pre-paid balance plus optional ceiling and
@@ -101,4 +109,29 @@ type TenantCreditPoolDraw struct {
 // TableName overrides the default GORM table name.
 func (TenantCreditPoolDraw) TableName() string {
 	return "tenant_credit_pool_draws"
+}
+
+// CreditPoolFundEvent records a completed idempotent fund operation from the
+// platform BillingOutbox. The EventID column carries the outbox event_id as a
+// unique key so replayed calls return the first result without double-crediting.
+//
+// Schema is managed by migration 019 (credit_pool_fund_events).
+// Design rationale: keeping fund events in a separate table from
+// tenant_credit_pool_draws avoids polluting the relay audit ledger with
+// cross-service provisioning semantics, and lets UNIQUE(event_id) be enforced
+// without adding a nullable column to the append-only draws table.
+type CreditPoolFundEvent struct {
+	ID          int64     `json:"id"          gorm:"primaryKey;autoIncrement"`
+	EventID     string    `json:"event_id"    gorm:"type:varchar(128);not null;uniqueIndex"`
+	TenantID    string    `json:"tenant_id"   gorm:"type:varchar(36);not null;index"`
+	PoolID      int64     `json:"pool_id"     gorm:"not null"`
+	Amount      int64     `json:"amount"      gorm:"type:bigint;not null"`
+	NewBalance  int64     `json:"new_balance" gorm:"type:bigint;not null"`
+	Source      string    `json:"source"      gorm:"type:varchar(64);not null"`
+	CreatedAt   time.Time `json:"created_at"  gorm:"not null"`
+}
+
+// TableName overrides the default GORM table name.
+func (CreditPoolFundEvent) TableName() string {
+	return "credit_pool_fund_events"
 }

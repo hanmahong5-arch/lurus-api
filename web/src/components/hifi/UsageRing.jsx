@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 /**
  * UsageRing — SVG donut ring showing quota consumption.
@@ -40,6 +41,7 @@ const UsageRing = ({
   unit = '',
   size = 64,
 }) => {
+  const { t: tr } = useTranslation();
   const pct = total > 0 ? Math.min(used / total, 1) : 0;
 
   const stroke = 5;
@@ -80,7 +82,11 @@ const UsageRing = ({
         height={size}
         viewBox={`0 0 ${size} ${size}`}
         role='img'
-        aria-label={`${label}: ${Math.round(pct * 100)}% used`}
+        aria-label={tr(
+          'console.component.usage_ring.aria_label',
+          '{{label}}: {{pct}}% used',
+          { label, pct: Math.round(pct * 100) },
+        )}
       >
         {/* Track */}
         <circle
