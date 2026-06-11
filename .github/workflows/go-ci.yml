@@ -424,7 +424,7 @@ jobs:
         with:
           go-version: '1.25.x'
           cache: true
-      - name: go test ./internal/adapter/repo/... against Postgres
+      - name: go test repo + migration packages against Postgres
         # -short skips the !testing.Short() stress tests; the PG integration tests
         # gate on the DSN (not on -short), so they all run here. -v + tee lets the
         # next step assert the harness sentinel actually executed.
@@ -432,7 +432,7 @@ jobs:
           TEST_POSTGRES_DSN: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
         run: |
           set -o pipefail
-          go test -short -count=1 -timeout=15m -v ./internal/adapter/repo/... 2>&1 | tee /tmp/pg-test.log
+          go test -short -count=1 -timeout=15m -v ./internal/adapter/repo/... ./internal/pkg/migration/... 2>&1 | tee /tmp/pg-test.log
       - name: Assert the PG harness was not hollow (sentinel ran + passed)
         # Defends against a misconfigured DSN that would make SetupTestDB t.Skip
         # the whole suite into a vacuous green. The sentinel only PASSes when it
