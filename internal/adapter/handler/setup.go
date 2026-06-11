@@ -34,12 +34,9 @@ func GetSetup(c *gin.Context) {
 		return
 	}
 	setup.RootInit = repo.RootUserExists()
-	if common.UsingMySQL {
-		setup.DatabaseType = "mysql"
-	}
-	if common.UsingPostgreSQL {
-		setup.DatabaseType = "postgres"
-	}
+	// Runtime is PG-only (2026-06); the SQLite arm exists only for the
+	// hermetic glebarez unit-test tier.
+	setup.DatabaseType = "postgres"
 	if common.UsingSQLite {
 		setup.DatabaseType = "sqlite"
 	}

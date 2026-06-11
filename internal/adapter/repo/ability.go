@@ -101,11 +101,7 @@ func GetChannel(group string, model string, retry int) (*Channel, error) {
 	if err != nil {
 		return nil, err
 	}
-	if common.UsingSQLite || common.UsingPostgreSQL {
-		err = channelQuery.Order("weight DESC").Find(&abilities).Error
-	} else {
-		err = channelQuery.Order("weight DESC").Find(&abilities).Error
-	}
+	err = channelQuery.Order("weight DESC").Find(&abilities).Error
 	if err != nil {
 		return nil, err
 	}
@@ -282,6 +278,8 @@ func FixAbility() (int, int, error) {
 	defer fixLock.Unlock()
 
 	// truncate abilities table
+	// SQLite arm exists only for the hermetic glebarez unit-test tier
+	// (no TRUNCATE in SQLite); runtime is always PostgreSQL.
 	if common.UsingSQLite {
 		err := DB.Exec("DELETE FROM abilities").Error
 		if err != nil {
