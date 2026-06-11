@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -12,10 +13,20 @@ import (
 	"github.com/LurusTech/lurus-hub/internal/domain/entity"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/pkg/constant"
+	"github.com/LurusTech/lurus-hub/internal/pkg/migration"
+	"github.com/LurusTech/lurus-hub/migrations"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
+
+// migrationBaselineThrough is the highest migrations/*.sql version that the
+// embedded Runner records as applied WITHOUT executing: 001–004 are MySQL
+// dialect (cannot run on PostgreSQL) and 005–020 were applied to STAGE by
+// hand before the Runner existed; on a fresh database their schema comes
+// from AutoMigrate. Only versions above this ever execute — they must be
+// PostgreSQL-only and idempotent (see internal/pkg/migration package doc).
+const migrationBaselineThrough = "020_create_privacy_erasure_requests"
 
 var commonGroupCol string
 var commonKeyCol string
@@ -172,12 +183,44 @@ func InitDB() (err error) {
 		// first asynchronous renew flips the flag.
 		common.SetLeader(true)
 		common.SysLog("database migration started")
-		err = migrateDB()
-		return err
+		if err = migrateDB(); err != nil {
+			return err
+		}
+		// Embedded SQL migration runner (ported from platform): runs in
+		// the lease-winner branch after AutoMigrate, so the boot lease
+		// stays the primary serializer; the runner's own pg_advisory_lock
+		// additionally guards against a future migrate subcommand or
+		// hand-run binary racing a booting pod.
+		if !migrationsAutoRunEnabled() {
+			common.SysLog("embedded SQL migrations skipped: MIGRATIONS_AUTO_RUN is disabled")
+			return nil
+		}
+		runner := &migration.Runner{
+			DB:              sqlDB,
+			FS:              migrations.FS,
+			BaselineThrough: migrationBaselineThrough,
+		}
+		if err := runner.Run(context.Background()); err != nil {
+			return fmt.Errorf("run embedded SQL migrations: %w", err)
+		}
+		return nil
 	} else {
 		common.FatalLog(err)
 	}
 	return err
+}
+
+// migrationsAutoRunEnabled gates the embedded SQL migration runner.
+// Unset defaults to ON — AutoMigrate has always run unconditionally on the
+// lease winner, so default-on matches the existing boot posture.
+// MIGRATIONS_AUTO_RUN=false|0|no|off is the escape hatch for hand-applied
+// migrations (e.g. an ALTER the app's PG role does not own).
+func migrationsAutoRunEnabled() bool {
+	switch strings.ToLower(os.Getenv("MIGRATIONS_AUTO_RUN")) {
+	case "false", "0", "no", "off":
+		return false
+	}
+	return true
 }
 
 func InitLogDB() (err error) {
