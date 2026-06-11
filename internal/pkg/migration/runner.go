@@ -88,7 +88,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	if err := r.lock(ctx); err != nil {
 		return err
 	}
-	defer r.unlock(logger)
+	defer r.unlock(ctx, logger)
 
 	if err := r.ensureTracker(ctx); err != nil {
 		return err
@@ -154,7 +154,7 @@ func (r *Runner) MarkApplied(ctx context.Context, versions []string) error {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	defer r.unlock(logger)
+	defer r.unlock(ctx, logger)
 	if err := r.ensureTracker(ctx); err != nil {
 		return err
 	}
@@ -207,10 +207,10 @@ func (r *Runner) lock(ctx context.Context) error {
 	return nil
 }
 
-func (r *Runner) unlock(logger *slog.Logger) {
-	// Use a fresh background context so unlock proceeds even when the
-	// caller's ctx is cancelled (e.g. shutdown mid-migration).
-	if _, err := r.DB.ExecContext(context.Background(),
+func (r *Runner) unlock(ctx context.Context, logger *slog.Logger) {
+	// WithoutCancel: unlock must proceed even when the caller's ctx is
+	// already cancelled (e.g. shutdown mid-migration).
+	if _, err := r.DB.ExecContext(context.WithoutCancel(ctx),
 		`SELECT pg_advisory_unlock($1)`, AdvisoryLockID); err != nil {
 		logger.Warn("migration: advisory unlock failed", "err", err)
 	}
