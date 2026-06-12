@@ -165,6 +165,12 @@ func UpdateAdminUserV2(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": err.Error()})
 			return
 		}
+		// Self-demotion locks the actor out of admin (root is NOT exempt).
+		// Only checked when a role change is actually requested (req.Role != nil).
+		if err := app.CheckSelfDemotion(c.GetInt("id"), userID, myRole, *req.Role); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": err.Error()})
+			return
+		}
 		newRole = *req.Role
 	}
 

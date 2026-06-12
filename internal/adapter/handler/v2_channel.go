@@ -58,7 +58,7 @@ func ListChannelsV2(c *gin.Context) {
 	}
 
 	// Check admin role
-	if !hasRole(tenantCtx.Roles, "admin") {
+	if !requireTenantAdmin(c, tenantCtx) {
 		c.JSON(http.StatusForbidden, gin.H{
 			"success": false,
 			"message": "Admin role required",
@@ -195,7 +195,7 @@ func GetChannelV2(c *gin.Context) {
 	}
 
 	// Check admin role
-	if !hasRole(tenantCtx.Roles, "admin") {
+	if !requireTenantAdmin(c, tenantCtx) {
 		c.JSON(http.StatusForbidden, gin.H{
 			"success": false,
 			"message": "Admin role required",
@@ -243,7 +243,7 @@ func CreateChannelV2(c *gin.Context) {
 	}
 
 	// Check admin role
-	if !hasRole(tenantCtx.Roles, "admin") {
+	if !requireTenantAdmin(c, tenantCtx) {
 		c.JSON(http.StatusForbidden, gin.H{
 			"success": false,
 			"message": "Admin role required",
@@ -358,7 +358,7 @@ func UpdateChannelV2(c *gin.Context) {
 	}
 
 	// Check admin role
-	if !hasRole(tenantCtx.Roles, "admin") {
+	if !requireTenantAdmin(c, tenantCtx) {
 		c.JSON(http.StatusForbidden, gin.H{
 			"success": false,
 			"message": "Admin role required",
@@ -499,7 +499,7 @@ func DeleteChannelV2(c *gin.Context) {
 	}
 
 	// Check admin role
-	if !hasRole(tenantCtx.Roles, "admin") {
+	if !requireTenantAdmin(c, tenantCtx) {
 		c.JSON(http.StatusForbidden, gin.H{
 			"success": false,
 			"message": "Admin role required",

@@ -153,6 +153,10 @@ func AddToken(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
 		return
 	}
+	if err := app.ValidateTokenExpiredTime(token.ExpiredTime); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+		return
+	}
 	key, err := app.GenerateTokenKey()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
@@ -203,6 +207,10 @@ func UpdateToken(c *gin.Context) {
 		return
 	}
 	if err := app.ValidateTokenQuota(token.RemainQuota, token.UnlimitedQuota); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	if err := app.ValidateTokenExpiredTime(token.ExpiredTime); err != nil {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
 		return
 	}

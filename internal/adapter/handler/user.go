@@ -361,6 +361,13 @@ func UpdateUser(c *gin.Context) {
 		})
 		return
 	}
+	if err := app.CheckSelfDemotion(c.GetInt("id"), updatedUser.Id, myRole, updatedUser.Role); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "不能降低自己的权限等级",
+		})
+		return
+	}
 	if err := updatedUser.Edit(); err != nil {
 		common.ApiError(c, err)
 		return
@@ -373,7 +380,9 @@ func UpdateUser(c *gin.Context) {
 	}
 	action := governance.ActionUserUpdated
 	auditDetail := fmt.Sprintf(`{"username":%q}`, updatedUser.Username)
-	if originUser.Role != updatedUser.Role {
+	// Role 0 means "not provided" in the payload; repo.Edit skips persisting it,
+	// so only emit the role-change audit event when the change was actually saved.
+	if updatedUser.Role != 0 && originUser.Role != updatedUser.Role {
 		action = governance.ActionUserRoleChanged
 		auditDetail = fmt.Sprintf(`{"old_role":%d,"new_role":%d}`, originUser.Role, updatedUser.Role)
 	}

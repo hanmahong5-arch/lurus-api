@@ -522,3 +522,30 @@ func TestApplyTokenUpdate_HandlesZeroValues(t *testing.T) {
 		t.Errorf("CrossGroupRetry should be false, got %v", target.CrossGroupRetry)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// ValidateTokenExpiredTime
+// ---------------------------------------------------------------------------
+
+func TestValidateTokenExpiredTime_BoundsTable(t *testing.T) {
+	cases := []struct {
+		name    string
+		expired int64
+		wantErr bool
+	}{
+		{"never expires (-1)", -1, false},
+		{"unset (0)", 0, false},
+		{"near future", common.GetTimestamp() + 3600, false},
+		{"exact upper bound (year 3000)", MaxTokenExpiredTime, false},
+		{"just beyond upper bound", MaxTokenExpiredTime + 1, true},
+		{"milliseconds-as-seconds mistake", 999999999999999, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateTokenExpiredTime(tc.expired)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("ValidateTokenExpiredTime(%d) error = %v, wantErr %v", tc.expired, err, tc.wantErr)
+			}
+		})
+	}
+}

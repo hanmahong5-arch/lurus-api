@@ -127,6 +127,12 @@ func CreateTenant(c *gin.Context) {
 	})
 	if err != nil {
 		common.SysError("Failed to update tenant: " + err.Error())
+	} else {
+		// The response must reflect what was persisted: `tenant` is the
+		// pre-update snapshot, so mirror the applied fields before marshal.
+		tenant.PlanType = req.PlanType
+		tenant.MaxUsers = req.MaxUsers
+		tenant.MaxQuota = req.MaxQuota
 	}
 
 	// Initialize default configs for new tenant

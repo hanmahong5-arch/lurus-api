@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -420,13 +421,25 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	return logs, total, err
 }
 
+// logKeywordCondition matches keyword against the integer `type` column only
+// when it parses as a number: on PostgreSQL, binding an arbitrary string
+// against an integer column raises 22P02 ("invalid input syntax for type
+// integer") and aborts the whole query, so non-numeric keywords must only hit
+// the content LIKE arm.
+func logKeywordCondition(tx *gorm.DB, keyword string) *gorm.DB {
+	if logType, parseErr := strconv.Atoi(keyword); parseErr == nil {
+		return tx.Where("type = ? or content LIKE ?", logType, keyword+"%")
+	}
+	return tx.Where("content LIKE ?", keyword+"%")
+}
+
 func SearchAllLogs(keyword string) (logs []*Log, err error) {
-	err = LOG_DB.Where("type = ? or content LIKE ?", keyword, keyword+"%").Order("id desc").Limit(common.MaxRecentItems).Find(&logs).Error
+	err = logKeywordCondition(LOG_DB, keyword).Order("id desc").Limit(common.MaxRecentItems).Find(&logs).Error
 	return logs, err
 }
 
 func SearchUserLogs(userId int, keyword string) (logs []*Log, err error) {
-	err = LOG_DB.Where("user_id = ? and type = ?", userId, keyword).Order("id desc").Limit(common.MaxRecentItems).Find(&logs).Error
+	err = logKeywordCondition(LOG_DB.Where("user_id = ?", userId), keyword).Order("id desc").Limit(common.MaxRecentItems).Find(&logs).Error
 	formatUserLogs(logs)
 	return logs, err
 }
@@ -674,8 +687,17 @@ func GetUserLogStatInternal(userID int, groupBy string) ([]LogStatEntry, error) 
 	var selectExpr, groupExpr string
 	switch groupBy {
 	case "day":
-		selectExpr = "DATE(created_at) as key, COUNT(*) as count, COALESCE(SUM(quota), 0) as total_quota"
-		groupExpr = "DATE(created_at)"
+		// created_at is a unix-epoch bigint: PG has no DATE(bigint), so it
+		// needs the TO_TIMESTAMP conversion. The SQLite arm exists only for
+		// the hermetic unit-test tier (same convention as v2_log_cluster.go).
+		var dayExpr string
+		if common.UsingPostgreSQL {
+			dayExpr = "TO_CHAR(TO_TIMESTAMP(created_at), 'YYYY-MM-DD')"
+		} else {
+			dayExpr = "strftime('%Y-%m-%d', datetime(created_at, 'unixepoch'))"
+		}
+		selectExpr = dayExpr + " as key, COUNT(*) as count, COALESCE(SUM(quota), 0) as total_quota"
+		groupExpr = dayExpr
 	default:
 		selectExpr = "model_name as key, COUNT(*) as count, COALESCE(SUM(quota), 0) as total_quota"
 		groupExpr = "model_name"
