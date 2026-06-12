@@ -64,6 +64,14 @@ func UpdateOption(c *gin.Context) {
 		option.Value = common.Interface2String(option.Value.(float64))
 	case int:
 		option.Value = common.Interface2String(option.Value.(int))
+	case nil:
+		// JSON null carries no usable value: stringifying a nil interface
+		// would persist the literal "<nil>". Callers must send "" to clear.
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "无效的参数：value 不能为 null，清空请传空字符串",
+		})
+		return
 	default:
 		option.Value = fmt.Sprintf("%v", option.Value)
 	}

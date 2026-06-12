@@ -13,6 +13,10 @@ import (
 const (
 	TokenNameMaxLength = 50
 	MaxQuotaMultiplier = 1000000000
+	// MaxTokenExpiredTime is 3000-01-01T00:00:00Z in epoch seconds. Anything
+	// later is almost certainly a unit mistake (e.g. milliseconds sent as
+	// seconds) and would silently behave like "never expires", so reject it.
+	MaxTokenExpiredTime = 32503680000
 )
 
 // ValidateTokenName checks that the token name does not exceed the maximum length.
@@ -35,6 +39,16 @@ func ValidateTokenQuota(remainQuota int, unlimitedQuota bool) error {
 	maxQuotaValue := int(MaxQuotaMultiplier * common.QuotaPerUnit)
 	if remainQuota > maxQuotaValue {
 		return fmt.Errorf("额度值超出有效范围，最大值为 %d", maxQuotaValue)
+	}
+	return nil
+}
+
+// ValidateTokenExpiredTime checks that expired_time is within a sane range.
+// -1 (never expires) and 0 (unset) are accepted; explicit "never expires"
+// must use -1 rather than a far-future timestamp.
+func ValidateTokenExpiredTime(expiredTime int64) error {
+	if expiredTime > MaxTokenExpiredTime {
+		return errors.New("过期时间无效，不能晚于公元 3000 年，永不过期请使用 -1")
 	}
 	return nil
 }

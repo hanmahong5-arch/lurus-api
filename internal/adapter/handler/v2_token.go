@@ -172,6 +172,15 @@ func CreateTokenV2(c *gin.Context) {
 		return
 	}
 
+	// Validate expiry upper bound (unit mistakes would mean "never expires")
+	if err := app.ValidateTokenExpiredTime(req.ExpiredTime); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
 	// Normalize and validate scopes — invalid values reject with 400.
 	scopesNormalized, err := app.NormalizeTokenScopes(req.Scopes)
 	if err != nil {
@@ -326,6 +335,13 @@ func UpdateTokenV2(c *gin.Context) {
 	}
 
 	if req.ExpiredTime != 0 {
+		if err := app.ValidateTokenExpiredTime(req.ExpiredTime); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
 		token.ExpiredTime = req.ExpiredTime
 	}
 

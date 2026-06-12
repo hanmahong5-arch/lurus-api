@@ -1435,6 +1435,68 @@ func TestInteg_CreateUser_DefaultGroup(t *testing.T) {
 	}
 }
 
+// TestInteg_CreateUser_WithTenantPlugin reproduces the production setup: the
+// GORM TenantPlugin is registered (repo/main.go does this at boot) and the
+// internal API key context carries NO tenant. Without an explicit default
+// tenant in the handler, the plugin's beforeCreate rejects the INSERT
+// ("tenant_id is required for create operations") and the endpoint 500s.
+// The harness in SetupIntegrationRouter does not register the plugin, which
+// is why the other CreateUser tests never caught this.
+func TestInteg_CreateUser_WithTenantPlugin(t *testing.T) {
+	cases := []struct {
+		name       string
+		body       map[string]interface{}
+		wantStatus int
+		wantTenant string // assert DB row tenant when 201
+	}{
+		{
+			name: "create succeeds and lands in default tenant",
+			body: map[string]interface{}{
+				"username": "tenantpluguser",
+				"email":    "tenantplug@test.local",
+			},
+			wantStatus: http.StatusCreated,
+			wantTenant: "default",
+		},
+		{
+			name: "validation error stays 400 not 500",
+			body: map[string]interface{}{
+				"username": "x", // too short
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			router, cleanup := SetupIntegrationRouter(t)
+			t.Cleanup(cleanup)
+			if err := repo.DB.Use(&repo.TenantPlugin{}); err != nil {
+				t.Fatalf("failed to register tenant plugin: %v", err)
+			}
+
+			w := internalRequest(router, "POST", "/internal/user", tc.body, authHeaders())
+			if w.Code != tc.wantStatus {
+				t.Fatalf("expected %d, got %d, body: %s", tc.wantStatus, w.Code, w.Body.String())
+			}
+
+			if tc.wantStatus == http.StatusCreated {
+				resp := parseResponse(t, w)
+				assertSuccess(t, resp)
+				data, _ := resp["data"].(map[string]interface{})
+				id := int(data["id"].(float64))
+				var created repo.User
+				if err := repo.WithoutTenantIsolation(repo.DB).Where("id = ?", id).First(&created).Error; err != nil {
+					t.Fatalf("created user %d not found: %v", id, err)
+				}
+				if created.TenantId != tc.wantTenant {
+					t.Errorf("expected tenant_id %q, got %q", tc.wantTenant, created.TenantId)
+				}
+			}
+		})
+	}
+}
+
 // ============================================================
 // Balance/Quota Getter Edge Cases
 // ============================================================

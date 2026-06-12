@@ -434,6 +434,18 @@ func (user *User) Edit() error {
 		"quota":        newUser.Quota,
 		"remark":       newUser.Remark,
 	}
+	// Edit is only reachable from the admin update path (handler.UpdateUser), which
+	// has already enforced CheckPermission/CheckRolePromotion; the self-service path
+	// (handler.UpdateSelf) goes through Update() with a clean struct and can never
+	// reach here. Zero means "not provided" in the decoded JSON payload (valid
+	// values start at 1, see common.UserStatusEnabled), so skip it to avoid
+	// resetting role/status on partial updates.
+	if newUser.Role != 0 {
+		updates["role"] = newUser.Role
+	}
+	if newUser.Status != 0 {
+		updates["status"] = newUser.Status
+	}
 
 	DB.First(&user, user.Id)
 	if err := DB.Model(user).Updates(updates).Error; err != nil {

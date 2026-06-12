@@ -112,3 +112,24 @@ func TestAdminOptionsV2_NonRootRejected(t *testing.T) {
 	w = V2RequestAsUser(ctx, ctx.NormalUser, http.MethodPut, "/api/v2/admin/options", body, nil)
 	AssertV2Error(t, w, http.StatusForbidden)
 }
+
+// TestUpdateAdminOptionV2_NullValueRejected proves a JSON null value is
+// rejected with 400 instead of persisting the literal "<nil>" string.
+func TestUpdateAdminOptionV2_NullValueRejected(t *testing.T) {
+	ctx := SetupV2TestRouter(t)
+	defer ctx.Cleanup()
+
+	seedOption("SystemName", "Lurus Hub")
+
+	body := map[string]interface{}{"key": "SystemName", "value": nil}
+	w := V2RequestAsUser(ctx, ctx.RootUser, http.MethodPut, "/api/v2/admin/options", body, []string{"root"})
+	AssertV2Error(t, w, http.StatusBadRequest)
+
+	// The stored value must be untouched — in particular not "<nil>".
+	common.OptionMapRWMutex.RLock()
+	got := common.OptionMap["SystemName"]
+	common.OptionMapRWMutex.RUnlock()
+	if got != "Lurus Hub" {
+		t.Errorf("expected SystemName unchanged after null update, got %q", got)
+	}
+}

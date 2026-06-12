@@ -699,6 +699,15 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
+	// JSON null binds without error but leaves Channel nil; guard before any dereference.
+	if addChannelRequest.Channel == nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "channel cannot be empty",
+		})
+		return
+	}
+
 	// 使用统一的校验函数
 	if err := validateChannel(addChannelRequest.Channel, true); err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -1304,8 +1313,9 @@ func CopyChannel(c *gin.Context) {
 		clone.UsedQuota = 0
 	}
 
-	// insert
-	if err := repo.BatchInsertChannels([]repo.Channel{clone}); err != nil {
+	// insert via pointer receiver so GORM writes the auto-generated id back into
+	// clone (BatchInsertChannels chunks into copies, so the caller never sees the id)
+	if err := clone.Insert(); err != nil {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
 		return
 	}

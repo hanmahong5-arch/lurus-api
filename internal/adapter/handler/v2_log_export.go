@@ -88,22 +88,28 @@ func ExportLogsV2(c *gin.Context) {
 	}
 
 	// Verify the URL slug maps to a real tenant and matches the JWT context.
-	tenant, err := repo.GetTenantBySlug(tenantSlug)
-	if err != nil || tenant == nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success":    false,
-			"message":    "Tenant not found",
-			"error_code": "TENANT_NOT_FOUND",
-		})
-		return
-	}
-	if tenant.Id != tenantCtx.TenantID {
-		c.JSON(http.StatusForbidden, gin.H{
-			"success":    false,
-			"message":    "Tenant mismatch",
-			"error_code": "TENANT_MISMATCH",
-		})
-		return
+	// Exception: "default" is the virtual single-tenant (tenant id == slug ==
+	// "default", no tenants row exists). Sibling v2 log endpoints (GetLogsV2 /
+	// GetLogStatV2 / cluster) accept it because they scope purely via the
+	// middleware tenant context, so the export must not 404 on the missing row.
+	if tenantSlug != "default" || tenantCtx.TenantID != "default" {
+		tenant, err := repo.GetTenantBySlug(tenantSlug)
+		if err != nil || tenant == nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success":    false,
+				"message":    "Tenant not found",
+				"error_code": "TENANT_NOT_FOUND",
+			})
+			return
+		}
+		if tenant.Id != tenantCtx.TenantID {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success":    false,
+				"message":    "Tenant mismatch",
+				"error_code": "TENANT_MISMATCH",
+			})
+			return
+		}
 	}
 
 	// ── query params ───────────────────────────────────────────────────────────

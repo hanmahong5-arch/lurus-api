@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 )
 
@@ -105,6 +106,71 @@ func TestUpdateAdminUserV2_RoleStatusQuota(t *testing.T) {
 	}
 	if d["group"] != "vip" {
 		t.Errorf("expected group=vip, got %v", d["group"])
+	}
+}
+
+// TestUpdateAdminUserV2_SelfDemotion proves the v2 role-update path applies
+// app.CheckSelfDemotion: an actor (even root) cannot lower their own role into
+// an admin lockout, while role-omitted self-updates and root editing another
+// user's role keep working.
+func TestUpdateAdminUserV2_SelfDemotion(t *testing.T) {
+	cases := []struct {
+		name       string
+		targetSelf bool // target = caller (RootUser) vs another user (NormalUser)
+		body       map[string]interface{}
+		wantStatus int
+		wantRole   int // expected role persisted in DB after the request
+	}{
+		{
+			name:       "root self-demotion rejected, DB unchanged",
+			targetSelf: true,
+			body:       map[string]interface{}{"role": common.RoleAdminUser},
+			wantStatus: http.StatusForbidden,
+			wantRole:   common.RoleRootUser,
+		},
+		{
+			name:       "role-omitted self-update still allowed",
+			targetSelf: true,
+			body:       map[string]interface{}{"quota": 777},
+			wantStatus: http.StatusOK,
+			wantRole:   common.RoleRootUser,
+		},
+		{
+			name:       "root changing another user's role still works",
+			targetSelf: false,
+			body:       map[string]interface{}{"role": common.RoleAdminUser},
+			wantStatus: http.StatusOK,
+			wantRole:   common.RoleAdminUser,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := SetupV2TestRouter(t)
+			defer ctx.Cleanup()
+
+			target := ctx.NormalUser
+			if tc.targetSelf {
+				target = ctx.RootUser
+			}
+
+			path := fmt.Sprintf("/api/v2/admin/users/%d", target.Id)
+			w := V2RequestAsUser(ctx, ctx.RootUser, http.MethodPut, path, tc.body, []string{"root"})
+			if tc.wantStatus == http.StatusOK {
+				AssertV2Status(t, w, http.StatusOK)
+				AssertV2Success(t, w)
+			} else {
+				AssertV2Error(t, w, tc.wantStatus)
+			}
+
+			var got repo.User
+			if err := ctx.DB.First(&got, "id = ?", target.Id).Error; err != nil {
+				t.Fatalf("failed to re-read target user: %v", err)
+			}
+			if got.Role != tc.wantRole {
+				t.Errorf("expected persisted role=%d, got %d", tc.wantRole, got.Role)
+			}
+		})
 	}
 }
 

@@ -7,6 +7,7 @@ package repo
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/LurusTech/lurus-hub/internal/domain/entity"
@@ -35,6 +36,56 @@ func TestUserRepo_Edit(t *testing.T) {
 	}
 	if fetched.DisplayName != "Edited Name" {
 		t.Errorf("DisplayName not updated, got %q", fetched.DisplayName)
+	}
+}
+
+func TestUserRepo_Edit_RoleStatusPersistence(t *testing.T) {
+	tests := []struct {
+		name       string
+		editRole   int
+		editStatus int
+		wantRole   int
+		wantStatus int
+	}{
+		{
+			name:       "admin edit persists role and status",
+			editRole:   common.RoleAdminUser,
+			editStatus: common.UserStatusDisabled,
+			wantRole:   common.RoleAdminUser,
+			wantStatus: common.UserStatusDisabled,
+		},
+		{
+			name:       "zero role/status means not provided, existing values kept",
+			editRole:   0,
+			editStatus: 0,
+			wantRole:   common.RoleCommonUser,
+			wantStatus: common.UserStatusEnabled,
+		},
+	}
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cleanup := setupSQLiteDB(t)
+			defer cleanup()
+
+			u := seedUser(t, fmt.Sprintf("edit-rs-user-%d", i), fmt.Sprintf("editrs%d@test.local", i),
+				common.RoleCommonUser, common.UserStatusEnabled, "default")
+			u.Role = tt.editRole
+			u.Status = tt.editStatus
+			if err := u.Edit(); err != nil {
+				t.Fatalf("Edit: %v", err)
+			}
+
+			var fetched User
+			if err := DB.First(&fetched, u.Id).Error; err != nil {
+				t.Fatalf("fetch after Edit: %v", err)
+			}
+			if fetched.Role != tt.wantRole {
+				t.Errorf("Role = %d, want %d", fetched.Role, tt.wantRole)
+			}
+			if fetched.Status != tt.wantStatus {
+				t.Errorf("Status = %d, want %d", fetched.Status, tt.wantStatus)
+			}
+		})
 	}
 }
 

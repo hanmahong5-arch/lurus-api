@@ -81,11 +81,19 @@ func InternalCreateUser(c *gin.Context) {
 		return
 	}
 
+	// This endpoint's contract carries no tenant, but the GORM tenant plugin
+	// rejects INSERTs into tenant-scoped tables when the context has no tenant
+	// ("tenant_id is required for create operations" → spurious 500). Scope the
+	// whole handler to the default tenant — the same default used by
+	// /internal/user/by-zitadel-sub and /internal/user/provision — so the
+	// uniqueness checks and the create all operate within one tenant.
+	db := repo.GetTenantDBWithID("default")
+
 	// Idempotency check
 	idempotencyKey := c.GetHeader("X-Idempotency-Key")
 	if idempotencyKey != "" {
 		existing := &repo.User{Username: username}
-		if err := repo.DB.Where("username = ?", username).First(existing).Error; err == nil && existing.Id > 0 {
+		if err := db.Where("username = ?", username).First(existing).Error; err == nil && existing.Id > 0 {
 			c.JSON(http.StatusOK, gin.H{
 				"success": true,
 				"data": gin.H{
@@ -103,7 +111,7 @@ func InternalCreateUser(c *gin.Context) {
 	}
 
 	var existingCount int64
-	repo.DB.Model(&repo.User{}).Where("username = ?", username).Count(&existingCount)
+	db.Model(&repo.User{}).Where("username = ?", username).Count(&existingCount)
 	if existingCount > 0 {
 		c.JSON(http.StatusConflict, gin.H{
 			"success":    false,
@@ -115,7 +123,7 @@ func InternalCreateUser(c *gin.Context) {
 
 	if req.Email != "" {
 		var emailCount int64
-		repo.DB.Model(&repo.User{}).Where("email = ?", req.Email).Count(&emailCount)
+		db.Model(&repo.User{}).Where("email = ?", req.Email).Count(&emailCount)
 		if emailCount > 0 {
 			c.JSON(http.StatusConflict, gin.H{
 				"success":    false,
@@ -138,6 +146,10 @@ func InternalCreateUser(c *gin.Context) {
 
 	user := &repo.User{
 		Username:    username,
+		// Set on the struct as well as via the tenant-scoped context: the plugin
+		// only stamps the column when registered, and the struct must reflect the
+		// row that was written.
+		TenantId:    "default",
 		Email:       req.Email,
 		DisplayName: displayName,
 		Group:       group,
@@ -146,7 +158,7 @@ func InternalCreateUser(c *gin.Context) {
 		Quota:       req.Quota,
 	}
 
-	if err := repo.DB.Create(user).Error; err != nil {
+	if err := db.Create(user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to create user: " + err.Error(),

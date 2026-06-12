@@ -300,6 +300,48 @@ func TestV2LogExport_UnknownSlug(t *testing.T) {
 	}
 }
 
+// TestV2LogExport_DefaultVirtualTenant: the "default" tenant is virtual
+// (tenant id == slug == "default", no tenants row). Sibling v2 log endpoints
+// accept it (they scope via the middleware tenant context only), so the
+// export must too — regression: it returned 404 TENANT_NOT_FOUND.
+func TestV2LogExport_DefaultVirtualTenant(t *testing.T) {
+	ctx := setupLogExportRouter(t)
+
+	// Seed a log under the virtual default tenant for the test user.
+	l := &repo.Log{
+		UserId:    ctx.userID,
+		TenantId:  "default",
+		Type:      repo.LogTypeConsume,
+		ModelName: "gpt-4o",
+		TokenName: "tk",
+		Quota:     100,
+		CreatedAt: 1_700_000_000,
+	}
+	if err := ctx.db.Create(l).Error; err != nil {
+		t.Fatalf("seed default-tenant log: %v", err)
+	}
+
+	w := doExportGet(ctx, "default", "", "default")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
+	}
+	records, err := csv.NewReader(w.Body).ReadAll()
+	if err != nil {
+		t.Fatalf("parse csv: %v", err)
+	}
+	if len(records) != 2 {
+		t.Errorf("rows = %d, want 2 (header + 1 data row), body:\n%s", len(records), w.Body.String())
+	}
+
+	// Guard: slug "default" with a *real* tenant context must NOT bypass the
+	// lookup — it still resolves (and 404s, since no "default" row exists).
+	w2 := doExportGet(ctx, "default", "", ctx.tenantID)
+	if w2.Code != http.StatusNotFound {
+		t.Errorf("real-tenant context on /default: status = %d, want 404, body: %s", w2.Code, w2.Body.String())
+	}
+}
+
 // TestV2LogExport_MaxRowsClamp: seed 10 logs, request max_rows=5 → exactly 5
 // data rows returned. Verifies the cap is honoured.
 func TestV2LogExport_MaxRowsClamp(t *testing.T) {

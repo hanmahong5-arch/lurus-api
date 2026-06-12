@@ -27,6 +27,17 @@ func CheckRolePromotion(actorRole int, newRole int) error {
 	return nil
 }
 
+// CheckSelfDemotion rejects an actor lowering their own role. Once demoted the
+// actor loses admin access and cannot restore it via the API (lockout), which
+// is why even the root user is not exempt here. newRole 0 means "not provided"
+// in the update payload (repo Edit skips persisting it), so it is ignored.
+func CheckSelfDemotion(actorId int, targetId int, actorRole int, newRole int) error {
+	if actorId == targetId && newRole != 0 && newRole < actorRole {
+		return errors.New("不能降低自己的权限等级")
+	}
+	return nil
+}
+
 // ValidateDisplayName checks that the display name does not exceed the maximum length.
 func ValidateDisplayName(displayName string) error {
 	if len(displayName) > DisplayNameMaxLength {

@@ -65,7 +65,7 @@ func TestChannelV2(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Tenant context not found"})
 		return
 	}
-	if !hasRole(tenantCtx.Roles, "admin") {
+	if !requireTenantAdmin(c, tenantCtx) {
 		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Admin role required"})
 		return
 	}
@@ -176,7 +176,7 @@ func FetchUpstreamModelsV2(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Tenant context not found"})
 		return
 	}
-	if !hasRole(tenantCtx.Roles, "admin") {
+	if !requireTenantAdmin(c, tenantCtx) {
 		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Admin role required"})
 		return
 	}

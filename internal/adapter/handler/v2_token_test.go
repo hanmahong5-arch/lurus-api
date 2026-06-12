@@ -646,3 +646,44 @@ func TestListTokensV2_CrossTenantIsolation(t *testing.T) {
 		t.Error("tokenView returned the raw bearer key; expected masked value")
 	}
 }
+
+func TestCreateTokenV2_AbsurdExpiredTimeRejected(t *testing.T) {
+	ctx := SetupV2TestRouter(t)
+	defer ctx.Cleanup()
+
+	body := map[string]interface{}{
+		"name":            "Absurd Expiry",
+		"expired_time":    int64(999999999999999), // far beyond year 3000
+		"unlimited_quota": true,
+	}
+
+	w := V2RequestAsUser(ctx, ctx.NormalUser, http.MethodPost, "/api/v2/test-tenant/tokens", body, nil)
+	AssertV2Status(t, w, http.StatusBadRequest)
+	resp := ParseV2Response(t, w)
+	if msg, _ := resp["message"].(string); !strings.Contains(msg, "过期时间无效") {
+		t.Errorf("expected 过期时间无效 error family, got %q", msg)
+	}
+}
+
+func TestUpdateTokenV2_AbsurdExpiredTimeRejected(t *testing.T) {
+	ctx := SetupV2TestRouter(t)
+	defer ctx.Cleanup()
+
+	token := SeedV2Token(t, ctx, ctx.NormalUser.Id, "Update Expiry Target")
+
+	body := map[string]interface{}{
+		"expired_time": int64(999999999999999),
+	}
+	path := fmt.Sprintf("/api/v2/test-tenant/tokens/%d", token.Id)
+	w := V2RequestAsUser(ctx, ctx.NormalUser, http.MethodPut, path, body, nil)
+	AssertV2Status(t, w, http.StatusBadRequest)
+
+	// Stored token must keep its original expiry.
+	var stored repo.Token
+	if err := ctx.DB.First(&stored, token.Id).Error; err != nil {
+		t.Fatalf("failed to reload token: %v", err)
+	}
+	if stored.ExpiredTime != -1 {
+		t.Errorf("expected stored ExpiredTime=-1, got %d", stored.ExpiredTime)
+	}
+}
