@@ -132,7 +132,7 @@ func CreateTenant(c *gin.Context) {
 		// pre-update snapshot, so mirror the applied fields before marshal.
 		tenant.PlanType = req.PlanType
 		tenant.MaxUsers = req.MaxUsers
-		tenant.MaxQuota = req.MaxQuota
+		tenant.MaxQuota = req.MaxQuota //nolint:staticcheck // SA1019: legacy field stays part of the create API until its Q4 removal (ADR 2026-05-18)
 	}
 
 	// Initialize default configs for new tenant

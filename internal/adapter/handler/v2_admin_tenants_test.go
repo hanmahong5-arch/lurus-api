@@ -52,6 +52,7 @@ func TestCreateTenantV2_ResponseReflectsPersistedFields(t *testing.T) {
 	if err := ctx.DB.Where("zitadel_org_id = ?", "org_create_resp_test").First(&stored).Error; err != nil {
 		t.Fatalf("failed to load created tenant: %v", err)
 	}
+	//nolint:staticcheck // SA1019: asserting the legacy MaxQuota field until its Q4 removal (ADR 2026-05-18)
 	if stored.PlanType != "pro" || stored.MaxUsers != 7 || stored.MaxQuota != 424242 {
 		t.Errorf("stored tenant fields = (%s,%d,%d), want (pro,7,424242)",
 			stored.PlanType, stored.MaxUsers, stored.MaxQuota)
