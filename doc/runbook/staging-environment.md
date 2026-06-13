@@ -2,29 +2,43 @@
 
 Pre-production env mirroring prod with reduced resources.
 
+> **Reconciled 2026-06-13 (Wave-2 C2).** This runbook documents the
+> `deploy/k8s/staging/` overlay (Zitadel auth, Traefik, `staging-api.lurus.cn`) —
+> the *sibling* of the `r6-stage/` platform-identity overlay
+> (`test-newhub.lurus.cn`); see `deploy/k8s/r6-stage/README.md` "Which overlay
+> when". Names/images/secret/PG-pod below were corrected against the live
+> manifests + cluster. Items tagged **⚠️VERIFY** could not be live-confirmed this
+> pass (MCP query whitelist + no SSH key) — confirm against the live `SQL_DSN`
+> before trusting.
+
 | Property | Value |
 |----------|-------|
 | Namespace | `lurus-staging` |
 | URL | https://staging-api.lurus.cn |
-| Database | `lurusapi_staging` (separate) |
+| Deployment / Service | `lurus-newhub` |
+| Database | `lurusapi_staging` (separate staging DB) — ⚠️VERIFY name vs live SQL_DSN |
 | Redis DB | 1 (prod uses 0) |
 | Replicas | 1 |
-| Image Tag | `staging` |
+| Image | `ghcr.io/hanmahong5-arch/lurus-newhub:staging` |
+| Secret | `lurus-newhub-staging-secrets` |
 | Meilisearch | `staging_*` indexes |
 
 ## Setup
 
 ```bash
-# 1. Staging DB
-kubectl exec -it postgres-0 -n databases -- psql -U lurus -c "CREATE DATABASE lurusapi_staging; GRANT ALL PRIVILEGES ON DATABASE lurusapi_staging TO lurus;"
+# 1. Staging DB (PG pod lurus-pg-1 in ns `database`, live-verified 2026-06-13).
+#    ⚠️VERIFY the DB name (lurusapi_staging) against the live SQL_DSN.
+kubectl exec -it lurus-pg-1 -n database -- psql -U lurus -c "CREATE DATABASE lurusapi_staging; GRANT ALL PRIVILEGES ON DATABASE lurusapi_staging TO lurus;"
 
 # 2. Secrets
-kubectl -n lurus-staging create secret generic lurus-api-staging-secrets \
+kubectl -n lurus-staging create secret generic lurus-newhub-staging-secrets \
   --from-literal=SESSION_SECRET="$(openssl rand -hex 32)" \
-  --from-literal=SQL_DSN='postgres://lurus:YOUR_PASSWORD@100.94.177.10:30543/lurusapi_staging' \
+  --from-literal=SQL_DSN='postgres://lurus:YOUR_PASSWORD@<PG_HOST>:<PORT>/lurusapi_staging' \
   --from-literal=ZITADEL_CLIENT_ID='YOUR_STAGING_CLIENT_ID'
+#  ⚠️VERIFY <PG_HOST>:<PORT> — older copy hard-coded 100.94.177.10:30543; the
+#  in-cluster PG is lurus-pg-1.database.svc. Use whichever the live DSN uses.
 
-# 3. Zitadel staging OIDC app "lurus-api-staging", redirect https://staging-api.lurus.cn/api/v2/oauth/callback → copy Client ID to secret
+# 3. Zitadel staging OIDC app "lurus-newhub-staging", redirect https://staging-api.lurus.cn/api/v2/oauth/callback → copy Client ID to secret
 
 # 4. Deploy
 kubectl apply -k deploy/k8s/staging/
@@ -35,29 +49,33 @@ kubectl -n lurus-staging get pods,svc,ingressroute
 
 ## Deploy
 
-Auto on push/merge to `main` or workflow dispatch (`.github/workflows/deploy-staging.yml`). Manual:
+Auto-deploy on push/merge to `main` is **dead** — the cluster API is Tailscale-only
+so the GitHub runner can't reach it (`.github/workflows/deploy-staging.yml` `deploy`
+job skips). Use the SSH path: `scripts/deploy-stage.sh` (see
+`doc/runbook/staging-deploy.md`). Manual equivalent:
 
 ```bash
-docker build -t ghcr.io/LurusTech/lurus-api:staging . && docker push ghcr.io/LurusTech/lurus-api:staging
-kubectl apply -k deploy/k8s/staging/ && kubectl -n lurus-staging rollout restart deployment/lurus-api
+docker build -t ghcr.io/hanmahong5-arch/lurus-newhub:staging . && docker push ghcr.io/hanmahong5-arch/lurus-newhub:staging
+kubectl apply -k deploy/k8s/staging/ && kubectl -n lurus-staging rollout restart deployment/lurus-newhub
 ```
 
 ## Verify / Monitor
 
 ```bash
-curl https://staging-api.lurus.cn/api/status                                    # {"success":true,"message":"pong",...}
+curl https://staging-api.lurus.cn/api/status                                    # liveness (DB-free)
+curl https://staging-api.lurus.cn/api/health                                    # deep health (200/503)
 # OAuth: visit https://staging-api.lurus.cn/api/v2/staging/auth/login → complete Zitadel
-curl -X POST https://staging-api.lurus.cn/api/v2/staging/tokens -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"name":"test-token"}'
-kubectl -n lurus-staging logs -f deployment/lurus-api                            # logs
-# metrics: https://staging-api.lurus.cn/metrics · traces (100% sampling): https://jaeger.lurus.cn (service=lurus-api, env=staging)
+kubectl -n lurus-staging logs -f deployment/lurus-newhub                         # logs
+# metrics: https://staging-api.lurus.cn/metrics (scraped by Netdata go.d prometheus
+# collector — the OTLP→jaeger trace path is RETIRED, monitoring is Netdata now;
+# see lurus/CLAUDE.md observability HARD RULE).
 ```
 
 ## Troubleshooting
 
 ```bash
-kubectl -n lurus-staging describe pod -l app=lurus-api
+kubectl -n lurus-staging describe pod -l app=lurus-newhub
 kubectl -n lurus-staging get events --sort-by=.lastTimestamp
-kubectl -n lurus-staging exec -it deployment/lurus-api -- sh -c 'nc -zv 100.94.177.10 30543'   # DB
 kubectl -n lurus-staging get certificate; kubectl -n cert-manager logs -l app=cert-manager      # certs
 ```
 
@@ -68,8 +86,7 @@ kubectl -n lurus-staging get certificate; kubectl -n cert-manager logs -l app=ce
 | Replicas | 2 | 1 |
 | Resources | 256Mi-1Gi / 100m-500m | 128Mi-512Mi / 50m-250m |
 | Redis DB | 0 | 1 |
-| Trace Sampling | 10% | 100% |
-| Database | lurusapi | lurusapi_staging |
+| Database | lurus_api | lurusapi_staging (⚠️VERIFY) |
 | PDB | Yes (minAvailable:1) | No |
 
 Cleanup: `kubectl delete namespace lurus-staging` (deletes resources but preserves the DB).
