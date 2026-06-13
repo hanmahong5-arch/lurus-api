@@ -8,7 +8,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: newhub-nats-egress
-  namespace: lurus-newhub
+  namespace: lurus-staging
   annotations:
     description: Allow newhub egress to NATS bridge on R5 (100.120.110.73:14222) + cluster DNS + cluster services
 spec:

@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: lurus-newhub
-  namespace: lurus-newhub
+  namespace: lurus-staging
   labels:
     app: lurus-newhub
     environment: stage

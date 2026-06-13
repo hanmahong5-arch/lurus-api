@@ -4,7 +4,7 @@ kind: Kustomization
 # R6 STAGE deployment for lurus-newhub (test-newhub.lurus.cn).
 # Apply with: kubectl apply -k deploy/k8s/r6-stage/
 
-namespace: lurus-newhub
+namespace: lurus-staging
 
 resources:
   - namespace.yaml

@@ -5,7 +5,7 @@ apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
   name: lurus-newhub-staging
-  namespace: lurus-newhub
+  namespace: lurus-staging
   labels:
     app: lurus-newhub
     environment: staging
@@ -26,7 +26,7 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: staging-api-lurus-cn-tls
-  namespace: lurus-newhub
+  namespace: lurus-staging
 spec:
   secretName: staging-api-lurus-cn-tls
   issuerRef:
@@ -40,7 +40,7 @@ apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
   name: lurus-newhub-staging-http
-  namespace: lurus-newhub
+  namespace: lurus-staging
 spec:
   entryPoints:
     - web

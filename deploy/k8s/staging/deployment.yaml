@@ -1,6 +1,6 @@
 # Staging deployment for lurus-newhub.
 # Deployed by .github/workflows/deploy-staging.yml on every push to main.
-# Lives in the same namespace as r6-stage manual apply (lurus-newhub),
+# Lives in the same namespace as r6-stage manual apply (lurus-staging),
 # but tracks the :staging floating tag instead of :main so the GHA-built
 # image is what runs in CI-driven STAGE while r6-stage YAML stays as a
 # manual fallback (kept in repo as a reference for disaster recovery).
@@ -8,7 +8,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: lurus-newhub
-  namespace: lurus-newhub
+  namespace: lurus-staging
   labels:
     app: lurus-newhub
     app.kubernetes.io/name: lurus-newhub
