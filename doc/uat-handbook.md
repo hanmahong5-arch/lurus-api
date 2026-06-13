@@ -2,6 +2,15 @@
 
 **Scope**: Wave-UAT campaign (S0 + Sα + Sβ + Sδ + Sα2 + Sε). Generated 2026-05-26.
 
+> **As-of update 2026-06-13 (Wave-2 C2):** the deploy namespace is now
+> **`lurus-staging`** (was `lurus-newhub` — PG netpol, PR #20); the `-n` flags +
+> the emergency-rollback `set image` below are corrected (deployment/container
+> `lurus-newhub`, image `ghcr.io/hanmahong5-arch/lurus-newhub`). The
+> `gh workflow run deploy-staging.yml` path (§2) is **dead** — the cluster API is
+> Tailscale-only so `STAGING_KUBECONFIG` can't be wired; deploy via
+> `scripts/deploy-stage.sh` (see `doc/runbook/staging-deploy.md`). The §1 matrix
+> is left as the historical Sε record.
+
 ---
 
 ## 1. Test Matrix
@@ -38,7 +47,7 @@ DoD items enumerated from the Wave-UAT plan. Status as of Sε completion.
   ```
 - Verify pod age <5 min:
   ```
-  ssh root@100.122.83.20 'kubectl -n lurus-newhub get pods'
+  ssh root@100.122.83.20 'kubectl -n lurus-staging get pods'
   ```
 - After pod is Running: run smoke tests (Section 3).
 - After Sγ (Playwright e2e) lands: trigger full e2e suite:
@@ -101,7 +110,7 @@ The script reads `deploy/k8s/staging/kustomization.yaml` for the current image t
 For immediate emergency rollback (no script):
 ```bash
 ssh root@100.122.83.20 \
-  "kubectl -n lurus-newhub set image deployment/newhub newhub=ghcr.io/LurusTech/lurus-api:main-<prev-sha7>"
+  "kubectl -n lurus-staging set image deployment/lurus-newhub lurus-newhub=ghcr.io/hanmahong5-arch/lurus-newhub:main-<prev-sha7>"
 ```
 
 ---
