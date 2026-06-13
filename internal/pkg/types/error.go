@@ -415,6 +415,54 @@ func IsUpstreamFailure(err *NewAPIError) bool {
 	return true
 }
 
+// RelayErrorType classifies a terminal relay error into one bounded,
+// low-cardinality bucket for the relay_errors_total metric (O1): the missing
+// "WHY is a provider failing" signal. The classification is two-tier on purpose:
+//
+//  1. errorCode first — to peel off errors that are NOT upstream-provider faults
+//     even though they often carry a synthetic 500 status: caller quota/credit
+//     exhaustion ("insufficient_quota") and newhub-internal / request-prep /
+//     routing / persistence failures ("internal"). Bucketing these by status
+//     would pollute upstream_5xx and make the signal lie.
+//  2. status code second — for everything that did reach the upstream exchange,
+//     isolating the two highest-signal sub-classes (rate-limit, timeout) before
+//     falling back to the 4xx/5xx status class.
+//
+// Returns one of: upstream_5xx, upstream_4xx, upstream_timeout,
+// upstream_rate_limit, insufficient_quota, internal.
+func RelayErrorType(err *NewAPIError) string {
+	if err == nil {
+		return "internal"
+	}
+	switch err.errorCode {
+	// Caller quota/credit exhaustion — actionable, not an upstream fault.
+	case ErrorCodeInsufficientUserQuota, ErrorCodePreConsumeTokenQuotaFailed, ErrorCodeTenantQuotaExceeded:
+		return "insufficient_quota"
+	// newhub-internal / request-prep / routing / persistence failures: synthetic
+	// 500s (or client-prep 4xx) that must NOT count as upstream provider faults.
+	case ErrorCodeInvalidRequest, ErrorCodeSensitiveWordsDetected,
+		ErrorCodeCountTokenFailed, ErrorCodeModelPriceError, ErrorCodeInvalidApiType,
+		ErrorCodeJsonMarshalFailed, ErrorCodeGenRelayInfoFailed, ErrorCodeGetChannelFailed,
+		ErrorCodeReadRequestBodyFailed, ErrorCodeConvertRequestFailed, ErrorCodeAccessDenied,
+		ErrorCodeBadRequestBody, ErrorCodeQueryDataError, ErrorCodeUpdateDataError:
+		return "internal"
+	}
+	// From here the error is attributable to the upstream exchange (response
+	// status, transport failure, or channel capacity).
+	switch err.StatusCode {
+	case http.StatusTooManyRequests: // 429
+		return "upstream_rate_limit"
+	case http.StatusRequestTimeout, http.StatusGatewayTimeout, 524: // 408 / 504 / CF 524
+		return "upstream_timeout"
+	}
+	if err.StatusCode/100 == 4 {
+		return "upstream_4xx"
+	}
+	// 5xx and unclassified (status 0 / channel-capacity) → fail-safe upstream_5xx,
+	// mirroring IsUpstreamFailure's default-true posture.
+	return "upstream_5xx"
+}
+
 func ErrOptionWithSkipRetry() NewAPIErrorOptions {
 	return func(e *NewAPIError) {
 		e.skipRetry = true
