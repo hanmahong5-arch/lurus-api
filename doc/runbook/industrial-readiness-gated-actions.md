@@ -139,6 +139,45 @@ probe to the 3-replica PROD without P1-2 (correlation-outage risk).
 >     `lurus_api` today — coverage is ZERO**, not merely "unconfirmed". Even flipping
 >     `BACKUP_ENABLED=true` would back up only `identity`. The fix extends the dump (below).
 
+> **🔴 LIVE DEEP-DIVE 2026-06-13 — worse than the above: the WHOLE cluster has no usable backup right now.**
+>   - **The pg_dump fallback CronJob is NOT deployed** (`kubectl get cronjob -n database` → *No resources
+>     found*; ConfigMap `lurus-platform-backup-config` absent; no backup PVC). The manifest lives only in
+>     the platform repo — never applied. So there is **no logical-dump floor at all** today — for `identity`
+>     *or* `lurus_api`.
+>   - **CNPG base backups: `lastSuccessfulBackup=2026-03-01`, failing daily since 03-02, `lastFailedBackup`=today.**
+>     With `retentionPolicy: 2d`, that one good base is **long expired → zero restorable base exists.** WAL
+>     archiving still flows (last archive today; but 235k historical failures) and is **useless without a base
+>     to replay onto.**
+>   - **Root cause (from the failed Backup's `.status.error`):** the backup process in `lurus-pg-1` gets
+>     `statusCode 500` calling `https://10.43.0.1:443/apis/postgresql.cnpg.io/...` — i.e. **the PG pod cannot
+>     reach the K8s API service IP `10.43.0.1:443`** (CNI/overlay). MinIO is **healthy** (`/minio/health/live`
+>     → 200), so the object store is not the problem.
+>   - **Storage wrinkle:** the `local-path` StorageClass provisions under `/var/lib/rancher/k3s/storage` — on
+>     the **20 GB root disk (6.3 GB free)**, NOT `/data` (98 GB, **39 GB free**). A default-SC backup PVC would
+>     fill root and break the R6 disk HARD RULE → **backups must use a hostPath volume on `/data`.**
+>   - **Net: `identity` + `lurus_api` are both effectively RPO=∞ today** — platform-wide, not newhub-only.
+
+### Turnkey remediation (two tracks; both touch platform infra/storage → owner executes)
+
+**Track A — immediate logical-dump floor (fast, independent of the CNPG networking bug).**
+Deploy a pg_dump CronJob that dumps **both** DBs to **`/data`** via a hostPath volume (not the default
+local-path PVC, which lands on the 20 GB root):
+
+```sh
+# in the pg-dump container command, loop both DBs:
+for DB in identity lurus_api; do
+  pg_dump -Fc -U postgres -h lurus-pg-rw.database.svc.cluster.local \
+    -d "$DB" -f "/backups/lurus-${DB}-$(date -u +%Y%m%d-%H%M%S).dump"
+done
+# volume: hostPath /data/lurus-platform/backups  (NOT a local-path PVC)
+# then: ConfigMap lurus-platform-backup-config BACKUP_ENABLED=true
+# MinIO (pg-backups-v3 @ 100.79.24.40:9000) is up for the weekly off-node copy.
+```
+
+**Track B — durable fix (restore PITR).** Fix the PG pod → K8s API (`10.43.0.1:443`) reachability (CNI/
+overlay) so the CNPG instance manager can orchestrate backups again; then bump `retentionPolicy` 2d → ≥14d
+and force one base (`kubectl cnpg backup lurus-pg -n database`); verify `lastSuccessfulBackup` advances.
+
 **Why gated:** touches platform's backup config + storage + (for the base-backup
 fix) the CNPG `Cluster` CR, which is **not in any repo** — managed live via
 `kubectl edit cluster lurus-pg -n database`. **Escalate earliest even though it
@@ -208,7 +247,7 @@ before the later-sequenced execution work.
 | **Infra-1** | Fix stage-overlay namespace `lurus-newhub` → a PG-netpol-whitelisted ns (e.g. `lurus-staging`), or have platform add `lurus-newhub` to `pg-access-control` | **deploy-blocking** — PG `connection refused` → crashloop; owner picks canonical stage ns (validated 2026-06-13) |
 | **P0-5** | Add newhub to ArgoCD appset, `selfHeal:false` start | edits root manifest; autosync vs empty R1 |
 | **P1-2 cap** | Sign off `BILLING_DEGRADED_SPEND_CAP_LB` (default 50 LB/tenant/hr) | unsecured-spend business risk |
-| **P1-5** | **CONFIRMED 2026-06-13: `lurus_api` backup coverage = ZERO** (pg_dump covers `identity` only; not a schema in identity; CNPG base backup broken since ~03-01). Extend the dump to cover `lurus_api` + run a restore drill | edits platform backup config + storage; **SLA #1** |
+| **P1-5** | **🔴 WHOLE-cluster RPO=∞ (live 2026-06-13)**: pg_dump CronJob never deployed; CNPG base backups broken since 03-02 (PG pod can't reach API `10.43.0.1:443`); `retentionPolicy 2d` → no restorable base. **Track A**: deploy hostPath-`/data` pg_dump of `identity`+`lurus_api` (floor); **Track B**: fix pod→API + bump retention (PITR) | platform infra/storage; **SLA #1**, platform-wide |
 | **P2-2** | sealed-secrets choice + decouple shared `IDENTITY_SESSION_SECRET` | controller/secret-custody choice |
 | **P2-4** | `hub.lurus.cn` DNS / R1 PROD launch | owner explicitly PMF-gated |
 
