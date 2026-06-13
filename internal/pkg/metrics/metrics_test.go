@@ -163,6 +163,44 @@ func TestPoolExhaustedRejections(t *testing.T) {
 	}
 }
 
+// TestRecordRelayError verifies the O1 terminal-error classifier counter
+// increments per (provider, model, error_type) and keeps error_types independent.
+func TestRecordRelayError(t *testing.T) {
+	provider, model := "openai", "gpt-4o"
+
+	before := testutil.ToFloat64(RelayErrorsTotal.WithLabelValues(provider, model, "upstream_5xx"))
+	RecordRelayError(provider, model, "upstream_5xx")
+	RecordRelayError(provider, model, "upstream_5xx")
+	if got := testutil.ToFloat64(RelayErrorsTotal.WithLabelValues(provider, model, "upstream_5xx")) - before; got != 2 {
+		t.Errorf("expected upstream_5xx delta 2, got %f", got)
+	}
+
+	// A distinct error_type is an independent series.
+	RecordRelayError(provider, model, "upstream_timeout")
+	if got := testutil.ToFloat64(RelayErrorsTotal.WithLabelValues(provider, model, "upstream_timeout")); got != 1 {
+		t.Errorf("expected upstream_timeout series 1, got %f", got)
+	}
+}
+
+// TestRecordRelayFailover verifies the O2 failover counter increments per
+// (provider, reason) with the two reasons kept independent.
+func TestRecordRelayFailover(t *testing.T) {
+	provider := "anthropic"
+
+	beforeBreaker := testutil.ToFloat64(RelayFailoverTotal.WithLabelValues(provider, "breaker_open"))
+	RecordRelayFailover(provider, "breaker_open")
+	if got := testutil.ToFloat64(RelayFailoverTotal.WithLabelValues(provider, "breaker_open")) - beforeBreaker; got != 1 {
+		t.Errorf("expected breaker_open delta 1, got %f", got)
+	}
+
+	beforeUpstream := testutil.ToFloat64(RelayFailoverTotal.WithLabelValues(provider, "upstream_error"))
+	RecordRelayFailover(provider, "upstream_error")
+	RecordRelayFailover(provider, "upstream_error")
+	if got := testutil.ToFloat64(RelayFailoverTotal.WithLabelValues(provider, "upstream_error")) - beforeUpstream; got != 2 {
+		t.Errorf("expected upstream_error delta 2, got %f", got)
+	}
+}
+
 // TestBillingDebitAmountCNY verifies that RecordBillingDebit populates the histogram.
 // HistogramVec.WithLabelValues returns Observer (not Collector), so we test via
 // testutil.CollectAndCount on the parent vec which counts metric families produced.
