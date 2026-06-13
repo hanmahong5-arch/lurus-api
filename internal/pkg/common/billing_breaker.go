@@ -55,6 +55,18 @@ func BillingBreakerAllow() error {
 	return nil
 }
 
+// BillingBreakerIsOpen reports whether the breaker is currently OPEN (platform
+// deemed unreachable). Read-only — unlike BillingBreakerAllow it never mutates
+// state (no half-open transition), so the P1-2 degrade path can consult it
+// without perturbing the breaker. half-open (state 2) returns false: a probe is
+// in flight, so we are not in the "platform is down" condition that degradation
+// is meant to cover.
+func BillingBreakerIsOpen() bool {
+	billingBreaker.mu.Lock()
+	defer billingBreaker.mu.Unlock()
+	return billingBreaker.state == 1
+}
+
 // BillingBreakerSuccess records a successful billing call.
 func BillingBreakerSuccess() {
 	billingBreaker.mu.Lock()

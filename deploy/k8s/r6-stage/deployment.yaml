@@ -141,6 +141,8 @@ spec:
             periodSeconds: 5
             failureThreshold: 30
             timeoutSeconds: 3
+          # Liveness stays SHALLOW (/api/status) — see base deployment.yaml for
+          # the full P0-2 rationale (no restart on dependency blips).
           livenessProbe:
             httpGet:
               path: /api/status
@@ -148,13 +150,20 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 15
             timeoutSeconds: 5
+          # Readiness is DEEP (/api/health): a DB-down pod leaves the Service.
           readinessProbe:
             httpGet:
-              path: /api/status
+              path: /api/health
               port: 3000
             initialDelaySeconds: 10
             periodSeconds: 5
-            timeoutSeconds: 3
+            timeoutSeconds: 2
+            failureThreshold: 3
+            successThreshold: 1
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sleep", "5"]
           volumeMounts:
             - name: data
               mountPath: /data

@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"time"
 
+	relaycommon "github.com/LurusTech/lurus-hub/internal/adapter/provider/common"
+	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/pkg/logger"
 	"github.com/LurusTech/lurus-hub/internal/pkg/metrics"
-	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
-	relaycommon "github.com/LurusTech/lurus-hub/internal/adapter/provider/common"
 	"github.com/LurusTech/lurus-hub/internal/pkg/types"
 
 	"github.com/gin-gonic/gin"
@@ -153,6 +153,19 @@ func platformPreAuthorize(c *gin.Context, estimatedQuota int, relayInfo *relayco
 	metrics.BillingPreAuthDuration.Observe(time.Since(preAuthStart).Seconds())
 
 	if err != nil {
+		// P1-2: when the platform breaker is OPEN, fall back to cached wallet
+		// balance instead of a hard 402 — a billing outage must degrade, not take
+		// the gateway down with it. TryDegradedPreAuth is fail-closed and bounded
+		// (fresh cache + 3× margin + per-tenant unsecured-spend cap); on success
+		// we proceed WITHOUT a pre-auth, taking the same legacy post-consume debit
+		// path as the high-balance skip above. This binding is also why the deep
+		// readiness probe (P0-2) is safe: /api/health no longer 503s on a billing
+		// blip, only on a true DB-down.
+		if common.TryDegradedPreAuth(c.GetString("tenant_id"), accountID, estimatedLB, err) {
+			logger.LogInfo(c, fmt.Sprintf("billing degraded: admitting account %d on cached balance (estimate %.4f LB, breaker open)",
+				accountID, estimatedLB))
+			return nil
+		}
 		return types.NewErrorWithStatusCode(
 			fmt.Errorf("insufficient balance or billing service unavailable"),
 			types.ErrorCodeInsufficientUserQuota, http.StatusPaymentRequired,

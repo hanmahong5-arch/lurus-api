@@ -10,7 +10,9 @@ import (
 
 	"github.com/LurusTech/lurus-hub/internal/domain/entity"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
+	"github.com/LurusTech/lurus-hub/internal/pkg/constant"
 	"github.com/LurusTech/lurus-hub/internal/pkg/logger"
+	"github.com/LurusTech/lurus-hub/internal/pkg/metrics"
 	"github.com/LurusTech/lurus-hub/internal/pkg/search"
 	"github.com/LurusTech/lurus-hub/internal/pkg/types"
 
@@ -251,6 +253,21 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 }
 
 func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
+	// P1-3: emit usage metrics here — the one chokepoint every relay path funnels
+	// through — BEFORE the log-config guards, so token/quota series are recorded
+	// even when consume-log writes are disabled. Provider is derived from the
+	// channel type so RecordTokens' (provider, model) labels are populated.
+	metricTenant := c.GetString("tenant_id")
+	if metricTenant == "" {
+		metricTenant = "default"
+	}
+	metrics.RecordTokens(constant.GetChannelTypeName(params.ChannelType), params.ModelName,
+		params.PromptTokens, params.CompletionTokens)
+	if params.Quota > 0 {
+		// Counter.Add panics on negatives; refund/zero rows must not be recorded.
+		metrics.RecordQuotaConsumed(metricTenant, strconv.Itoa(userId), int64(params.Quota))
+	}
+
 	if !common.LogConsumeEnabled {
 		return
 	}

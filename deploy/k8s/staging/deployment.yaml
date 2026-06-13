@@ -160,6 +160,8 @@ spec:
             periodSeconds: 5
             failureThreshold: 30
             timeoutSeconds: 3
+          # Liveness stays SHALLOW (/api/status) — never restart on a dependency
+          # blip. See base deploy/k8s/deployment.yaml for the full P0-2 rationale.
           livenessProbe:
             httpGet:
               path: /api/status
@@ -167,13 +169,22 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 15
             timeoutSeconds: 5
+          # Readiness is DEEP (/api/health) so a DB-down pod is pulled from the
+          # Service. Single replica here, so no fleet-wide correlation risk; this
+          # is the safe place to exercise the deep-probe behaviour before PROD.
           readinessProbe:
             httpGet:
-              path: /api/status
+              path: /api/health
               port: 3000
             initialDelaySeconds: 10
             periodSeconds: 5
-            timeoutSeconds: 3
+            timeoutSeconds: 2
+            failureThreshold: 3
+            successThreshold: 1
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sleep", "5"]
           volumeMounts:
             - name: data
               mountPath: /data

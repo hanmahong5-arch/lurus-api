@@ -2,6 +2,7 @@ package search
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"time"
@@ -17,20 +18,20 @@ var Client meilisearch.ServiceManager
 // Configuration variables
 // 配置变量
 var (
-	Enabled        bool   // Whether Meilisearch integration is enabled / 是否启用 Meilisearch 集成
-	Host           string // Meilisearch host URL / Meilisearch 主机地址
-	APIKey         string // Meilisearch API key / Meilisearch API 密钥
-	SyncEnabled    bool   // Whether automatic sync is enabled / 是否启用自动同步
-	SyncBatchSize  int    // Batch size for bulk operations / 批量操作的批次大小
-	SyncInterval   int    // Sync interval in seconds / 同步间隔(秒)
-	MaxResults     int    // Maximum search results / 最大搜索结果数
-	SearchTimeout  int64  // Search timeout in milliseconds / 搜索超时时间(毫秒)
-	Debug          bool   // Enable debug logging / 启用调试日志
-	WorkerCount    int    // Number of worker goroutines / 工作协程数
-	RetryCount     int    // Number of retries for failed operations / 失败操作重试次数
-	RetryDelay     int    // Retry delay in milliseconds / 重试延迟(毫秒)
-	AutoCreateIndex bool  // Auto create index if not exists / 自动创建索引
-	IndexPrefix    string // Index name prefix / 索引名称前缀
+	Enabled         bool   // Whether Meilisearch integration is enabled / 是否启用 Meilisearch 集成
+	Host            string // Meilisearch host URL / Meilisearch 主机地址
+	APIKey          string // Meilisearch API key / Meilisearch API 密钥
+	SyncEnabled     bool   // Whether automatic sync is enabled / 是否启用自动同步
+	SyncBatchSize   int    // Batch size for bulk operations / 批量操作的批次大小
+	SyncInterval    int    // Sync interval in seconds / 同步间隔(秒)
+	MaxResults      int    // Maximum search results / 最大搜索结果数
+	SearchTimeout   int64  // Search timeout in milliseconds / 搜索超时时间(毫秒)
+	Debug           bool   // Enable debug logging / 启用调试日志
+	WorkerCount     int    // Number of worker goroutines / 工作协程数
+	RetryCount      int    // Number of retries for failed operations / 失败操作重试次数
+	RetryDelay      int    // Retry delay in milliseconds / 重试延迟(毫秒)
+	AutoCreateIndex bool   // Auto create index if not exists / 自动创建索引
+	IndexPrefix     string // Index name prefix / 索引名称前缀
 )
 
 // InitMeilisearch initializes the Meilisearch client and loads configuration
@@ -56,9 +57,19 @@ func InitMeilisearch() error {
 		return fmt.Errorf("MEILISEARCH_API_KEY is required when MEILISEARCH_ENABLED=true")
 	}
 
-	// Create Meilisearch client
-	// 创建 Meilisearch 客户端
-	Client = meilisearch.New(Host, meilisearch.WithAPIKey(APIKey))
+	// Create Meilisearch client with a bounded HTTP timeout (P1-1). Meilisearch
+	// is off the relay/billing hot path (log full-text search only), but without
+	// a client timeout a hung or slow instance would block the admin log handler
+	// indefinitely. SearchTimeout caps every Meilisearch call so a down search
+	// backend fails fast instead of pinning request goroutines. A 0/negative
+	// value falls back to a sane 5s default rather than "no timeout".
+	timeout := time.Duration(SearchTimeout) * time.Millisecond
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	Client = meilisearch.New(Host,
+		meilisearch.WithAPIKey(APIKey),
+		meilisearch.WithCustomClient(&http.Client{Timeout: timeout}))
 
 	// Test connection and get health status
 	// 测试连接并获取健康状态

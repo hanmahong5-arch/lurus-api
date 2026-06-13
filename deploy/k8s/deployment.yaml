@@ -38,6 +38,17 @@ spec:
                   matchLabels:
                     app: lurus-api
                 topologyKey: kubernetes.io/hostname
+      # P1-4: spread the 3 replicas across nodes so a single node loss can't take
+      # down the whole Service. ScheduleAnyway (not DoNotSchedule) keeps this
+      # best-effort — it must never block scheduling on a single-node cluster
+      # (R1/R6 today). Complements the soft podAntiAffinity above.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: lurus-api
       # Resolve auth.lurus.cn to Traefik ClusterIP inside the pod.
       # Avoids hairpin NAT issue when exchanging OIDC tokens with Zitadel.
       hostAliases:
@@ -218,6 +229,10 @@ spec:
             periodSeconds: 5
             failureThreshold: 24
             timeoutSeconds: 3
+          # Liveness stays SHALLOW (/api/status, no dependency checks). A deep
+          # liveness that pinged the shared PG would restart all 3 pods at once
+          # on a DB blip — a cascading restart storm. Restarts must reflect a
+          # broken *process*, never a transient dependency. (P0-2)
           livenessProbe:
             httpGet:
               path: /api/status
@@ -225,13 +240,35 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 15
             timeoutSeconds: 5
+          # Readiness is DEEP (/api/health: DB ping + breaker state). This gates
+          # traffic, not restarts — a NotReady pod is pulled from the Service but
+          # not killed. CORRELATION RISK: all 3 replicas share one PG, so a PG
+          # blip flips all 3 NotReady at once = full outage, worse than the
+          # occasional 500 it replaces. Two mitigations are MANDATORY and ship
+          # WITH this change to PROD:
+          #   1. failureThreshold:3 + periodSeconds:5 ⇒ ~15s of sustained failure
+          #      before a pod leaves the Service, so a 2s PG hiccup never flaps
+          #      the fleet; timeoutSeconds:2 keeps a hung DB ping from wedging.
+          #   2. P1-2 (billing breaker → cached-balance degrade) must be live so
+          #      /api/health does NOT 503 on a billing-path blip — only a true
+          #      DB-down trips readiness. DO NOT apply this readiness change to
+          #      PROD ahead of P1-2.
           readinessProbe:
             httpGet:
-              path: /api/status
+              path: /api/health
               port: 3000
             initialDelaySeconds: 10
             periodSeconds: 5
-            timeoutSeconds: 3
+            timeoutSeconds: 2
+            failureThreshold: 3
+            successThreshold: 1
+          # P1-4: give in-flight relay requests ~5s to drain before SIGTERM on a
+          # rolling update (maxUnavailable:0/maxSurge:1). /bin/sleep exists in the
+          # debian:bookworm-slim runtime base.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sleep", "5"]
           volumeMounts:
             - name: data
               mountPath: /data

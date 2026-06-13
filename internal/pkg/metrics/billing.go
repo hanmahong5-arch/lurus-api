@@ -57,4 +57,19 @@ var (
 			Help:      "Circuit breaker state: 0=closed (healthy), 1=open (platform down), 2=halfopen (probing)",
 		},
 	)
+
+	// BillingDegradedTotal counts relay requests that were admitted on cached
+	// wallet balance while the platform billing breaker was open (P1-2 graceful
+	// degradation), labeled by outcome:
+	//   allowed — admitted on fresh cached credit (breaker open, estimate ≪ balance, under tenant cap)
+	//   denied  — degrade declined (no fresh cache / estimate too close to balance / tenant cap hit) → fail-closed 402
+	BillingDegradedTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: "billing",
+			Name:      "degraded_total",
+			Help:      "Relay billing degradation decisions while breaker open, by outcome (allowed/denied)",
+		},
+		[]string{"outcome"},
+	)
 )

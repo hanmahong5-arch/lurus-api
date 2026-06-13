@@ -4,6 +4,7 @@ import (
 	"github.com/LurusTech/lurus-hub/internal/adapter/handler"
 	"github.com/LurusTech/lurus-hub/internal/adapter/middleware"
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 
 	"github.com/gin-gonic/gin"
 )
@@ -13,6 +14,12 @@ import (
 func SetInternalApiRouter(router *gin.Engine) {
 	internalGroup := router.Group("/internal")
 	internalGroup.Use(middleware.InternalApiAuth())
+	// Per-key general bucket on EVERY internal route (mounted after auth so the
+	// key id is in context). A stolen key is bounded even on read endpoints; the
+	// write/provision groups below add a second, tighter bucket on top. Marks are
+	// unique per tier so the buckets never collide. (P0-3)
+	internalGroup.Use(middleware.InternalApiRateLimit(
+		common.InternalApiReadRateLimitNum, common.InternalApiReadRateLimitDuration, "IKR"))
 
 	// User read APIs - query user information
 	userReadGroup := internalGroup.Group("/user")
@@ -27,6 +34,8 @@ func SetInternalApiRouter(router *gin.Engine) {
 	// User write APIs - create and modify users
 	userWriteGroup := internalGroup.Group("/user")
 	userWriteGroup.Use(middleware.RequireScope(repo.ScopeUserWrite))
+	userWriteGroup.Use(middleware.InternalApiRateLimit(
+		common.InternalApiWriteRateLimitNum, common.InternalApiWriteRateLimitDuration, "IKW"))
 	{
 		userWriteGroup.POST("", handler.InternalCreateUser)
 		userWriteGroup.PUT("/:id", handler.InternalUpdateUser)
@@ -134,6 +143,8 @@ func SetInternalApiRouter(router *gin.Engine) {
 	// (ADR 2026-05-18 §4.2). Auth: X-API-Key + scope "provisioning".
 	provisioningGroup := internalGroup.Group("/v1/provisioning")
 	provisioningGroup.Use(middleware.RequireScope(repo.ScopeProvisioning))
+	provisioningGroup.Use(middleware.InternalApiRateLimit(
+		common.InternalApiProvisionRateLimitNum, common.InternalApiProvisionRateLimitDuration, "IKP"))
 	{
 		provisioningGroup.POST("/tenants/:slug/keys", handler.CreateProvisionedKey)
 		provisioningGroup.GET("/tenants/:slug/keys", handler.ListProvisionedKeys)
@@ -146,6 +157,8 @@ func SetInternalApiRouter(router *gin.Engine) {
 	// Idempotency: enforced via UNIQUE(event_id) in credit_pool_fund_events (migration 019).
 	poolFundGroup := internalGroup.Group("/v1/provisioning")
 	poolFundGroup.Use(middleware.RequireScope(repo.ScopeBalanceWrite))
+	poolFundGroup.Use(middleware.InternalApiRateLimit(
+		common.InternalApiProvisionRateLimitNum, common.InternalApiProvisionRateLimitDuration, "IKF"))
 	{
 		poolFundGroup.POST("/tenants/:slug/credit-pool/fund", handler.InternalFundCreditPool)
 	}

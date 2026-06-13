@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
@@ -18,9 +19,13 @@ var defNext = func(c *gin.Context) {
 }
 
 func redisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark string) {
+	redisRateLimiterKeyed(c, maxRequestNum, duration, mark, c.ClientIP())
+}
+
+func redisRateLimiterKeyed(c *gin.Context, maxRequestNum int, duration int64, mark, ident string) {
 	ctx := c.Request.Context()
 	rdb := common.RDB
-	key := "rateLimit:" + mark + c.ClientIP()
+	key := "rateLimit:" + mark + ident
 	listLength, err := rdb.LLen(ctx, key).Result()
 	if err != nil {
 		common.SysError("redis rate limit LLen error: " + err.Error())
@@ -66,7 +71,11 @@ func redisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark st
 }
 
 func memoryRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark string) {
-	key := mark + c.ClientIP()
+	memoryRateLimiterKeyed(c, maxRequestNum, duration, mark, c.ClientIP())
+}
+
+func memoryRateLimiterKeyed(c *gin.Context, maxRequestNum int, duration int64, mark, ident string) {
+	key := mark + ident
 	if !inMemoryRateLimiter.Request(key, maxRequestNum, duration) {
 		setRateLimitResponseHeaders(c, maxRequestNum, 0, duration)
 		c.Status(http.StatusTooManyRequests)
@@ -135,6 +144,45 @@ func TopupRateLimit() func(c *gin.Context) {
 // radius without affecting normal first-login latency.
 func BootstrapRateLimit() func(c *gin.Context) {
 	return rateLimitFactory(5, 60, "BS")
+}
+
+// internalApiRateLimitKey derives the per-key bucket identity from the
+// authenticated internal API key (set by InternalApiAuth). Keying on the key id
+// — not the client IP — is the whole point of P0-3: a stolen key replayed from a
+// botnet of source IPs still shares ONE bucket and cannot be used to spread a
+// provision/DoS flood across IPs. Falls back to client IP only if the auth
+// middleware (impossibly) did not run, so an unauthenticated caller can never
+// share a bucket with an authenticated one.
+func internalApiRateLimitKey(c *gin.Context) string {
+	if id := c.GetInt("internal_api_key_id"); id > 0 {
+		return "ik:" + strconv.Itoa(id)
+	}
+	return "ip:" + c.ClientIP()
+}
+
+// keyedRateLimitFactory builds a rate-limit middleware whose bucket key is
+// derived per-request by keyFn, rather than the client IP. Mirrors
+// rateLimitFactory's redis-or-memory selection.
+func keyedRateLimitFactory(maxRequestNum int, duration int64, mark string, keyFn func(*gin.Context) string) func(c *gin.Context) {
+	if common.RedisEnabled {
+		return func(c *gin.Context) {
+			redisRateLimiterKeyed(c, maxRequestNum, duration, mark, keyFn(c))
+		}
+	}
+	inMemoryRateLimiter.Init(common.RateLimitKeyExpirationDuration)
+	return func(c *gin.Context) {
+		memoryRateLimiterKeyed(c, maxRequestNum, duration, mark, keyFn(c))
+	}
+}
+
+// InternalApiRateLimit returns a per-API-key rate limiter for /internal routes.
+// Must be mounted AFTER InternalApiAuth so the key id is present in context.
+// mark must be unique per bucket tier so the tiers don't share a Redis list.
+func InternalApiRateLimit(maxRequestNum int, duration int64, mark string) func(c *gin.Context) {
+	if !common.InternalApiRateLimitEnable {
+		return defNext
+	}
+	return keyedRateLimitFactory(maxRequestNum, duration, mark, internalApiRateLimitKey)
 }
 
 func setRateLimitResponseHeaders(c *gin.Context, limit int, remaining int, retryAfterSec int64) {

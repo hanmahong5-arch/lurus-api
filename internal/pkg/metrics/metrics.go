@@ -336,6 +336,17 @@ func RecordQuotaConsumed(tenantID, userID string, quota int64) {
 	QuotaConsumed.WithLabelValues(tenantID, userID).Add(float64(quota))
 }
 
+// RecordCacheHit records a cache hit or miss for the given cache type. Used to
+// measure wallet-balance cache effectiveness, which directly gauges how often
+// the P1-2 cached-balance degrade path even has data to work with.
+func RecordCacheHit(cacheType string, hit bool) {
+	result := "miss"
+	if hit {
+		result = "hit"
+	}
+	CacheHits.WithLabelValues(cacheType, result).Inc()
+}
+
 // RecordChannelError increments consecutive error count for a channel
 func RecordChannelError(channelID, channelName, provider, errorType string) {
 	ChannelConsecutiveErrors.WithLabelValues(channelID, channelName, provider).Inc()
