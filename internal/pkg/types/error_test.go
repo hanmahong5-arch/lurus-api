@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -58,5 +59,71 @@ func TestIsUpstreamFailure(t *testing.T) {
 				t.Errorf("IsUpstreamFailure() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRelayErrorType(t *testing.T) {
+	tests := []struct {
+		name string
+		err  *NewAPIError
+		want string
+	}{
+		{"nil → internal", nil, "internal"},
+		// Quota/credit exhaustion wins on errorCode regardless of status shape.
+		{"insufficient user quota", &NewAPIError{errorCode: ErrorCodeInsufficientUserQuota, StatusCode: 500}, "insufficient_quota"},
+		{"pre-consume quota failed", &NewAPIError{errorCode: ErrorCodePreConsumeTokenQuotaFailed, StatusCode: 500}, "insufficient_quota"},
+		{"tenant quota exceeded (403 overridden by code)", &NewAPIError{errorCode: ErrorCodeTenantQuotaExceeded, StatusCode: 403}, "insufficient_quota"},
+		// newhub-internal / request-prep failures carrying synthetic 500s must NOT
+		// be counted as upstream provider faults.
+		{"invalid request → internal", &NewAPIError{errorCode: ErrorCodeInvalidRequest, StatusCode: 500}, "internal"},
+		{"gen relay info failed → internal", &NewAPIError{errorCode: ErrorCodeGenRelayInfoFailed, StatusCode: 500}, "internal"},
+		{"count token failed → internal", &NewAPIError{errorCode: ErrorCodeCountTokenFailed, StatusCode: 500}, "internal"},
+		{"get channel failed → internal", &NewAPIError{errorCode: ErrorCodeGetChannelFailed, StatusCode: 500}, "internal"},
+		// Upstream exchange: status-driven sub-classes.
+		{"429 → upstream_rate_limit", &NewAPIError{StatusCode: 429}, "upstream_rate_limit"},
+		{"408 → upstream_timeout", &NewAPIError{StatusCode: 408}, "upstream_timeout"},
+		{"504 → upstream_timeout", &NewAPIError{StatusCode: 504}, "upstream_timeout"},
+		{"524 → upstream_timeout", &NewAPIError{StatusCode: 524}, "upstream_timeout"},
+		{"500 → upstream_5xx", &NewAPIError{StatusCode: 500}, "upstream_5xx"},
+		{"502 → upstream_5xx", &NewAPIError{StatusCode: 502}, "upstream_5xx"},
+		{"400 (provider rejected) → upstream_4xx", &NewAPIError{StatusCode: 400}, "upstream_4xx"},
+		{"401 (bad upstream key) → upstream_4xx", &NewAPIError{StatusCode: 401}, "upstream_4xx"},
+		// Transport failure (B1's hung-provider path) → synthetic 500 → upstream_5xx.
+		{"do_request_failed → upstream_5xx", &NewAPIError{errorCode: ErrorCodeDoRequestFailed, StatusCode: 500}, "upstream_5xx"},
+		// Channel capacity exhaustion with no status → fail-safe upstream_5xx.
+		{"all-keys-cooling (status 0) → upstream_5xx", &NewAPIError{errorCode: ErrorCodeChannelAllKeysCooling, StatusCode: 0}, "upstream_5xx"},
+		{"unclassified status 0 → upstream_5xx", &NewAPIError{StatusCode: 0}, "upstream_5xx"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := RelayErrorType(tt.err); got != tt.want {
+				t.Errorf("RelayErrorType() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestUpstreamProviderContext_ShapingAndMasking exercises the B4 client-error
+// shaping: prefixing the message with provider context (as the relay final-error
+// defer does for upstream failures) must survive into the client envelope while
+// MaskSensitiveInfo still scrubs secrets. Uses ErrorTypeNewAPIError (the
+// do_request_failed / hung-provider path) where SetMessage drives the rendered
+// message — same set of errors the existing request-id wrap shapes.
+func TestUpstreamProviderContext_ShapingAndMasking(t *testing.T) {
+	orig := "connect to https://secret.upstream.example/v1/KEY12345SECRET failed"
+	e := NewError(errors.New(orig), ErrorCodeDoRequestFailed)
+	e.StatusCode = 500
+	e.SetMessage(fmt.Sprintf("upstream provider %s returned %d: %s", "openai", e.StatusCode, e.Error()))
+
+	out := e.ToOpenAIError()
+
+	if !strings.Contains(out.Message, "upstream provider openai returned 500") {
+		t.Errorf("expected provider-context prefix in client message, got %q", out.Message)
+	}
+	if strings.Contains(out.Message, "KEY12345SECRET") {
+		t.Errorf("masking guard: sensitive URL path leaked through, got %q", out.Message)
+	}
+	if e.StatusCode != 500 {
+		t.Errorf("status code must be unchanged by message shaping, got %d", e.StatusCode)
 	}
 }

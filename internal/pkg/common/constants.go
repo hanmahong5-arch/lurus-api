@@ -140,6 +140,30 @@ var (
 	RelayDialTimeout           = 10 * time.Second
 )
 
+// HealthDBPingTimeout bounds the /api/health DB ping (A1). On every readiness
+// probe the handler pings the DB; without its own deadline a ping to a DOWN
+// host can outlive the readinessProbe timeoutSeconds:2 window (~5s observed) and
+// the pod keeps draining traffic as a "zombie". This caps the ping below that
+// window. NOTE: the DSN statement_timeout governs queries on a LIVE connection,
+// not connect/ping to a dead host — this is a distinct deadline. Tune via
+// HEALTH_DB_PING_TIMEOUT_MS.
+var HealthDBPingTimeout = 1500 * time.Millisecond
+
+// DB/Redis boot connect-retry budget (A2). A transient dependency blip at
+// startup (the DB/Redis pod not yet Ready when this pod boots) otherwise
+// crashes the process on the first gorm.Open/ping → exit(1) → a burned K8s
+// restart. RetryConnect (retry.go) wraps connect+ping with bounded exponential
+// backoff so a cold cluster self-heals instead of crash-looping. The budget is
+// intentionally small — worst case ≈ 1+2+4+8s backoff + 5×5s ping ≈ 40s, well
+// under the startupProbe (~120s) — so a genuinely-misconfigured DSN only delays
+// the terminal FatalLog at the call site by that much. Tune via DB_CONNECT_*.
+var (
+	DBConnectRetries        = 5
+	DBConnectRetryBaseDelay = time.Second
+	DBConnectRetryMaxDelay  = 10 * time.Second
+	DBConnectPingTimeout    = 5 * time.Second
+)
+
 var GeminiSafetySetting string
 
 // https://docs.cohere.com/docs/safety-modes Type; NONE/CONTEXTUAL/STRICT

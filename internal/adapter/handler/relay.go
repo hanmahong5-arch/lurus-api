@@ -130,6 +130,32 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	defer func() {
 		if newAPIError != nil {
 			logger.LogError(c, fmt.Sprintf("relay error: %s", newAPIError.Error()))
+
+			// Resolve the last-tried provider once for both the O1 metric and the
+			// client-facing provider context below (mirrors the RecordRelayTotal defer).
+			provider := constant.GetChannelTypeName(c.GetInt("channel_type"))
+			if provider == "" {
+				provider = "unknown"
+			}
+			model := c.GetString("original_model")
+			if model == "" {
+				model = "unknown"
+			}
+			// O1 (B2): classify this terminal failure. Runs once per request — the
+			// defer body executes only on the error path (success returns without
+			// setting newAPIError), so this never double-counts vs RetryAttempts.
+			metrics.RecordRelayError(provider, model, types.RelayErrorType(newAPIError))
+
+			// E1 (B4): when the failure is upstream-attributable, tell the client
+			// WHICH provider failed and with what status, BEFORE the request-id wrap
+			// below. MaskSensitiveInfo still runs in ToOpenAIError/ToClaudeError after
+			// this, so no upstream secret leaks; envelope shape/status/code unchanged.
+			// The all-keys-cooling branch builds + returns its own message → unaffected.
+			if types.IsUpstreamFailure(newAPIError) {
+				newAPIError.SetMessage(fmt.Sprintf("upstream provider %s returned %d: %s",
+					provider, newAPIError.StatusCode, newAPIError.Error()))
+			}
+
 			newAPIError.SetMessage(common.MessageWithRequestId(newAPIError.Error(), requestId))
 
 			// All-keys-cooling (every key in an OpenRouter pool is rate-limited):
@@ -281,6 +307,8 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		// sending traffic to a known-failing upstream provider.
 		if !channelBreakers.Allow(channel.Id) {
 			metrics.RecordCircuitBreakerRejection(fmt.Sprintf("%d", channel.Id))
+			// O2 (B3): skipping an Open-breaker channel is a failover event.
+			metrics.RecordRelayFailover(constant.GetChannelTypeName(channel.Type), "breaker_open")
 			logger.LogDebug(c, "circuit breaker open for channel #%d, skipping", channel.Id)
 			continue
 		}
@@ -362,6 +390,14 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		if !shouldRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry()) {
 			break
+		}
+
+		// O2 (B3): we're about to retry on a fresh channel. Count it as a failover
+		// when the cause was an upstream/provider failure (not a user 4xx) —
+		// providerName is the channel we're failing OVER FROM. Separate series from
+		// RetryAttempts (different name/labels), so no double-count in alerts.
+		if types.IsUpstreamFailure(newAPIError) {
+			metrics.RecordRelayFailover(providerName, "upstream_error")
 		}
 
 		// Record retry attempt

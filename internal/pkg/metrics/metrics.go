@@ -102,6 +102,39 @@ var (
 		[]string{"provider", "reason"},
 	)
 
+	// RelayErrorsTotal classifies terminal relay failures by provider, model, and
+	// error_type (O1). Recorded once per failed request at the relay's final-error
+	// defer — terminal outcomes only, never per-retry (RetryAttempts covers that),
+	// and success skips it. error_type is one of {upstream_5xx, upstream_4xx,
+	// upstream_timeout, upstream_rate_limit, insufficient_quota, internal}; see
+	// types.RelayErrorType. This is the missing "WHY is a provider failing" signal —
+	// RelayRequestsTotal{status="error"} only says THAT it failed.
+	RelayErrorsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "relay_errors_total",
+			Help:      "Terminal relay errors by provider, model, and error_type",
+		},
+		[]string{"provider", "model", "error_type"},
+	)
+
+	// RelayFailoverTotal counts failover events: a request abandoning one channel
+	// for another (O2). reason is one of {breaker_open (skipped a channel whose
+	// circuit breaker is Open), upstream_error (retried onto a new channel after an
+	// upstream/provider failure)}. A separate series from RetryAttempts — this is
+	// the churn signal: sustained failover means capacity is thin or a provider is
+	// flapping. provider labels the channel being failed OVER FROM.
+	RelayFailoverTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "relay_failover_total",
+			Help:      "Relay failover events by provider (failed-over-from) and reason",
+		},
+		[]string{"provider", "reason"},
+	)
+
 	// ActiveConnections tracks current active connections
 	ActiveConnections = promauto.NewGauge(
 		prometheus.GaugeOpts{
@@ -319,6 +352,19 @@ var (
 func RecordRelayRequest(provider, model, status string, durationSec float64) {
 	RelayRequestsTotal.WithLabelValues(provider, model, status).Inc()
 	RelayDuration.WithLabelValues(provider, model).Observe(durationSec)
+}
+
+// RecordRelayError records a terminal relay failure classified by error_type (O1).
+// Call once per failed request from the relay's final-error path.
+func RecordRelayError(provider, model, errorType string) {
+	RelayErrorsTotal.WithLabelValues(provider, model, errorType).Inc()
+}
+
+// RecordRelayFailover records a failover event (O2). reason is "breaker_open"
+// (skipped an Open-breaker channel) or "upstream_error" (retried onto a new
+// channel after an upstream failure).
+func RecordRelayFailover(provider, reason string) {
+	RelayFailoverTotal.WithLabelValues(provider, reason).Inc()
 }
 
 // RecordTokens records token usage
