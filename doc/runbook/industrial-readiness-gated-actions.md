@@ -33,6 +33,36 @@ staging and that the backup gap was a flag flip):
 3. **The PG is single-instance `lurus-pg-1` (no HA replica).** A node/pod loss on that one
    PG is a hard newhub outage regardless of newhub replica count — relevant to any availability SLA.
 
+## In-cluster validation 2026-06-13 (PASS) + a deploy-blocking ns bug
+
+The merged PR #17 image was actually deployed to R6 (`ssh root@100.98.57.55`, a disposable
+PG-whitelisted ns, a self-assembled secret) and torn down clean (zero footprint). **The
+hardening works on real K8s:**
+
+- PG-only boot OK; `schema_migrations=20` (max `020_create_privacy_erasure_requests`);
+  `/api/status` + `/api/health` both 200; `billing_config_poll WARN 404 keeping-current`
+  (P1-2 degrade path live).
+- **P0-2 proven on real kubelet probes + Service endpoints (stronger than the local stack):**
+  a deny-egress NetworkPolicy cut Hub→PG → `/api/health` 503 (DB ping ~5s) → readiness 0/1 →
+  pod **removed from the Service endpoints**, while `/api/status` stayed 200 → liveness held →
+  **zero restarts** (no storm). Delete the netpol → 200 / Ready / back in endpoints. This is the
+  exact "readiness sheds, liveness holds" contract.
+
+**🐞 Deploy-blocking bug found:** the `staging/` + `r6-stage/` overlays and `deploy-staging.yml`
+deploy to namespace **`lurus-newhub`**, which is **not** in the `database` ns `pg-access-control`
+NetworkPolicy whitelist (allowed: `lurus-system, lurus-platform, lucrum, matrix, lurus-staging,
+lurus-ops`). A Hub pod there gets PG **`connection refused`** and crashloops — and this also blocks
+the future `STAGING_KUBECONFIG`-wired deploy. **Fix (owner picks the canonical stage ns — it
+touches platform's netpol convention):**
+  - **(a)** point the stage overlays + `deploy-staging.yml` at a whitelisted ns — `lurus-staging`
+    is literally named for this; or
+  - **(b)** have platform add `lurus-newhub` to `pg-access-control` (platform-side change).
+  `lurus-newhub` is also the app / Deployment / Service **name** (keep those) — under (a) only the
+  *namespace* references change (~14 sites across the two overlays + `deploy-staging.yml` + ingress).
+
+Minor: 1 transient cold-start restart (exit 1 ~1s on first DB connect, K8s retry recovered) = the
+designed PG-only fast-fail; a boot connect-retry/backoff would make first boot clean.
+
 ---
 
 ## P0-5 — Add newhub PROD to the ArgoCD ApplicationSet (`selfHeal: false` to start)
@@ -175,6 +205,7 @@ before the later-sequenced execution work.
 | Item | Action | Why gated |
 |---|---|---|
 | **Infra-0** | Wire the `STAGING_KUBECONFIG` repo secret so the Hub actually deploys to a staging cluster | **blocks ALL probe/manifest validation** — today the deploy job skips; needs staging cluster creds |
+| **Infra-1** | Fix stage-overlay namespace `lurus-newhub` → a PG-netpol-whitelisted ns (e.g. `lurus-staging`), or have platform add `lurus-newhub` to `pg-access-control` | **deploy-blocking** — PG `connection refused` → crashloop; owner picks canonical stage ns (validated 2026-06-13) |
 | **P0-5** | Add newhub to ArgoCD appset, `selfHeal:false` start | edits root manifest; autosync vs empty R1 |
 | **P1-2 cap** | Sign off `BILLING_DEGRADED_SPEND_CAP_LB` (default 50 LB/tenant/hr) | unsecured-spend business risk |
 | **P1-5** | **CONFIRMED 2026-06-13: `lurus_api` backup coverage = ZERO** (pg_dump covers `identity` only; not a schema in identity; CNPG base backup broken since ~03-01). Extend the dump to cover `lurus_api` + run a restore drill | edits platform backup config + storage; **SLA #1** |
