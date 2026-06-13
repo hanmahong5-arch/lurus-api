@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: lurus-newhub
+  name: lurus-staging
   labels:
     app.kubernetes.io/part-of: lurus
     environment: stage

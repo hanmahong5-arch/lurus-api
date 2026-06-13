@@ -3,7 +3,7 @@
 Live deployment of `2b-svc-newhub` on the R6 STAGE cluster, fronted by R6 host nginx.
 
 - Cluster: R6 (`43.226.38.244`, Tailscale `100.122.83.20`), single-node K3s
-- Namespace: `lurus-newhub`
+- Namespace: `lurus-staging` (PG `pg-access-control` netpol whitelists this ns, not `lurus-newhub` — see runbook Infra-1, 2026-06-13)
 - Domain: https://test-newhub.lurus.cn
 - Service: NodePort 30850 -> container port 3000
 - Image: `ghcr.io/hanmahong5-arch/lurus-api:main` (floating tag, `imagePullPolicy: Always`)
@@ -12,7 +12,7 @@ Live deployment of `2b-svc-newhub` on the R6 STAGE cluster, fronted by R6 host n
 
 ```bash
 # 1. Seed the secret with real values (NEVER commit them):
-kubectl -n lurus-newhub create secret generic lurus-newhub-secrets \
+kubectl -n lurus-staging create secret generic lurus-newhub-secrets \
   --from-literal=SESSION_SECRET='<real>' \
   --from-literal=SQL_DSN='<real>' \
   --from-literal=IDENTITY_SERVICE_INTERNAL_KEY='<real>' \
