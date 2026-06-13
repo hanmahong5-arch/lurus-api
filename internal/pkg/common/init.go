@@ -90,6 +90,10 @@ func InitEnv() {
 	RelayMaxIdleConns = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS", 500)
 	RelayMaxIdleConnsPerHost = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS_PER_HOST", 100)
 
+	// Streaming-safe hung-upstream guards (B1/R3) — seconds. NOT a total timeout.
+	RelayResponseHeaderTimeout = time.Duration(GetEnvOrDefault("RELAY_RESPONSE_HEADER_TIMEOUT", 90)) * time.Second
+	RelayDialTimeout = time.Duration(GetEnvOrDefault("RELAY_DIAL_TIMEOUT", 10)) * time.Second
+
 	CostSpikeProtectionEnabled = GetEnvOrDefaultBool("COST_SPIKE_PROTECTION_ENABLED", true)
 	CostSpikeHardLimitPer5Min = GetEnvOrDefault("COST_SPIKE_HARD_LIMIT_PER_5MIN", 50000)
 
