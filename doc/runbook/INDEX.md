@@ -20,6 +20,7 @@ alert / signal comes from), **Triggered by** (the literal condition),
 |---|---|
 | [tenant-onboarding](tenant-onboarding.md) | New Reseller signs up — provisioning a tenant + first key |
 | [deployment](deployment.md) | Cutting a new image to R6 stage / R1 prod |
+| [staging-deploy](staging-deploy.md) | Deploying newhub to R6 STAGE via the working SSH path (`scripts/deploy-stage.sh`; GHA deploy is dead) |
 | [ha-deployment](ha-deployment.md) | Multi-replica considerations (session secret, batch updates) |
 | [staging-environment](staging-environment.md) | Bringing up STAGE on R6 from scratch |
 | [database](database.md) | DB shape, common queries, GORM auto-migrate gotchas |
