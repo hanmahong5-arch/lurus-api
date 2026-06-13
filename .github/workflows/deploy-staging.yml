@@ -109,6 +109,12 @@ jobs:
     # Skip cleanly when no real staging cluster is wired up yet (empty
     # STAGING_KUBECONFIG) instead of failing `main` CI on a tracked infra gap.
     # Runs automatically once the secret is configured.
+    #
+    # NOTE (2026-06-13): the cluster API is Tailscale-only, so a GitHub-hosted
+    # runner cannot reach it and STAGING_KUBECONFIG stays empty — this job is
+    # effectively dead. The WORKING deploy path is SSH: scripts/deploy-stage.sh
+    # (see doc/runbook/staging-deploy.md). This job is kept (not deleted) so its
+    # skip-warning keeps documenting the gap until the cluster is reachable from CI.
     if: ${{ needs.build.outputs.has_kubeconfig == 'true' }}
     runs-on: ubuntu-latest
     environment: staging

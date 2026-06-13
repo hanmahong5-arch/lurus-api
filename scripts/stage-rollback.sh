@@ -6,9 +6,9 @@
 #   bash scripts/stage-rollback.sh --restore  # restore forward (undo the rollback)
 #
 # Mechanism:
-#   rollback: kubectl rollout undo deployment/lurus-newhub -n lurus-newhub
+#   rollback: kubectl rollout undo deployment/lurus-newhub -n lurus-staging
 #             (Kubernetes keeps the previous ReplicaSet; undo swaps back to it)
-#   restore:  kubectl rollout undo deployment/lurus-newhub -n lurus-newhub
+#   restore:  kubectl rollout undo deployment/lurus-newhub -n lurus-staging
 #             (calling undo again steps forward in revision history)
 #
 # Idempotency: running the script twice with no change in state between runs is
@@ -21,7 +21,10 @@
 
 set -euo pipefail
 
-readonly NAMESPACE="lurus-newhub"
+# Namespace is lurus-staging (the PG pg-access-control netpol whitelists it, NOT
+# lurus-newhub — see runbook Infra-1, PR #20 2026-06-13). Deployment name and the
+# /api/status health URL are unchanged (confirmed against deploy/k8s/{staging,r6-stage}).
+readonly NAMESPACE="lurus-staging"
 readonly DEPLOYMENT="lurus-newhub"
 readonly HEALTH_URL="https://test-newhub.lurus.cn/api/status"
 readonly WAIT_TIMEOUT="120s"
