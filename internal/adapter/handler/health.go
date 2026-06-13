@@ -21,7 +21,13 @@ func GetHealthDetailed(c *gin.Context) {
 	if repo.DB != nil {
 		sqlDB, err := repo.DB.DB()
 		if err == nil {
-			if err := sqlDB.PingContext(c.Request.Context()); err != nil {
+			// Bound the ping with its own deadline (A1): a ping to a DOWN host can
+			// otherwise outlive the readinessProbe timeoutSeconds:2 window and leave
+			// a zombie pod draining traffic. Inline cancel — two more checks follow.
+			ctx, cancel := context.WithTimeout(c.Request.Context(), common.HealthDBPingTimeout)
+			pingErr := sqlDB.PingContext(ctx)
+			cancel()
+			if pingErr != nil {
 				checks["database"] = "unreachable"
 				healthy = false
 			} else {

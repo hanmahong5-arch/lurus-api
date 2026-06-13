@@ -39,10 +39,20 @@ func InitRedisClient() (err error) {
 	opt.PoolSize = GetEnvOrDefault("REDIS_POOL_SIZE", 10)
 	RDB = redis.NewClient(opt)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err = RDB.Ping(ctx).Result()
+	// Bounded boot connect-retry (A2): a Redis pod not yet Ready when this pod
+	// boots otherwise crashes the process on the first ping. Reuse the same
+	// bounded-backoff helper + budget as the DB path. The ParseURL failure above
+	// stays an immediate FatalLog (config error, not transient).
+	err = RetryConnect("redis", RetryConfig{
+		MaxAttempts: DBConnectRetries,
+		BaseDelay:   DBConnectRetryBaseDelay,
+		MaxDelay:    DBConnectRetryMaxDelay,
+	}, func(error) bool { return true }, func() error {
+		ctx, cancel := context.WithTimeout(context.Background(), DBConnectPingTimeout)
+		defer cancel()
+		_, perr := RDB.Ping(ctx).Result()
+		return perr
+	})
 	if err != nil {
 		FatalLog("Redis ping test failed: " + err.Error())
 	}

@@ -105,12 +105,48 @@ func chooseDB(envName string) (*gorm.DB, error) {
 	dsn := withStatementTimeout(os.Getenv(envName))
 	common.SysLog("using PostgreSQL as database")
 	common.UsingPostgreSQL = true
-	return gorm.Open(postgres.New(postgres.Config{
-		DSN:                  dsn,
-		PreferSimpleProtocol: true, // disables implicit prepared statement usage
-	}), &gorm.Config{
-		PrepareStmt: true, // precompile SQL
+
+	// Bounded boot connect-retry (A2). gorm.Open with the pgx driver connects
+	// LAZILY, so it succeeds even when PG is unreachable — the failure only
+	// surfaces on first query. We therefore ping inside each attempt (load-
+	// bearing) so retry actually observes "PG not ready" and a DB pod that is
+	// not yet Ready when this pod boots is retried instead of crash-looping the
+	// process. RetryConnect never FatalLogs; InitDB/InitLogDB keep the terminal
+	// FatalLog after the budget is exhausted. The all-retryable predicate makes
+	// a misconfigured DSN merely delay that FatalLog by the bounded budget
+	// (validateSQLDSN already rejected bad schemes upstream).
+	var db *gorm.DB
+	err := common.RetryConnect("postgres "+envName, common.RetryConfig{
+		MaxAttempts: common.DBConnectRetries,
+		BaseDelay:   common.DBConnectRetryBaseDelay,
+		MaxDelay:    common.DBConnectRetryMaxDelay,
+	}, func(error) bool { return true }, func() error {
+		opened, oerr := gorm.Open(postgres.New(postgres.Config{
+			DSN:                  dsn,
+			PreferSimpleProtocol: true, // disables implicit prepared statement usage
+		}), &gorm.Config{
+			PrepareStmt: true, // precompile SQL
+		})
+		if oerr != nil {
+			return oerr
+		}
+		sqlDB, derr := opened.DB()
+		if derr != nil {
+			return derr
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), common.DBConnectPingTimeout)
+		defer cancel()
+		if perr := sqlDB.PingContext(ctx); perr != nil {
+			_ = sqlDB.Close() // don't leak the pool on a failed attempt
+			return perr
+		}
+		db = opened
+		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
 }
 
 // withStatementTimeout injects a server-side statement_timeout (ms) as a pgx

@@ -90,6 +90,13 @@ func InitEnv() {
 	RelayMaxIdleConns = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS", 500)
 	RelayMaxIdleConnsPerHost = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS_PER_HOST", 100)
 
+	// Health-check DB ping deadline (A1) + boot connect-retry budget (A2).
+	HealthDBPingTimeout = time.Duration(GetEnvOrDefault("HEALTH_DB_PING_TIMEOUT_MS", 1500)) * time.Millisecond
+	DBConnectRetries = GetEnvOrDefault("DB_CONNECT_RETRIES", 5)
+	DBConnectRetryBaseDelay = time.Duration(GetEnvOrDefault("DB_CONNECT_RETRY_DELAY_MS", 1000)) * time.Millisecond
+	DBConnectRetryMaxDelay = time.Duration(GetEnvOrDefault("DB_CONNECT_RETRY_MAX_DELAY_MS", 10000)) * time.Millisecond
+	DBConnectPingTimeout = time.Duration(GetEnvOrDefault("DB_CONNECT_PING_TIMEOUT_MS", 5000)) * time.Millisecond
+
 	CostSpikeProtectionEnabled = GetEnvOrDefaultBool("COST_SPIKE_PROTECTION_ENABLED", true)
 	CostSpikeHardLimitPer5Min = GetEnvOrDefault("COST_SPIKE_HARD_LIMIT_PER_5MIN", 50000)
 
