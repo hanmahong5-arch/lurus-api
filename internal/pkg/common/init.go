@@ -109,6 +109,19 @@ func InitEnv() {
 	CriticalRateLimitEnable = GetEnvOrDefaultBool("CRITICAL_RATE_LIMIT_ENABLE", true)
 	CriticalRateLimitNum = GetEnvOrDefault("CRITICAL_RATE_LIMIT", 20)
 	CriticalRateLimitDuration = int64(GetEnvOrDefault("CRITICAL_RATE_LIMIT_DURATION", 20*60))
+
+	// Internal API per-key rate limits (keyed by API-key id, not IP — see constants.go).
+	InternalApiRateLimitEnable = GetEnvOrDefaultBool("INTERNAL_API_RATE_LIMIT_ENABLE", true)
+	InternalApiReadRateLimitNum = GetEnvOrDefault("INTERNAL_API_READ_RATE_LIMIT", 600)
+	InternalApiReadRateLimitDuration = int64(GetEnvOrDefault("INTERNAL_API_READ_RATE_LIMIT_DURATION", 60))
+	InternalApiWriteRateLimitNum = GetEnvOrDefault("INTERNAL_API_WRITE_RATE_LIMIT", 120)
+	InternalApiWriteRateLimitDuration = int64(GetEnvOrDefault("INTERNAL_API_WRITE_RATE_LIMIT_DURATION", 60))
+	InternalApiProvisionRateLimitNum = GetEnvOrDefault("INTERNAL_API_PROVISION_RATE_LIMIT", 60)
+	InternalApiProvisionRateLimitDuration = int64(GetEnvOrDefault("INTERNAL_API_PROVISION_RATE_LIMIT_DURATION", 60))
+
+	// Billing degradation cap (P1-2) — owner-tunable; default is conservative.
+	BillingDegradedSpendCapLB = GetEnvOrDefaultFloat("BILLING_DEGRADED_SPEND_CAP_LB", 50.0)
+	BillingDegradedWindowSec = GetEnvOrDefault("BILLING_DEGRADED_WINDOW_SEC", 3600)
 	initConstantEnv()
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -222,6 +223,69 @@ func TestProvision_Reprovision_SelfHealsLink(t *testing.T) {
 	}
 	if !tokens[0].UnlimitedQuota {
 		t.Errorf("self-healed linked token must have UnlimitedQuota=true (else wallet-debited AND token-capped at RemainQuota); got false")
+	}
+}
+
+// TestProvision_WithTenantPlugin reproduces production: the GORM TenantPlugin is
+// registered (repo/main.go does this at boot) and the internal API key context
+// carries NO tenant. The provision handler opens its own transaction; if that tx
+// is not tenant-scoped, the plugin's beforeCreate rejects every INSERT
+// ("tenant_id is required for create operations") and the endpoint 500s instead
+// of provisioning. This is the same class of bug as the InternalCreateUser tenant
+// regression — caught here because the other provision tests don't register the
+// plugin. Covers both the no-token and create-initial-token paths so all three
+// tx.Create calls (user/mapping/token) are exercised under the plugin.
+func TestProvision_WithTenantPlugin(t *testing.T) {
+	cases := []struct {
+		name        string
+		createToken bool
+	}{
+		{name: "provision without initial token", createToken: false},
+		{name: "provision with initial token", createToken: true},
+	}
+
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			router, cleanup := SetupIntegrationRouter(t)
+			t.Cleanup(cleanup)
+			if err := repo.DB.Use(&repo.TenantPlugin{}); err != nil {
+				t.Fatalf("failed to register tenant plugin: %v", err)
+			}
+			stubResolver(t, func(_ context.Context, _ string) (*common.IdentityMapping, error) {
+				return nil, nil // unlinked path keeps the test free of platform deps
+			})
+
+			sub := "zsub-tenantplugin-" + strconv.Itoa(i)
+			w := internalRequest(router, "POST", "/internal/user/provision", map[string]interface{}{
+				"zitadel_sub":          sub,
+				"email":                "tenantplugin@test.local",
+				"create_initial_token": tc.createToken,
+			}, authHeaders())
+
+			if w.Code != http.StatusCreated {
+				t.Fatalf("expected 201 with tenant plugin active, got %d, body: %s", w.Code, w.Body.String())
+			}
+			assertSuccess(t, parseResponse(t, w))
+
+			// The user, mapping, and (optional) token must actually exist in the
+			// default tenant — a 201 with no row would be a hollow pass.
+			user, mapping, err := repo.GetUserByZitadelID(sub, "default")
+			if err != nil || user == nil {
+				t.Fatalf("provisioned user/mapping not found under tenant plugin: %v", err)
+			}
+			if user.TenantId != "default" {
+				t.Errorf("expected tenant_id 'default', got %q", user.TenantId)
+			}
+			if mapping == nil || mapping.ZitadelUserID != sub {
+				t.Errorf("identity mapping not written for sub %q", sub)
+			}
+			if tc.createToken {
+				tokens, _ := repo.GetAllUserTokens(user.Id, 0, 10)
+				if len(tokens) == 0 {
+					t.Error("expected initial token row under tenant plugin")
+				}
+			}
+		})
 	}
 }
 

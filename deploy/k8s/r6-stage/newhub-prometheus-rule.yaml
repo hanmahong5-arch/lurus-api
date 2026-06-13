@@ -167,6 +167,83 @@ spec:
           annotations:
             summary: "Tenant {{ $labels.tenant_id }} credit pool EXHAUSTED — relay returning HTTP 402"
 
+    # P0-4: Google SRE multi-window multi-burn-rate alerts on the relay SLOs in
+    # doc/slo-relay.md. Two SLIs, each with a fast-burn and a slow-burn page:
+    #   • Availability SLO = 99.5% relay success ⇒ 0.5% error budget.
+    #       - fast: 14.4× burn (2% of 30d budget in 1h), 1h AND 5m windows
+    #       - slow:  6×  burn (5% of 30d budget in 6h), 6h AND 30m windows
+    #   • Overhead-latency SLO = 99% of relays under 50ms ⇒ 1% budget.
+    #       (overhead histogram has an le=0.05 bucket exactly at the SLO target)
+    # The short-window AND clause stops a single bad spike from alerting and then
+    # auto-resolving — the long window must ALSO be burning. Burn thresholds:
+    #   bad_rate > burn_rate × (1 − SLO).
+    - name: lurus-hub-slo-burn-rate
+      interval: 30s
+      rules:
+        - alert: RelayAvailabilityFastBurn
+          expr: |
+            (
+              sum(rate(lurus_gateway_relay_total_duration_seconds_count{status!="success"}[1h]))
+                / sum(rate(lurus_gateway_relay_total_duration_seconds_count[1h]))
+            ) > (14.4 * 0.005)
+            and
+            (
+              sum(rate(lurus_gateway_relay_total_duration_seconds_count{status!="success"}[5m]))
+                / sum(rate(lurus_gateway_relay_total_duration_seconds_count[5m]))
+            ) > (14.4 * 0.005)
+          for: 2m
+          labels:
+            severity: page
+            service: lurus-hub
+            slo: relay-availability
+          annotations:
+            summary: "relay availability fast-burn — 2% of 30d error budget in <1h"
+            description: "Relay error ratio >7.2% over both 1h and 5m. Check upstream providers + circuit breakers; runbook doc/slo-relay.md."
+
+        - alert: RelayAvailabilitySlowBurn
+          expr: |
+            (
+              sum(rate(lurus_gateway_relay_total_duration_seconds_count{status!="success"}[6h]))
+                / sum(rate(lurus_gateway_relay_total_duration_seconds_count[6h]))
+            ) > (6 * 0.005)
+            and
+            (
+              sum(rate(lurus_gateway_relay_total_duration_seconds_count{status!="success"}[30m]))
+                / sum(rate(lurus_gateway_relay_total_duration_seconds_count[30m]))
+            ) > (6 * 0.005)
+          for: 15m
+          labels:
+            severity: page
+            service: lurus-hub
+            slo: relay-availability
+          annotations:
+            summary: "relay availability slow-burn — 5% of 30d error budget in <6h"
+            description: "Relay error ratio >3% over both 6h and 30m. Sustained degradation; runbook doc/slo-relay.md."
+
+        - alert: RelayOverheadFastBurn
+          expr: |
+            (
+              1 - (
+                sum(rate(lurus_gateway_relay_overhead_duration_seconds_bucket{le="0.05"}[1h]))
+                  / sum(rate(lurus_gateway_relay_overhead_duration_seconds_count[1h]))
+              )
+            ) > (14.4 * 0.01)
+            and
+            (
+              1 - (
+                sum(rate(lurus_gateway_relay_overhead_duration_seconds_bucket{le="0.05"}[5m]))
+                  / sum(rate(lurus_gateway_relay_overhead_duration_seconds_count[5m]))
+              )
+            ) > (14.4 * 0.01)
+          for: 2m
+          labels:
+            severity: page
+            service: lurus-hub
+            slo: relay-overhead
+          annotations:
+            summary: "relay overhead fast-burn — newhub adding >50ms on too many requests"
+            description: ">14.4% of relays exceed the 50ms overhead SLO over 1h AND 5m. This is latency newhub OWNS — check channel-select + quota path, not upstream."
+
     - name: lurus-hub-pool-exhaustion-rate
       interval: 30s
       rules:

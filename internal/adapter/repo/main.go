@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -100,7 +102,7 @@ func CheckSetup() {
 // (2026-06), keep the PG arm on conflicts.
 func chooseDB(envName string) (*gorm.DB, error) {
 	defer initCol()
-	dsn := os.Getenv(envName)
+	dsn := withStatementTimeout(os.Getenv(envName))
 	common.SysLog("using PostgreSQL as database")
 	common.UsingPostgreSQL = true
 	return gorm.Open(postgres.New(postgres.Config{
@@ -109,6 +111,36 @@ func chooseDB(envName string) (*gorm.DB, error) {
 	}), &gorm.Config{
 		PrepareStmt: true, // precompile SQL
 	})
+}
+
+// withStatementTimeout injects a server-side statement_timeout (ms) as a pgx
+// connection runtime parameter so EVERY pooled connection caps query duration at
+// the driver level (P1-1). This is the cheapest, broadest DB-hang guard — far
+// better than threading a context deadline through each repo call: a wedged
+// query (lock wait, runaway plan) is killed by Postgres instead of pinning a
+// goroutine + connection until the pool drains. Default 8s sits well above
+// normal cluster-local latency yet below the relay/readiness timeouts, so a
+// genuinely stuck query surfaces as a fast error that the breaker/readiness path
+// can act on. SQL_STATEMENT_TIMEOUT_MS=0 disables it. A DSN that already sets
+// statement_timeout is left untouched (operator override wins).
+func withStatementTimeout(dsn string) string {
+	timeoutMs := common.GetEnvOrDefault("SQL_STATEMENT_TIMEOUT_MS", 8000)
+	if timeoutMs <= 0 || dsn == "" {
+		return dsn
+	}
+	u, err := url.Parse(dsn)
+	if err != nil {
+		// Not a URL-form DSN we can safely edit — leave it as-is rather than risk
+		// corrupting a key=value DSN. PG-only boot gate already validated scheme.
+		return dsn
+	}
+	q := u.Query()
+	if q.Get("statement_timeout") != "" {
+		return dsn // operator already set it; don't override
+	}
+	q.Set("statement_timeout", strconv.Itoa(timeoutMs))
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 // validateSQLDSN is the PG-only boot gate: newhub refuses to start on anything

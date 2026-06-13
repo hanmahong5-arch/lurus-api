@@ -145,7 +145,7 @@ func InternalCreateUser(c *gin.Context) {
 	}
 
 	user := &repo.User{
-		Username:    username,
+		Username: username,
 		// Set on the struct as well as via the tenant-scoped context: the plugin
 		// only stamps the column when registered, and the struct must reflect the
 		// row that was written.
@@ -279,14 +279,14 @@ func InternalGetUserByZitadelSub(c *gin.Context) {
 // POST /internal/user/provision
 func InternalProvisionUser(c *gin.Context) {
 	var req struct {
-		ZitadelSub        string `json:"zitadel_sub" binding:"required"`
-		Email             string `json:"email" binding:"required"`
-		DisplayName       string `json:"display_name"`
-		TenantID          string `json:"tenant_id"`
-		Group             string `json:"group"`
-		InitialQuota      int    `json:"initial_quota"`
-		CreateInitialToken bool  `json:"create_initial_token"`
-		InitialTokenName  string `json:"initial_token_name"`
+		ZitadelSub         string `json:"zitadel_sub" binding:"required"`
+		Email              string `json:"email" binding:"required"`
+		DisplayName        string `json:"display_name"`
+		TenantID           string `json:"tenant_id"`
+		Group              string `json:"group"`
+		InitialQuota       int    `json:"initial_quota"`
+		CreateInitialToken bool   `json:"create_initial_token"`
+		InitialTokenName   string `json:"initial_token_name"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -373,8 +373,14 @@ func InternalProvisionUser(c *gin.Context) {
 		displayName = strings.Split(req.Email, "@")[0]
 	}
 
-	// Begin transaction for atomicity
-	tx := repo.DB.Begin()
+	// Begin transaction for atomicity. Scope it to the tenant so the GORM tenant
+	// plugin's create callback finds a tenant_id in Statement.Context — a bare
+	// repo.DB.Begin() carries no tenant and the three tx.Create calls below
+	// (user/mapping/token) fail with "tenant_id is required for create
+	// operations" → spurious 500. GetTenantDBWithID stamps the tenant on the
+	// DB context and .Begin() inherits Statement.Context, mirroring the verified
+	// InternalCreateUser path above.
+	tx := repo.GetTenantDBWithID(tenantId).Begin()
 	if tx.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -440,16 +446,16 @@ func InternalProvisionUser(c *gin.Context) {
 	// Step 2: Create identity mapping
 	now := time.Now()
 	mapping := &repo.UserIdentityMapping{
-		LurusUserID:      user.Id,
-		ZitadelUserID:    req.ZitadelSub,
-		TenantID:         tenantId,
-		Email:            req.Email,
-		DisplayName:      displayName,
+		LurusUserID:       user.Id,
+		ZitadelUserID:     req.ZitadelSub,
+		TenantID:          tenantId,
+		Email:             req.Email,
+		DisplayName:       displayName,
 		PreferredUsername: finalUsername,
-		LastSyncAt:       &now,
-		IsActive:         true,
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		LastSyncAt:        &now,
+		IsActive:          true,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 
 	if err := tx.Create(mapping).Error; err != nil {

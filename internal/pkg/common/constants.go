@@ -177,6 +177,37 @@ var (
 
 	DownloadRateLimitNum            = 10
 	DownloadRateLimitDuration int64 = 60
+
+	// Internal API per-key rate limits. The bucket is keyed by the AUTHENTICATED
+	// internal API-key id (not client IP), so a stolen key cannot be used to DoS
+	// the internal plane or spam provisioning by spreading replays across many
+	// source IPs. Three tiers: a general/default bucket on every /internal route,
+	// a tighter bucket on write endpoints, and the tightest on provisioning +
+	// credit-pool funding (the highest-impact operations). Conservative defaults —
+	// tune via env with the owner once real traffic shape is known.
+	InternalApiRateLimitEnable = true
+
+	InternalApiReadRateLimitNum            = 600
+	InternalApiReadRateLimitDuration int64 = 60
+
+	InternalApiWriteRateLimitNum            = 120
+	InternalApiWriteRateLimitDuration int64 = 60
+
+	InternalApiProvisionRateLimitNum            = 60
+	InternalApiProvisionRateLimitDuration int64 = 60
+)
+
+// Billing degradation (P1-2). When the platform billing breaker is OPEN, a relay
+// can be admitted on fresh cached wallet balance instead of hard-failing 402 —
+// bounded so an unreachable platform can't be exploited for unlimited unsecured
+// spend. BillingDegradedSpendCapLB is the per-tenant ceiling of unsecured spend
+// (in LB) admitted within a rolling BillingDegradedWindowSec window; once hit,
+// further requests fail closed until the window rolls or the breaker recovers.
+// The cap VALUE is an owner-signed business-risk decision — the conservative
+// default ships the mechanism; tune via env with the owner.
+var (
+	BillingDegradedSpendCapLB float64 = 50.0
+	BillingDegradedWindowSec  int     = 3600
 )
 
 var RateLimitKeyExpirationDuration = 20 * time.Minute
@@ -247,21 +278,21 @@ const (
 // Login and Registration Configuration Variables
 var (
 	// Phone Verification Configuration
-	PhoneVerificationMode           = PhoneVerificationOptional // Current phone verification mode
-	PhoneRequiredForLogin           = false                     // Require phone verification for login
-	PhoneRequiredForPasswordReset   = false                     // Require phone for password reset
-	PhoneRequiredFor2FAChange       = false                     // Require phone for 2FA changes
-	PhoneRequiredForPayment         = false                     // Require phone for payment operations
-	PhoneRequiredForWithdrawal      = false                     // Require phone for withdrawal
-	PhoneRequiredForPhoneBind       = false                     // Require old phone verification to bind new phone
-	PhoneRequiredForAccountDelete   = false                     // Require phone for account deletion
-	PhoneRequiredForTokenGenerate   = false                     // Require phone for API token generation
-	PhoneRequiredForOAuthBind       = false                     // Require phone for OAuth binding
+	PhoneVerificationMode         = PhoneVerificationOptional // Current phone verification mode
+	PhoneRequiredForLogin         = false                     // Require phone verification for login
+	PhoneRequiredForPasswordReset = false                     // Require phone for password reset
+	PhoneRequiredFor2FAChange     = false                     // Require phone for 2FA changes
+	PhoneRequiredForPayment       = false                     // Require phone for payment operations
+	PhoneRequiredForWithdrawal    = false                     // Require phone for withdrawal
+	PhoneRequiredForPhoneBind     = false                     // Require old phone verification to bind new phone
+	PhoneRequiredForAccountDelete = false                     // Require phone for account deletion
+	PhoneRequiredForTokenGenerate = false                     // Require phone for API token generation
+	PhoneRequiredForOAuthBind     = false                     // Require phone for OAuth binding
 
 	// Registration Configuration
-	RegistrationMode     = RegistrationModeOpen // Current registration mode
-	SMSAutoRegister      = true                 // Auto-register new users via SMS login
-	InviteCodeRequired   = false                // Require invitation code for registration
+	RegistrationMode   = RegistrationModeOpen // Current registration mode
+	SMSAutoRegister    = true                 // Auto-register new users via SMS login
+	InviteCodeRequired = false                // Require invitation code for registration
 
 	// Security Configuration
 	SensitiveActionRequirePassword = false // Require password re-entry for sensitive actions
