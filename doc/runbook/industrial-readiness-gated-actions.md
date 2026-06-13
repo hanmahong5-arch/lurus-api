@@ -6,11 +6,32 @@ manifests, platform config, or PROD/基建** — they are made *one-command read
 but are **NOT executed**; they wait on owner sign-off (root `CLAUDE.md` boundary).
 
 > Sequencing reminder (from the plan's dependency order): the hardened manifests
-> (P0-2 deep readiness, P1-4 spread/preStop) are **committed but only staging-applied**.
+> (P0-2 deep readiness, P1-4 spread/preStop) are **on `main` (PR #17, merged 2026-06-13)**
+> but **not applied to any cluster yet** (see *Verified state* below — the staging deploy
+> is skipped on an empty `STAGING_KUBECONFIG`, so there is no live target to validate against).
 > Their PROD apply is blocked on **two** gates simultaneously:
 >   1. **P0-5** — how PROD apply is delivered (GitOps vs manual).
 >   2. **P1-2** — billing degrade live, so the deep readiness probe can't turn a
 >      PG/billing blip into a fleet-wide outage. **Never** ship P0-2 to PROD ahead of P1-2.
+
+## Verified state (2026-06-13 — live cluster + repo inspection)
+
+Three facts were confirmed against the live cluster and the platform repo. They
+**correct two assumptions the original plan made** (it assumed newhub already ran on
+staging and that the backup gap was a flag flip):
+
+1. **The Hub is not deployed to any reachable cluster.** The reachable cluster runs
+   `lurus-newapi` (the open-source base) but **no `lurus-api` / `lurus-newhub`**. The
+   `deploy-staging.yml` workflow **builds + pushes the image but skips the cluster apply**
+   because the `STAGING_KUBECONFIG` repo secret is empty (it warns and exits 0 — a tracked
+   infra gap, `doc/uat-handbook.md §2`). ⇒ the P0-2/P1-4 probe/topology changes **cannot be
+   validated on any cluster** until staging is wired. New gating item: **Infra-0** below.
+2. **newhub `lurus_api` has ZERO backup coverage** (previously "unconfirmed"). The pg_dump
+   CronJob hardcodes `-d identity`, and `lurus_api` is **not a schema inside `identity`**
+   (live check — identity's schemas are app/billing/identity/module/notification/public).
+   So no backup path touches newhub data today. The fix extends the dump, not a flag (P1-5).
+3. **The PG is single-instance `lurus-pg-1` (no HA replica).** A node/pod loss on that one
+   PG is a hard newhub outage regardless of newhub replica count — relevant to any availability SLA.
 
 ---
 
@@ -81,17 +102,19 @@ probe to the 3-replica PROD without P1-2 (correlation-outage risk).
 >   - A **pg_dump fallback CronJob** exists, gated by ConfigMap
 >     `lurus-platform-backup-config` `BACKUP_ENABLED` (default off), writing to PVC
 >     `lurus-pg-backup` + (weekly) MinIO bucket `pg-backups-v2`.
->   - ⚠️ **OPEN QUESTION — verify FIRST:** that pg_dump dumps database **`identity`**.
->     newhub's data is the **`lurus_api`** schema/DB on the same `lurus-pg` cluster.
->     **It is unconfirmed that any current backup path covers `lurus_api` at all.**
->     Do not claim newhub is backed up until this is proven.
+>   - ✅ **CONFIRMED 2026-06-13 (was "unconfirmed"):** the pg_dump CronJob hardcodes
+>     `pg_dump -d identity` (file name `lurus-identity-*.dump`), and `lurus_api` is **NOT a
+>     schema inside `identity`** (live check — identity's schemas are
+>     app/billing/identity/module/notification/public). ⇒ **no backup path covers newhub's
+>     `lurus_api` today — coverage is ZERO**, not merely "unconfirmed". Even flipping
+>     `BACKUP_ENABLED=true` would back up only `identity`. The fix extends the dump (below).
 
 **Why gated:** touches platform's backup config + storage + (for the base-backup
 fix) the CNPG `Cluster` CR, which is **not in any repo** — managed live via
 `kubectl edit cluster lurus-pg -n database`. **Escalate earliest even though it
 executes late: an unverified-coverage DB vs an enterprise SLA is non-negotiable.**
 
-### (a) FIRST — prove what is (and isn't) backed up for newhub
+### (a) Proven 2026-06-13 — only `identity` is dumped, `lurus_api` is not (commands to reproduce)
 
 ```bash
 # Does any backup path include newhub's lurus_api DB, or only identity?
@@ -103,9 +126,17 @@ ssh root@100.98.57.55 "kubectl -n database get cronjob -o wide"   # daily-pg-dum
 
 ### (b) Enable + cover newhub (owner)
 
-- If pg_dump only covers `identity`: extend the CronJob (platform repo
-  `deploy/k8s/cronjobs/pg-backup.yaml`, config diff — not platform *code*) to also
-  `pg_dump` the `lurus_api` DB; set ConfigMap `BACKUP_ENABLED=true`.
+- **Confirmed: pg_dump covers only `identity`.** Extend the CronJob (platform repo
+  `deploy/k8s/cronjobs/pg-backup.yaml`, config diff — not platform *code*) to also dump
+  newhub's `lurus_api` DB — add a second dump line in the same job (confirm the exact
+  `datname` from newhub's `SQL_DSN` when its Secret is provisioned):
+
+  ```sh
+  # alongside the existing `pg_dump -Fc -d identity -f .../lurus-identity-${TS}.dump`:
+  pg_dump -Fc -U postgres -h lurus-pg-rw.database.svc.cluster.local \
+    -d lurus_api -f "/backups/lurus-api-${TS}.dump"
+  ```
+  Then set ConfigMap `BACKUP_ENABLED=true`. (Flipping the flag alone backs up only `identity`.)
 - For full-cluster PITR: fix the CNPG base-backup overlay-network root cause
   (incident doc §2.3/§5) and confirm `barmanObjectStore` archives resume — this is
   the durable fix; the pg_dump is the interim floor. Storage stays on R6 `/data`
@@ -128,7 +159,7 @@ bash 2l-svc-platform/scripts/drills/backup-restore.sh --R6_HOST 100.122.83.20
 
 | Objective | Target | Measured (drill) |
 |---|---|---|
-| newhub `lurus_api` covered by a backup? | **YES (proven)** | _TBD — see (a)_ |
+| newhub `lurus_api` covered by a backup? | **YES (target)** | **NO — zero coverage, verified 2026-06-13** |
 | RPO (max data loss) | ≤ 6h | _TBD_ |
 | RTO (time to restore) | ≤ 1h | _TBD_ |
 | Drill date / operator | — | _TBD_ |
@@ -143,9 +174,10 @@ before the later-sequenced execution work.
 
 | Item | Action | Why gated |
 |---|---|---|
+| **Infra-0** | Wire the `STAGING_KUBECONFIG` repo secret so the Hub actually deploys to a staging cluster | **blocks ALL probe/manifest validation** — today the deploy job skips; needs staging cluster creds |
 | **P0-5** | Add newhub to ArgoCD appset, `selfHeal:false` start | edits root manifest; autosync vs empty R1 |
 | **P1-2 cap** | Sign off `BILLING_DEGRADED_SPEND_CAP_LB` (default 50 LB/tenant/hr) | unsecured-spend business risk |
-| **P1-5** | **Prove** newhub `lurus_api` is in a backup (likely NOT today — pg_dump covers `identity` only; CNPG base backup broken since ~03-01) → extend dump + run restore drill | edits platform backup config + storage; **SLA #1** |
+| **P1-5** | **CONFIRMED 2026-06-13: `lurus_api` backup coverage = ZERO** (pg_dump covers `identity` only; not a schema in identity; CNPG base backup broken since ~03-01). Extend the dump to cover `lurus_api` + run a restore drill | edits platform backup config + storage; **SLA #1** |
 | **P2-2** | sealed-secrets choice + decouple shared `IDENTITY_SESSION_SECRET` | controller/secret-custody choice |
 | **P2-4** | `hub.lurus.cn` DNS / R1 PROD launch | owner explicitly PMF-gated |
 
