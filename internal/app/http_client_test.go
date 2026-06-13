@@ -2,7 +2,10 @@ package app
 
 import (
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,6 +72,107 @@ func TestHttpClient_Timeout(t *testing.T) {
 	if client.Timeout != expected {
 		t.Fatalf("expected timeout %v, got %v", expected, client.Timeout)
 	}
+}
+
+// TestHttpClient_RelayTransportTimeouts is the B1/R3 footgun guard: the default
+// relay client must bound time-to-first-header + connect, but MUST NOT set a
+// total Client.Timeout (which would cut legitimate long SSE streams).
+func TestHttpClient_RelayTransportTimeouts(t *testing.T) {
+	common.RelayTimeout = 0 // the footgun default: no total timeout
+	common.RelayResponseHeaderTimeout = 90 * time.Second
+	common.RelayDialTimeout = 10 * time.Second
+	common.RelayMaxIdleConns = 100
+	common.RelayMaxIdleConnsPerHost = 50
+
+	InitHttpClient()
+	client := GetHttpClient()
+	if client == nil {
+		t.Fatal("expected non-nil http client")
+	}
+	// Footgun guard: a TOTAL timeout would cut long legitimate streams.
+	if client.Timeout != 0 {
+		t.Fatalf("Client.Timeout must stay 0 (no total timeout), got %v", client.Timeout)
+	}
+	tr, ok := client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("expected *http.Transport, got %T", client.Transport)
+	}
+	if tr.ResponseHeaderTimeout != 90*time.Second {
+		t.Fatalf("ResponseHeaderTimeout = %v, want 90s", tr.ResponseHeaderTimeout)
+	}
+	if tr.DialContext == nil {
+		t.Fatal("DialContext (connect timeout) must be set")
+	}
+}
+
+// TestRelayTransportTimeouts_Behavior proves the runtime semantics of
+// applyRelayTransportTimeouts: a never-responding upstream IS cut at
+// ResponseHeaderTimeout, while a stream whose body is slower than that timeout is
+// NOT cut (headers already arrived). Both assertions stay well under 1s (-short).
+func TestRelayTransportTimeouts_Behavior(t *testing.T) {
+	common.RelayDialTimeout = 10 * time.Second
+
+	newClient := func() *http.Client {
+		tr := &http.Transport{}
+		applyRelayTransportTimeouts(tr)
+		return &http.Client{Transport: tr} // no total Timeout — mirrors production
+	}
+
+	t.Run("no_headers_is_timed_out", func(t *testing.T) {
+		common.RelayResponseHeaderTimeout = 250 * time.Millisecond
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(700 * time.Millisecond) // never sends headers within the timeout
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		start := time.Now()
+		resp, err := newClient().Get(srv.URL)
+		elapsed := time.Since(start)
+		if err == nil {
+			_ = resp.Body.Close()
+			t.Fatal("expected ResponseHeaderTimeout error for a no-headers upstream")
+		}
+		if elapsed >= time.Second {
+			t.Fatalf("must time out at ~ResponseHeaderTimeout, took %v", elapsed)
+		}
+	})
+
+	t.Run("slow_body_stream_not_cut", func(t *testing.T) {
+		common.RelayResponseHeaderTimeout = 400 * time.Millisecond
+		const chunks = 3
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Headers arrive immediately → ResponseHeaderTimeout satisfied. The body
+			// then streams for 3×180ms = 540ms (> 400ms) and must NOT be cut.
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+			w.(http.Flusher).Flush()
+			for i := 0; i < chunks; i++ {
+				time.Sleep(180 * time.Millisecond)
+				_, _ = io.WriteString(w, "data: keepalive\n\n")
+				w.(http.Flusher).Flush()
+			}
+		}))
+		defer srv.Close()
+
+		start := time.Now()
+		resp, err := newClient().Get(srv.URL)
+		if err != nil {
+			t.Fatalf("slow-body stream must NOT be cut by ResponseHeaderTimeout, got %v", err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		body, readErr := io.ReadAll(resp.Body)
+		elapsed := time.Since(start)
+		if readErr != nil {
+			t.Fatalf("reading slow body: %v", readErr)
+		}
+		if strings.Count(string(body), "keepalive") != chunks {
+			t.Fatalf("expected %d streamed chunks intact, got %q", chunks, body)
+		}
+		if elapsed >= time.Second {
+			t.Fatalf("behavioral test must stay -short-safe (<1s), took %v", elapsed)
+		}
+	})
 }
 
 func TestHttpClient_NewProxyClient_HTTP(t *testing.T) {

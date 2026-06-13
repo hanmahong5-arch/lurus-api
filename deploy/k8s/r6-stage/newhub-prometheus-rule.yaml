@@ -244,6 +244,50 @@ spec:
             summary: "relay overhead fast-burn — newhub adding >50ms on too many requests"
             description: ">14.4% of relays exceed the 50ms overhead SLO over 1h AND 5m. This is latency newhub OWNS — check channel-select + quota path, not upstream."
 
+    # B5: alerts on the Wave-2 relay error-classification (O1) + failover (O2)
+    # series. Thresholds are FIRST-CUT (no production traffic to calibrate against
+    # yet) — tune post-traffic. Restricted to upstream_* error_types so internal /
+    # insufficient_quota terminal errors don't page on a provider-health alert.
+    - name: lurus-hub-relay-errors
+      interval: 30s
+      rules:
+        - alert: RelayProviderErrorSpike
+          expr: |
+            sum by (provider, error_type) (
+              rate(lurus_gateway_relay_errors_total{error_type=~"upstream_.*"}[5m])
+            ) * 60 > 10
+          for: 10m
+          labels:
+            severity: ticket
+            service: lurus-hub
+          annotations:
+            summary: >-
+              provider {{ $labels.provider }} {{ $labels.error_type }} at
+              {{ printf "%.1f" $value }}/min
+            description: >-
+              Sustained upstream error spike for one provider/error_type (>10/min for
+              10m). Check that provider's health; cross-ref lurus_gateway_relay_failover_total
+              and lurus_gateway_circuit_breaker_state. First-cut threshold — tune post-traffic.
+
+        - alert: RelayFailoverChurnHigh
+          expr: |
+            sum by (provider) (
+              rate(lurus_gateway_relay_failover_total[5m])
+            ) * 60 > 20
+          for: 10m
+          labels:
+            severity: info
+            service: lurus-hub
+          annotations:
+            summary: >-
+              relay failover churn {{ printf "%.1f" $value }}/min from provider
+              {{ $labels.provider }}
+            description: >-
+              High rate of relays abandoning this provider (breaker_open + upstream_error)
+              for 10m. Capacity may be thin or the provider is flapping; cross-ref
+              lurus_gateway_circuit_breaker_state + lurus_gateway_relay_errors_total.
+              First-cut threshold — tune post-traffic.
+
     - name: lurus-hub-pool-exhaustion-rate
       interval: 30s
       rules:

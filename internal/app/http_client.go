@@ -40,6 +40,29 @@ func checkRedirect(req *http.Request, via []*http.Request) error {
 	return nil
 }
 
+// applyRelayTransportTimeouts bounds the two upstream hang vectors on a relay
+// transport (B1/R3) so a wedged provider cannot pin a client connection forever
+// — WITHOUT capping legitimate long streams (the SSE body is governed per-chunk
+// by streamingTimeout, not here). Factored so the three transport construction
+// sites (default + http/https proxy + socks5 proxy) cannot drift.
+//
+//   - ResponseHeaderTimeout caps time-to-first-response-header; it is satisfied
+//     for the request lifetime once 200+headers arrive, so an in-flight stream is
+//     never cut by it. This is the real "hung upstream" guard.
+//   - A net.Dialer connect timeout is installed ONLY when the transport has no
+//     DialContext yet: the socks5 site sets its own dialer and must not be
+//     clobbered (doing so would break socks5 proxying). socks5 still gets the
+//     ResponseHeaderTimeout guard.
+//
+// http.Client.Timeout (RelayTimeout) is deliberately left untouched — a TOTAL
+// timeout would cut long legitimate streams (the RELAY_TIMEOUT=0 footgun).
+func applyRelayTransportTimeouts(t *http.Transport) {
+	t.ResponseHeaderTimeout = common.RelayResponseHeaderTimeout
+	if t.DialContext == nil {
+		t.DialContext = (&net.Dialer{Timeout: common.RelayDialTimeout}).DialContext
+	}
+}
+
 func InitHttpClient() {
 	transport := &http.Transport{
 		MaxIdleConns:        common.RelayMaxIdleConns,
@@ -47,6 +70,7 @@ func InitHttpClient() {
 		ForceAttemptHTTP2:   true,
 		Proxy:               http.ProxyFromEnvironment, // Support HTTP_PROXY, HTTPS_PROXY, NO_PROXY env vars
 	}
+	applyRelayTransportTimeouts(transport)
 
 	if common.RelayTimeout == 0 {
 		httpClient = &http.Client{
@@ -125,13 +149,15 @@ func NewProxyHttpClient(proxyURL string) (*http.Client, error) {
 
 	switch parsedURL.Scheme {
 	case "http", "https":
+		tr := &http.Transport{
+			MaxIdleConns:        common.RelayMaxIdleConns,
+			MaxIdleConnsPerHost: common.RelayMaxIdleConnsPerHost,
+			ForceAttemptHTTP2:   true,
+			Proxy:               http.ProxyURL(parsedURL),
+		}
+		applyRelayTransportTimeouts(tr)
 		client := &http.Client{
-			Transport: &http.Transport{
-				MaxIdleConns:        common.RelayMaxIdleConns,
-				MaxIdleConnsPerHost: common.RelayMaxIdleConnsPerHost,
-				ForceAttemptHTTP2:   true,
-				Proxy:               http.ProxyURL(parsedURL),
-			},
+			Transport:     tr,
 			CheckRedirect: checkRedirect,
 		}
 		client.Timeout = time.Duration(common.RelayTimeout) * time.Second
@@ -158,15 +184,19 @@ func NewProxyHttpClient(proxyURL string) (*http.Client, error) {
 			return nil, err
 		}
 
-		client := &http.Client{
-			Transport: &http.Transport{
-				MaxIdleConns:        common.RelayMaxIdleConns,
-				MaxIdleConnsPerHost: common.RelayMaxIdleConnsPerHost,
-				ForceAttemptHTTP2:   true,
-				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-					return dialer.Dial(network, addr)
-				},
+		tr := &http.Transport{
+			MaxIdleConns:        common.RelayMaxIdleConns,
+			MaxIdleConnsPerHost: common.RelayMaxIdleConnsPerHost,
+			ForceAttemptHTTP2:   true,
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return dialer.Dial(network, addr)
 			},
+		}
+		// Preserves the socks5 DialContext above (helper only sets it when nil);
+		// adds the ResponseHeaderTimeout hung-upstream guard.
+		applyRelayTransportTimeouts(tr)
+		client := &http.Client{
+			Transport:     tr,
 			CheckRedirect: checkRedirect,
 		}
 		client.Timeout = time.Duration(common.RelayTimeout) * time.Second

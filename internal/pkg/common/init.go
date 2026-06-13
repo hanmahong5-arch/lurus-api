@@ -90,6 +90,10 @@ func InitEnv() {
 	RelayMaxIdleConns = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS", 500)
 	RelayMaxIdleConnsPerHost = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS_PER_HOST", 100)
 
+	// Streaming-safe hung-upstream guards (B1/R3) — seconds. NOT a total timeout.
+	RelayResponseHeaderTimeout = time.Duration(GetEnvOrDefault("RELAY_RESPONSE_HEADER_TIMEOUT", 90)) * time.Second
+	RelayDialTimeout = time.Duration(GetEnvOrDefault("RELAY_DIAL_TIMEOUT", 10)) * time.Second
+
 	// Health-check DB ping deadline (A1) + boot connect-retry budget (A2).
 	HealthDBPingTimeout = time.Duration(GetEnvOrDefault("HEALTH_DB_PING_TIMEOUT_MS", 1500)) * time.Millisecond
 	DBConnectRetries = GetEnvOrDefault("DB_CONNECT_RETRIES", 5)

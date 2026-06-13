@@ -124,6 +124,22 @@ var RelayTimeout int // unit is second
 var RelayMaxIdleConns int
 var RelayMaxIdleConnsPerHost int
 
+// Streaming-safe hung-upstream guards (B1/R3). RelayTimeout (http.Client.Timeout)
+// is deliberately left at its default 0 — a TOTAL timeout would cut legitimate
+// long SSE streams. Instead we bound only the two hang vectors that don't affect
+// a healthy in-flight stream:
+//   - RelayResponseHeaderTimeout caps time-to-first-response-header. It fires
+//     ONLY before the first header byte; once 200+headers arrive the SSE body is
+//     governed by the existing per-chunk streamingTimeout (300s), not this. A
+//     hung provider that never responds now surfaces as a transport error
+//     (ErrorCodeDoRequestFailed → 500) that trips the breaker and fails over.
+//   - RelayDialTimeout caps TCP connection establishment.
+// Tune via RELAY_RESPONSE_HEADER_TIMEOUT / RELAY_DIAL_TIMEOUT (seconds).
+var (
+	RelayResponseHeaderTimeout = 90 * time.Second
+	RelayDialTimeout           = 10 * time.Second
+)
+
 // HealthDBPingTimeout bounds the /api/health DB ping (A1). On every readiness
 // probe the handler pings the DB; without its own deadline a ping to a DOWN
 // host can outlive the readinessProbe timeoutSeconds:2 window (~5s observed) and
