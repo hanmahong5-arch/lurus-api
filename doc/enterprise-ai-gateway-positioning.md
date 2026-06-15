@@ -91,8 +91,8 @@ become committed only once P1-5 (backups) + alert paging land — see §5.**
   (**P1-1**).
 
 **Gap to "SLA-capable" (minimal honest set), all owner-gated:**
-1. **P1-5** — prove `lurus_api` is actually backed up (likely NOT today) + 1 restore
-   drill. **RPO is the #1 blocker; an unverified-coverage DB ≠ any honest SLA.**
+1. **P1-5** — prove the newhub DB (`newhub`) is actually backed up (likely NOT today) +
+   1 restore drill. **RPO is the #1 blocker; an unverified-coverage DB ≠ any honest SLA.**
 2. **P0-2 → PROD only with P1-2** — deep readiness on 3 PG-sharing replicas without
    the degrade would convert a PG blip into a fleet-wide outage.
 3. **P0-5** — GitOps so the hardened manifests are actually delivered to PROD.

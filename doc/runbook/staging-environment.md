@@ -7,16 +7,17 @@ Pre-production env mirroring prod with reduced resources.
 > the *sibling* of the `r6-stage/` platform-identity overlay
 > (`test-newhub.lurus.cn`); see `deploy/k8s/r6-stage/README.md` "Which overlay
 > when". Names/images/secret/PG-pod below were corrected against the live
-> manifests + cluster. Items tagged **⚠️VERIFY** could not be live-confirmed this
-> pass (MCP query whitelist + no SSH key) — confirm against the live `SQL_DSN`
-> before trusting.
+> manifests + cluster. The DB **name** is `newhub` (owner-confirmed 2026-06-14;
+> `lurus_api` is the schema inside it). Items still tagged **⚠️VERIFY** below (PG
+> host:port; whether this overlay gets its own isolated DB vs sharing r6-stage's
+> `newhub`) were not live-confirmed — check against the live `SQL_DSN` before trusting.
 
 | Property | Value |
 |----------|-------|
 | Namespace | `lurus-staging` |
 | URL | https://staging-api.lurus.cn |
 | Deployment / Service | `lurus-newhub` |
-| Database | `lurusapi_staging` (separate staging DB) — ⚠️VERIFY name vs live SQL_DSN |
+| Database | `newhub` (owner-confirmed 2026-06-14; schema `lurus_api`) — ⚠️VERIFY whether staging gets an isolated DB or shares r6-stage's |
 | Redis DB | 1 (prod uses 0) |
 | Replicas | 1 |
 | Image | `ghcr.io/hanmahong5-arch/lurus-newhub:staging` |
@@ -27,13 +28,15 @@ Pre-production env mirroring prod with reduced resources.
 
 ```bash
 # 1. Staging DB (PG pod lurus-pg-1 in ns `database`, live-verified 2026-06-13).
-#    ⚠️VERIFY the DB name (lurusapi_staging) against the live SQL_DSN.
-kubectl exec -it lurus-pg-1 -n database -- psql -U lurus -c "CREATE DATABASE lurusapi_staging; GRANT ALL PRIVILEGES ON DATABASE lurusapi_staging TO lurus;"
+#    newhub's DB name is `newhub` (owner-confirmed 2026-06-14). Only run CREATE
+#    DATABASE if you want an isolated staging DB; if staging shares the r6-stage
+#    `newhub` DB it already exists — point SQL_DSN at it and skip this step.
+kubectl exec -it lurus-pg-1 -n database -- psql -U lurus -c "CREATE DATABASE newhub; GRANT ALL PRIVILEGES ON DATABASE newhub TO lurus;"
 
 # 2. Secrets
 kubectl -n lurus-staging create secret generic lurus-newhub-staging-secrets \
   --from-literal=SESSION_SECRET="$(openssl rand -hex 32)" \
-  --from-literal=SQL_DSN='postgres://lurus:YOUR_PASSWORD@<PG_HOST>:<PORT>/lurusapi_staging' \
+  --from-literal=SQL_DSN='postgres://lurus:YOUR_PASSWORD@<PG_HOST>:<PORT>/newhub' \
   --from-literal=ZITADEL_CLIENT_ID='YOUR_STAGING_CLIENT_ID'
 #  ⚠️VERIFY <PG_HOST>:<PORT> — older copy hard-coded 100.94.177.10:30543; the
 #  in-cluster PG is lurus-pg-1.database.svc. Use whichever the live DSN uses.
@@ -86,7 +89,7 @@ kubectl -n lurus-staging get certificate; kubectl -n cert-manager logs -l app=ce
 | Replicas | 2 | 1 |
 | Resources | 256Mi-1Gi / 100m-500m | 128Mi-512Mi / 50m-250m |
 | Redis DB | 0 | 1 |
-| Database | lurus_api | lurusapi_staging (⚠️VERIFY) |
+| Database | newhub | newhub (no isolated staging DB confirmed) |
 | PDB | Yes (minAvailable:1) | No |
 
 Cleanup: `kubectl delete namespace lurus-staging` (deletes resources but preserves the DB).

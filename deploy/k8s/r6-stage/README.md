@@ -43,11 +43,11 @@ kubectl apply -k deploy/k8s/r6-stage/
 
 # 3. Seed the default tenant (slug='lurus') — required for v2 multi-tenant
 #    routes; without it /api/v2/lurus/* returns 404 "record not found".
-#    db name is lurus_api per the service SSOT (2b-svc-newhub/CLAUDE.md); the PG
-#    pod is lurus-pg-1 in ns `database` (live-verified 2026-06-13). VERIFY the db
-#    name against the live SQL_DSN before running — older runbooks said `newhub`.
+#    db name is `newhub` (owner-confirmed 2026-06-14); `lurus_api` in the service
+#    CLAUDE.md is the *schema* inside it, not the database. The PG pod is lurus-pg-1
+#    in ns `database` (live-verified 2026-06-13).
 ssh root@100.122.83.20 "kubectl exec -n database lurus-pg-1 -- \
-  psql -U lurus -d lurus_api" < deploy/k8s/r6-stage/seed-default-tenant.sql
+  psql -U lurus -d newhub" < deploy/k8s/r6-stage/seed-default-tenant.sql
 ```
 
 ## Sync nginx vhost to R6 host
