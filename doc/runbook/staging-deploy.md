@@ -79,6 +79,6 @@ ssh root@100.98.57.55 "kubectl -n lurus-staging get deploy lurus-newhub \
 - Host IPs in older docs vary (`100.122.83.20` is R6's Tailscale IP per
   `lurus/CLAUDE.md`; `100.98.57.55` is the documented kubectl jump host). If
   `ssh root@100.98.57.55` does not reach kubectl, fall back to R6's Tailscale IP.
-- The seed DB name is `lurus_api` per the service SSOT (`2b-svc-newhub/CLAUDE.md`);
-  some older runbooks said `newhub`. Confirm against the live `SQL_DSN` before
-  running the default-tenant seed.
+- The seed DB name is `newhub` (owner-confirmed 2026-06-14); `lurus_api` in the
+  service CLAUDE.md is the *schema* inside that DB, not the database name. Earlier
+  copies of this note had the two swapped.
