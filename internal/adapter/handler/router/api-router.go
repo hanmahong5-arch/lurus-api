@@ -53,6 +53,13 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.POST("/user/topup", middleware.UserAuth(), handler.RedeemCodeV2)
 		apiRouter.GET("/user/models", middleware.UserAuth(), handler.GetUserModels)
 
+		// -- Secure verification (session-based step-up re-confirmation) --
+		// Strong auth factor (MFA) is performed at Zitadel login; this records a
+		// short-lived (5min) session re-confirmation that gates sensitive ops such
+		// as channel-key reveal. Frontend contract: web/src/services/secureVerification.js.
+		apiRouter.POST("/verify", middleware.UserAuth(), handler.UniversalVerify)
+		apiRouter.GET("/verify/status", middleware.UserAuth(), handler.GetVerificationStatus)
+
 		// -- Platform wallet integration --
 		apiRouter.GET("/wallet/info", middleware.UserAuth(), handler.GetWalletInfo)
 		apiRouter.GET("/wallet/transactions", middleware.UserAuth(), handler.GetWalletTransactions)
@@ -118,7 +125,7 @@ func SetApiRouter(router *gin.Engine) {
 			channelRoute.GET("/models", handler.ChannelListModels)
 			channelRoute.GET("/models_enabled", handler.EnabledListModels)
 			channelRoute.GET("/:id", handler.GetChannel)
-			channelRoute.GET("/:id/key", middleware.RootAuth(), middleware.CriticalRateLimit(), middleware.DisableCache(), handler.GetChannelKey)
+			channelRoute.POST("/:id/key", middleware.RootAuth(), middleware.CriticalRateLimit(), middleware.DisableCache(), middleware.SecureVerificationRequired(), handler.GetChannelKey)
 			channelRoute.GET("/test", handler.TestAllChannels)
 			channelRoute.GET("/test/:id", handler.TestChannel)
 			channelRoute.GET("/update_balance", handler.UpdateAllChannelsBalance)

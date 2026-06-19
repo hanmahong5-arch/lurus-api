@@ -15,9 +15,10 @@ const (
 	SecureVerificationTimeout = 300 // 5分钟
 )
 
-// SecureVerificationRequired 安全验证中间件
-// 检查用户是否在有效时间内通过了安全验证
-// 如果未验证或验证已过期，返回 401 错误
+// SecureVerificationRequired 安全验证中间件。
+// 未登录返回 401;会话未验证 / 已过期(>5min)/ 状态异常返回 403,body 携带
+// code=VERIFICATION_REQUIRED|VERIFICATION_EXPIRED|VERIFICATION_INVALID,供前端
+// secureApiCall.js 触发验证流程;验证有效则放行。
 func SecureVerificationRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 检查用户是否已登录
