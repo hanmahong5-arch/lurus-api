@@ -104,3 +104,22 @@ newhub 技术上**全面更现代**（架构/DB/可观测性/多租户/平台计
 - 锚点与否定式 claim 由各 agent grep 核验;`✓verified` 项由编排方独立重核。
 - 未独立重核项以 agent 报告为准,标 `path:line` 可自查;严重度对 affinity 等"取决于生产是否实际配置"项需 owner 确认。
 - 本文为 point-in-time（两仓 HEAD 2026-06-18）;功能会被补齐,退役前应对 HEAD 复核否定式条目。
+
+---
+
+## 附 B:HEAD 复核（2026-06-19，对 newhub HEAD）
+
+> 履行文末约定「退役前对 HEAD 复核否定式条目」。编排层（主回路）对 §3.C「风险/回退」全部 + §3.B codex 逐条独立重核(grep/read 具名工件)。**总结论:§3.C 五项无一是可立即自主修的 FREEZE-safe bug**——1 项已修、1 项实为设计改进、2 项 owner-gated、codex 的"崩 500"被证伪。原 §3 的 point-in-time 判断保留,以下为差异修订。
+
+| §3 原条目 | 原判 | HEAD 复核结论 | 锚点 |
+|---|---|---|---|
+| codex 缺 → "relay 命中 nil adaptor → 500" (§3.B) | HIGH 崩溃 | **崩溃证伪**:`GetAdaptor` 返回 nil 时,全部 12 个 relay 调用点均 `if adaptor==nil` 提前返回干净 `ErrorCodeInvalidApiType`+skip-retry,非 panic/500。codex *feature* 缺失仍是 B 类决策,但**无健壮性 bug** | `relay/compatible_handler.go:73-74`;同构于 claude/gemini/image/audio/embedding/rerank/responses/websocket 及 `relay_task.go:130,394,472` |
+| channel key reveal "GET 无校验" (§3.C) | MED 安全回退 | **原判既夸大又低估**。夸大:`GET /:id/key` 实由 `RootAuth+CriticalRateLimit+DisableCache` 门控(admin-only,非"无校验")。低估:本应附加的 `SecureVerificationRequired` 中间件**存在但未挂任何路由**,且验证端点 `UniversalVerify`/`GetVerificationStatus` **也从未注册** —— **整个 secure-verification 特性两端皆死线**。补全牵扯冻结的 Zitadel re-auth(`UniversalVerify` 注释"MFA 委托 Zitadel")→ **A 类/owner-gated,非快速 C-fix**。另:`GetChannelKey` 注释谎称"依赖 SecureVerificationRequired 中间件"=诚实缺陷(可独立小修) | 路由 `api-router.go:121`(链中无 SecureVerificationRequired);中间件 `middleware/secure_verification.go:21`(全 router 零引用);端点 `handler/secure_verification.go:33,75`(零路由);误导注释 `handler/channel.go:579-580` |
+| token key reveal "rotate 破坏性" (§3.C) | MED 回退 | **实为设计安全硬化,非回退**:V2 token 平时 masked(`first4****last4`),全 key 仅 create/rotate 返回——不暴露已存密钥是改进。"破坏性"仅迁移注意项(依赖 reveal 的脚本须改用 rotate) | `v2_token.go:26,255`,`RotateTokenV2:568-611` |
+| migration baseline fresh-PG gap (§3.C) | HIGH | **已修**(PR #31 `021_pg_baseline_gaps.sql`,CI pg-integration 实证绿)。复核发现比原判更重:2 张表整张缺 AutoMigrate(`internal_api_key_tenants` 无 Go struct;`credit_pool_fund_events` 有 struct 却漏挂)。TIER 1 已发;TIER 2(users/tokens/redemptions per-tenant 复合 unique)延后——须同改 struct tag(单列 unique 每次 boot 被 AutoMigrate 重建)+ STAGE 去重审计 | `migrations/021_pg_baseline_gaps.sql`;`adapter/repo/main.go` migrateDB |
+| TopUpV2/GetTopUpsV2 half-wired (§3.C) | LOW | **非漏接线,系故意延后**:Wave-2 scope-cut 明示"Write paths deferred … UI carries mini WIPBanner";且 handler 依赖平台钱包 `DebitWalletGRPC`(未必上线)→ owner-gated(平台计费上线后再挂),非快速 wire | 路由 `api-v2-router.go:155-158,179-183`;handler `v2_billing.go:241` |
+
+**对 §4 checklist 的修订建议**:
+- 步骤 4(codex):删去"→ nil adaptor → 500"措辞(已证伪);仅保留"是否移植 codex feature"的 B 类决策。
+- 步骤 6(migration):TIER 1 已由 PR #31 完成;新增 TIER 2 待办(per-tenant 复合 unique + STAGE 去重审计)。
+- 步骤 7 过于轻量,拆为两个 owner 决策:(a) secure-verification 经 Zitadel re-auth 落地 **或** 删死代码并修正 `GetChannelKey` 误导注释;(b) TopUpV2 待平台计费上线再挂。token reveal 无需动作(设计改进)。
