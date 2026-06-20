@@ -95,34 +95,36 @@ func tableExists(t *testing.T, db *sql.DB, name string) bool {
 	return exists
 }
 
-// TestIntegrationRun_EmptyDB_BaselinesWithoutExecuting is the boot
-// contract on a fresh database: Run() with the real embedded FS and the
-// production baseline records exactly the 20 baseline versions as
-// applied and executes NONE of them — 001 is MySQL dialect, so any
-// execution attempt would fail the Run, and 005 creates the releases
-// tables, so their absence proves no DDL ran.
+// TestIntegrationRun_EmptyDB_BaselinesWithoutExecuting is the bookkeeping
+// contract on a fresh database: Run() with the real embedded FS records every
+// shipped migration as applied WITHOUT executing any of it. We baseline through
+// the current head (021) here so the mechanic is exercised across all files —
+// 001 is MySQL dialect (any execution would fail the Run) and 005 creates the
+// releases tables (their absence proves no DDL ran). NOTE: production
+// (internal/adapter/repo/main.go) baselines through 020 so that 021 DOES
+// execute; that path is covered by baseline_gaps_pg_test.go.
 func TestIntegrationRun_EmptyDB_BaselinesWithoutExecuting(t *testing.T) {
 	db := setupPG(t)
 	r := &migration.Runner{
 		DB:              db,
 		FS:              migrations.FS,
-		BaselineThrough: "020_create_privacy_erasure_requests",
+		BaselineThrough: "021_pg_baseline_gaps",
 	}
 	if err := r.Run(context.Background()); err != nil {
 		t.Fatalf("Run on empty DB: %v", err)
 	}
-	if got := countApplied(t, db); got != 20 {
-		t.Errorf("schema_migrations rows = %d, want exactly 20 (baseline bookkeeping)", got)
+	if got := countApplied(t, db); got != 21 {
+		t.Errorf("schema_migrations rows = %d, want exactly 21 (baseline bookkeeping)", got)
 	}
 	if tableExists(t, db, "releases") {
-		t.Error("releases table exists — baseline migration 005 was EXECUTED, not just recorded")
+		t.Error("releases table exists — a baseline migration was EXECUTED, not just recorded")
 	}
 	// Idempotent: a second Run is a no-op.
 	if err := r.Run(context.Background()); err != nil {
 		t.Fatalf("second Run: %v", err)
 	}
-	if got := countApplied(t, db); got != 20 {
-		t.Errorf("after rerun schema_migrations rows = %d, want 20", got)
+	if got := countApplied(t, db); got != 21 {
+		t.Errorf("after rerun schema_migrations rows = %d, want 21", got)
 	}
 }
 

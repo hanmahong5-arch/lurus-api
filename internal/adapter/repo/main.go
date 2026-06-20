@@ -362,6 +362,10 @@ func migrateDB() error {
 		// Tenant credit pools (Reseller mode, ADR 2026-05-18)
 		&entity.TenantCreditPool{},
 		&entity.TenantCreditPoolDraw{},
+		// Credit-pool fund events (BillingOutbox idempotency, migration 019) —
+		// was missing here, so a fresh PG never created the table; migration 021
+		// also creates it IF NOT EXISTS for DR restores that skip AutoMigrate.
+		&entity.CreditPoolFundEvent{},
 		// Playground named presets (Wave 3 Phase 1)
 		&PlaygroundPreset{},
 		// HA leader-election lease (H1.3)
