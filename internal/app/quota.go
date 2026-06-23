@@ -25,6 +25,7 @@ import (
 	"github.com/bytedance/gopkg/util/gopool"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
 
@@ -685,7 +686,8 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 				debitCtx, debitCancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer debitCancel()
 				if _, debitErr := common.DebitWalletGRPC(debitCtx, accountID, amountLB, "llm_usage",
-					fmt.Sprintf("relay userId=%d", relayInfo.UserId), sourceProductOf(relayInfo)); debitErr != nil {
+					fmt.Sprintf("relay userId=%d", relayInfo.UserId), sourceProductOf(relayInfo),
+					"llm-usage:"+uuid.NewString()); debitErr != nil {
 					common.SysLog(fmt.Sprintf("legacy wallet debit failed: accountID=%d, amount=%.4f LB, err=%s",
 						accountID, amountLB, debitErr.Error()))
 				}

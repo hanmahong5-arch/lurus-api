@@ -11,6 +11,7 @@ import (
 	"github.com/LurusTech/lurus-hub/internal/pkg/metrics"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // Reseller-facing admin handlers for tenant credit pools.
@@ -260,9 +261,13 @@ func TopupCreditPool(c *gin.Context) {
 	accountID := *actor.LurusAccountID
 
 	walletAmount := float64(req.Amount) / 1000.0 // 1 LB ≈ 1000 quota units, matches existing relay accounting
+	// One idempotency key per topup intent: the same key flows to the gRPC debit
+	// and its HTTP twin so a partial/retried call dedupes instead of double-charging.
+	// The revert uses a distinct key so it is never deduped against the debit.
+	idemKey := "pool-topup:" + uuid.NewString()
 	debit, derr := common.DebitWalletGRPC(
 		c.Request.Context(), accountID, walletAmount,
-		"pool_topup", "Credit pool topup for tenant "+tenantID, "newhub",
+		"pool_topup", "Credit pool topup for tenant "+tenantID, "newhub", idemKey,
 	)
 	if derr != nil || debit == nil || !debit.Success {
 		c.JSON(http.StatusPaymentRequired, gin.H{
@@ -280,7 +285,7 @@ func TopupCreditPool(c *gin.Context) {
 			c.Request.Context(), accountID, walletAmount,
 			"pool_topup_revert",
 			"Revert: pool topup failed for tenant "+tenantID,
-			"newhub",
+			"newhub", idemKey+":revert",
 		); rerr != nil {
 			common.SysError("STRANDED wallet debit — pool topup AND revert both failed. " +
 				"account=" + strconv.FormatInt(accountID, 10) +
