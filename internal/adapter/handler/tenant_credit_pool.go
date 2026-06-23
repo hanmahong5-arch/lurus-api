@@ -261,10 +261,21 @@ func TopupCreditPool(c *gin.Context) {
 	accountID := *actor.LurusAccountID
 
 	walletAmount := float64(req.Amount) / 1000.0 // 1 LB ≈ 1000 quota units, matches existing relay accounting
-	// One idempotency key per topup intent: the same key flows to the gRPC debit
-	// and its HTTP twin so a partial/retried call dedupes instead of double-charging.
-	// The revert uses a distinct key so it is never deduped against the debit.
-	idemKey := "pool-topup:" + uuid.NewString()
+	// Idempotency key per topup intent (contracts.md S1 / ADR D4 "deterministic
+	// business key, never random"): honour a caller-supplied Idempotency-Key so a
+	// double-clicked/retried topup dedupes against double-charge; fall back to a
+	// per-request UUID only when absent (no client key → treated as a fresh intent,
+	// NOT content-hashed: a content hash would dedupe two legitimately-identical
+	// topups into one wallet debit but credit the pool twice). The same key flows
+	// to the gRPC debit and its HTTP twin; the revert uses a distinct key so it is
+	// never deduped against the debit.
+	idemKey := c.GetHeader("Idempotency-Key")
+	if idemKey == "" {
+		idemKey = c.GetHeader("X-Idempotency-Key")
+	}
+	if idemKey == "" {
+		idemKey = "pool-topup:" + uuid.NewString()
+	}
 	debit, derr := common.DebitWalletGRPC(
 		c.Request.Context(), accountID, walletAmount,
 		"pool_topup", "Credit pool topup for tenant "+tenantID, "newhub", idemKey,
