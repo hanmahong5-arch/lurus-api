@@ -12,13 +12,20 @@
 -- 幂等：ON CONFLICT DO NOTHING，重跑无副作用。
 -- 后续：等 Zitadel confidential client 注册到位时，需把 zitadel_org_id
 --       从占位值 'lurus-default-org' 改为真实 Zitadel organization ID。
+--
+-- 租户 id 必须用规范值 'default'：ORM struct tag (default:'default')、所有 Go
+-- 写入路径、以及 fresh-PG 的 migration 021 §4 种子全部用 'default'。早期本脚本
+-- 误用 id='lurus-default'(slug 仍 'lurus') 造成 pool 挂在 lurus-default 而
+-- user/token 默认 'default' 的孤儿漂移 → relay pool-miss 静默漏扣费;migration
+-- 022 收敛存量数据,此处修源头防新部署再漂移。('lurus-default' 仍是 org 占位串,
+-- 是 zitadel_org_id 不是租户 id,与本修复无关。)
 
 INSERT INTO tenants (
   id, zitadel_org_id, slug, name,
   status, plan_type, max_users, max_quota,
   created_at, updated_at
 ) VALUES (
-  'lurus-default',
+  'default',            -- canonical tenant id (was 'lurus-default' — see note above)
   'lurus-default-org',  -- TODO: replace with real Zitadel org ID after client registration
   'lurus',
   'Lurus',
