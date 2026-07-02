@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
+	relaycommon "github.com/LurusTech/lurus-hub/internal/adapter/provider/common"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 	"github.com/LurusTech/lurus-hub/internal/pkg/config"
 	"github.com/LurusTech/lurus-hub/internal/pkg/constant"
 	"github.com/LurusTech/lurus-hub/internal/pkg/logger"
-	relaycommon "github.com/LurusTech/lurus-hub/internal/adapter/provider/common"
 	"github.com/LurusTech/lurus-hub/internal/pkg/setting/operation_setting"
 
 	"github.com/bytedance/gopkg/util/gopool"
@@ -29,10 +29,22 @@ func getScannerBufferSize() int {
 	return config.Get().Relay.StreamScannerMaxBuffer
 }
 
-func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo, dataHandler func(data string) bool) {
+// StreamScannerHandler scans an SSE response body and invokes dataHandler per event.
+// sawTerminalMarker is an optional out-param (variadic so existing callers are
+// unaffected): when provided, it is set to true only if a "[DONE]" terminator was
+// actually observed before the scan loop exited. Callers that need to distinguish a
+// clean stream end from an abnormal one (ctx cancel, timeout, upstream EOF without
+// [DONE]) can pass a *bool and check it after this call returns.
+func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo, dataHandler func(data string) bool, sawTerminalMarker ...*bool) {
 
 	if resp == nil || dataHandler == nil {
 		return
+	}
+
+	setTerminalMarkerSeen := func() {
+		if len(sawTerminalMarker) > 0 && sawTerminalMarker[0] != nil {
+			*sawTerminalMarker[0] = true
+		}
 	}
 
 	// 确保响应体总是被关闭
@@ -132,13 +144,15 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			for {
 				select {
 				case <-pingTicker.C:
-					// 使用超时机制防止写操作阻塞
+					// 使用超时机制防止写操作阻塞。用 SafeGo 包裹:PingData 直接写
+					// 客户端连接,panic 若不 recover 会绕过外层 goroutine 的恢复直接崩进程;
+					// 内层 defer Unlock 在 panic 展开时先于 recover 执行,不会泄漏 writeMutex。
 					done := make(chan error, 1)
-					go func() {
+					common.SafeGo(func() {
 						writeMutex.Lock()
 						defer writeMutex.Unlock()
 						done <- PingData(c)
-					}()
+					})
 
 					select {
 					case err := <-done:
@@ -218,13 +232,16 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			if !strings.HasPrefix(data, "[DONE]") {
 				info.SetFirstResponseTime()
 
-				// 使用超时机制防止写操作阻塞
+				// 使用超时机制防止写操作阻塞。dataHandler 是各 provider 的闭包,
+				// 解析上游 SSE 负载(index-out-of-range 等 panic 的真实来源);用 SafeGo
+				// 包裹避免其 panic 绕过外层 recover 崩进程,内层 defer Unlock 先于 recover
+				// 执行不泄漏 writeMutex(panic 时不 send done,外层 select 由 WriteTimeout 兜底)。
 				done := make(chan bool, 1)
-				go func() {
+				common.SafeGo(func() {
 					writeMutex.Lock()
 					defer writeMutex.Unlock()
 					done <- dataHandler(data)
-				}()
+				})
 
 				select {
 				case success := <-done:
@@ -241,6 +258,7 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 				}
 			} else {
 				// done, 处理完成标志，直接退出停止读取剩余数据防止出错
+				setTerminalMarkerSeen()
 				if common.DebugEnabled {
 					println("received [DONE], stopping scanner")
 				}

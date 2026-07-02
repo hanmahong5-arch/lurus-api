@@ -14,6 +14,9 @@ import (
 
 // IdentitySessionSecret is the shared HS256 secret for validating lurus-platform session tokens.
 // Must match the SESSION_SECRET env var in lurus-platform.
+// Re-read post-.env by RefreshIdentityClientEnv (identity_client.go) — see that
+// func's comment for why the package-init read alone is not sufficient for
+// .env-only deployments.
 var IdentitySessionSecret = os.Getenv("IDENTITY_SESSION_SECRET")
 
 // validSessionIssuers lists accepted issuer values for platform session tokens.

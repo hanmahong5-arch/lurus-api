@@ -88,10 +88,11 @@ func InternalCreateUser(c *gin.Context) {
 	// This endpoint's contract carries no tenant, but the GORM tenant plugin
 	// rejects INSERTs into tenant-scoped tables when the context has no tenant
 	// ("tenant_id is required for create operations" → spurious 500). Scope the
-	// whole handler to the default tenant — the same default used by
+	// whole handler to the resolved default tenant — the same default used by
 	// /internal/user/by-zitadel-sub and /internal/user/provision — so the
 	// uniqueness checks and the create all operate within one tenant.
-	db := repo.GetTenantDBWithID("default")
+	defaultTenantID := repo.ResolveDefaultTenantID()
+	db := repo.GetTenantDBWithID(defaultTenantID)
 
 	// Idempotency check
 	idempotencyKey := c.GetHeader("X-Idempotency-Key")
@@ -153,7 +154,7 @@ func InternalCreateUser(c *gin.Context) {
 		// Set on the struct as well as via the tenant-scoped context: the plugin
 		// only stamps the column when registered, and the struct must reflect the
 		// row that was written.
-		TenantId:    "default",
+		TenantId:    defaultTenantID,
 		Email:       req.Email,
 		DisplayName: displayName,
 		Group:       group,
@@ -163,6 +164,19 @@ func InternalCreateUser(c *gin.Context) {
 	}
 
 	if err := db.Create(user).Error; err != nil {
+		// The existingCount pre-check above is tenant-scoped, but users.username
+		// carries a GLOBAL unique index — two tenants racing to provision the same
+		// username both pass the pre-check and one loses here. Surface that as the
+		// same clean 409 the pre-check would have returned instead of a raw 500
+		// with leaked DB error text.
+		if isUsernameUniqueViolation(err) {
+			c.JSON(http.StatusConflict, gin.H{
+				"success":    false,
+				"message":    "Username already exists",
+				"error_code": "USER_EXISTS",
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to create user: " + err.Error(),
@@ -181,6 +195,21 @@ func InternalCreateUser(c *gin.Context) {
 			"quota":        user.Quota,
 		},
 	})
+}
+
+// isUsernameUniqueViolation reports whether a DB create error is a UNIQUE
+// constraint violation, across both PostgreSQL (error code 23505) and SQLite
+// ("UNIQUE constraint") — mirrors repo.isUniqueViolation's string-matching
+// idiom (unexported there, so duplicated here rather than exported cross-package
+// for this single call site).
+func isUsernameUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "duplicate key value") ||
+		strings.Contains(s, "UNIQUE constraint failed") ||
+		strings.Contains(s, "23505")
 }
 
 // InternalDeleteUser deletes a user by ID.

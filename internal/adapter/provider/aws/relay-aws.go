@@ -294,6 +294,11 @@ func handleNovaRequest(c *gin.Context, info *relaycommon.RelayInfo, a *Adaptor) 
 		return types.NewError(errors.Wrap(err, "unmarshal nova response"), types.ErrorCodeBadResponseBody), nil
 	}
 
+	// 安全拒答/截断生成会返回空 content 数组，先判空再索引 [0] 避免 panic
+	if len(novaResp.Output.Message.Content) == 0 {
+		return types.NewError(errors.New("nova response contains no content"), types.ErrorCodeBadResponseBody), nil
+	}
+
 	// 构造OpenAI格式响应
 	response := dto.OpenAITextResponse{
 		Id:      helper.GetResponseID(c),

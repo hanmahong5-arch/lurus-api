@@ -12,13 +12,18 @@
 -- 幂等：ON CONFLICT DO NOTHING，重跑无副作用。
 -- 后续：等 OIDC confidential client 注册到位时，需把 zitadel_org_id 列值
 --       从占位值 (lurus-default-org) 改为真实 OIDC organization ID（物理列名 zitadel_org_id 暂不改，待 migration）。
+--
+-- 现状（migration 021 §4 之后）：021 已自带幂等 self-seed（按 id='default' OR
+-- slug='lurus' 解析已存在的默认租户，缺失才建），本脚本已是可选/legacy 手段，
+-- 仅在需要绕过 021、提前手工建租户时使用。若执行，id 必须用规范值 'default'，
+-- 不再用历史遗留的 'lurus-default'（021 §4 的兼容分支只为兜底旧 STAGE 数据）。
 
 INSERT INTO tenants (
   id, zitadel_org_id, slug, name,
   status, plan_type, max_users, max_quota,
   created_at, updated_at
 ) VALUES (
-  'lurus-default',
+  'default',
   'lurus-default-org',  -- TODO: replace with real OIDC org ID after client registration
   'lurus',
   'Lurus',

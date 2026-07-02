@@ -32,9 +32,10 @@ func AdminJWTAuth() gin.HandlerFunc {
 
 		claims, err := validateJWT(c)
 		if err != nil {
+			common.SysError(fmt.Sprintf("AdminJWTAuth: token validation failed: %v", err))
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
-				"message": err.Error(),
+				"message": "unauthorized",
 			})
 			c.Abort()
 			return
@@ -78,9 +79,10 @@ func RootJWTAuth() gin.HandlerFunc {
 
 		claims, err := validateJWT(c)
 		if err != nil {
+			common.SysError(fmt.Sprintf("RootJWTAuth: token validation failed: %v", err))
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
-				"message": err.Error(),
+				"message": "unauthorized",
 			})
 			c.Abort()
 			return
@@ -149,6 +151,14 @@ func validateJWT(c *gin.Context) (*OIDCClaims, error) {
 	}
 	if !adminIssuerOK {
 		common.SysLog(fmt.Sprintf("admin JWT issuer mismatch: got %s, accepted %v", claims.Issuer, oidcIssuers))
+		return nil, errors.New("invalid or expired token")
+	}
+
+	// Reject tokens minted for a different client/resource when audience
+	// enforcement is opted in (OIDC_ALLOWED_AUDIENCES); see checkAudience in
+	// oidc_auth.go. No-op when that var is unset.
+	if !checkAudience(claims.Audience) {
+		common.SysLog(fmt.Sprintf("admin JWT audience mismatch: got %v", []string(claims.Audience)))
 		return nil, errors.New("invalid or expired token")
 	}
 

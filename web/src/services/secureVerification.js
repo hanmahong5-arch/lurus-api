@@ -22,7 +22,10 @@ import { API } from '../helpers';
 /**
  * Secure verification service.
  * 2FA and Passkey verification have been delegated to the OIDC IdP.
- * Only session-based verification via /api/verify remains.
+ * Only session-based verification via /api/verify remains, and the backend
+ * (UniversalVerify) accepts method "session" for any authenticated, enabled
+ * user — so it must always be reported as available or the step-up flow
+ * dead-ends before ever calling /api/verify.
  */
 export class SecureVerificationService {
   static async checkAvailableVerificationMethods() {
@@ -30,6 +33,7 @@ export class SecureVerificationService {
       has2FA: false,
       hasPasskey: false,
       passkeySupported: false,
+      hasSession: true,
     };
   }
 

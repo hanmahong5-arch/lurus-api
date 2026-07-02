@@ -27,6 +27,18 @@ var IdentityServiceInternalKey = os.Getenv("IDENTITY_SERVICE_INTERNAL_KEY")
 // Set IDENTITY_AUTH_REDIRECT=true to enable.
 var IdentityAuthRedirect = os.Getenv("IDENTITY_AUTH_REDIRECT") == "true"
 
+// RefreshIdentityClientEnv re-reads the identity/session/billing env vars whose
+// package-level initializers run at program init — BEFORE main() calls
+// godotenv.Load(".env"). Without this refresh, any of these vars set only in a
+// .env file (not real process env) would be silently ignored. Real process env
+// (K8s) is honoured either way. Call once, right after godotenv.Load succeeds.
+func RefreshIdentityClientEnv() {
+	IdentityServiceInternalKey = os.Getenv("IDENTITY_SERVICE_INTERNAL_KEY")
+	IdentityAuthRedirect = os.Getenv("IDENTITY_AUTH_REDIRECT") == "true"
+	IdentitySessionSecret = os.Getenv("IDENTITY_SESSION_SECRET")
+	SetBillingUnifiedEnabled(os.Getenv("BILLING_UNIFIED_ENABLED") == "true")
+}
+
 // IdentityPublicURL is the external-facing URL for lurus-platform (used in redirect responses).
 var IdentityPublicURL = getIdentityPublicURL()
 

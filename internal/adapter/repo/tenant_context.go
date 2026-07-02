@@ -3,6 +3,7 @@ package repo
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -72,8 +73,11 @@ func GetUserID(c *gin.Context) (int, error) {
 	return uid, nil
 }
 
-// GetTenantDB returns a GORM DB instance with tenant context injected
-// This is the recommended way to get a DB instance in request handlers
+// GetTenantDB returns a GORM DB instance with tenant context injected, which
+// engages TenantPlugin's automatic tenant_id filtering. Most handlers instead
+// apply their own explicit .Where("tenant_id = ?", ...) filters and never call
+// this — the plugin's filtering is a defense-in-depth backstop, not the
+// primary enforcement layer.
 func GetTenantDB(c *gin.Context) (*gorm.DB, error) {
 	tenantID, err := GetTenantID(c)
 	if err != nil {
@@ -100,10 +104,44 @@ func GetSystemDB() *gorm.DB {
 	return WithoutTenantIsolation(DB)
 }
 
+// defaultTenantIDFallback is the literal id used when no tenants row can be
+// resolved yet (fresh DB, before migration 021's default-tenant seed runs).
+const defaultTenantIDFallback = "default"
+
+var (
+	defaultTenantIDOnce sync.Once
+	resolvedTenantID    string
+)
+
+// ResolveDefaultTenantID returns the id of the tenant that backward-compatible
+// v1 routes should operate against. Some environments seeded their default
+// tenant row under id "lurus-default" (slug "lurus") instead of the literal
+// "default" — hardcoding "default" everywhere then silently targets an orphan
+// tenant with no data. Resolved once (sync.Once) via a query mirroring
+// migration 021 section 4, and cached for the process lifetime; falls back to
+// the "default" literal when no matching row exists yet (fresh DB pre-migration).
+func ResolveDefaultTenantID() string {
+	defaultTenantIDOnce.Do(func() {
+		resolvedTenantID = defaultTenantIDFallback
+		if DB == nil {
+			return
+		}
+		var id string
+		err := DB.Raw(
+			"SELECT id FROM tenants WHERE id = ? OR slug = ? ORDER BY (id = ?) DESC LIMIT 1",
+			defaultTenantIDFallback, "lurus", defaultTenantIDFallback,
+		).Scan(&id).Error
+		if err == nil && id != "" {
+			resolvedTenantID = id
+		}
+	})
+	return resolvedTenantID
+}
+
 // GetDefaultTenantDB returns a GORM DB instance for the default tenant
 // Use this for v1 API backward compatibility
 func GetDefaultTenantDB() *gorm.DB {
-	return GetTenantDBWithID("default")
+	return GetTenantDBWithID(ResolveDefaultTenantID())
 }
 
 // WithTenantContext wraps a function with tenant context
@@ -193,7 +231,7 @@ func RequireTenantAccess() gin.HandlerFunc {
 func SetDefaultTenant() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Inject default tenant context
-		InjectTenantContext(c, "default", 0)
+		InjectTenantContext(c, ResolveDefaultTenantID(), 0)
 		c.Next()
 	}
 }

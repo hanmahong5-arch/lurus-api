@@ -36,6 +36,7 @@ import (
 
 	"github.com/LurusTech/lurus-hub/internal/adapter/middleware"
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/app/governance"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 
 	"github.com/gin-gonic/gin"
@@ -124,6 +125,7 @@ func TestChannelV2(c *gin.Context) {
 	resp, err := channelTestHTTPClient.Do(req)
 	latencyMs := time.Since(tik).Milliseconds()
 	if err != nil {
+		recordChannelTestAudit(c, tenantCtx.UserID, channel.Id, false)
 		c.JSON(http.StatusOK, gin.H{
 			"success":    false,
 			"latency_ms": latencyMs,
@@ -142,6 +144,7 @@ func TestChannelV2(c *gin.Context) {
 		if errMsg == "" {
 			errMsg = fmt.Sprintf("upstream returned HTTP %d", resp.StatusCode)
 		}
+		recordChannelTestAudit(c, tenantCtx.UserID, channel.Id, false)
 		c.JSON(http.StatusOK, gin.H{
 			"success":    false,
 			"latency_ms": latencyMs,
@@ -151,6 +154,7 @@ func TestChannelV2(c *gin.Context) {
 	}
 
 	if errMsg := extractJSONError(raw); errMsg != "" {
+		recordChannelTestAudit(c, tenantCtx.UserID, channel.Id, false)
 		c.JSON(http.StatusOK, gin.H{
 			"success":    false,
 			"latency_ms": latencyMs,
@@ -159,10 +163,20 @@ func TestChannelV2(c *gin.Context) {
 		return
 	}
 
+	recordChannelTestAudit(c, tenantCtx.UserID, channel.Id, true)
 	c.JSON(http.StatusOK, gin.H{
 		"success":    true,
 		"latency_ms": latencyMs,
 	})
+}
+
+// recordChannelTestAudit logs a live outbound test call (it uses the
+// tenant's stored channel key) so a "who tested this channel and when" trail
+// exists even though the test itself never mutates channel state.
+func recordChannelTestAudit(c *gin.Context, actorID, channelID int, success bool) {
+	details := fmt.Sprintf(`{"success":%t}`, success)
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, actorID,
+		governance.ActionChannelTested, governance.ResourceChannel, channelID, details))
 }
 
 // FetchUpstreamModelsV2 fetches the model list from the channel's /v1/models

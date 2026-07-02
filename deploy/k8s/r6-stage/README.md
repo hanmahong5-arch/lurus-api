@@ -41,8 +41,13 @@ kubectl -n lurus-staging create secret generic lurus-newhub-secrets \
 #    it is harmless because the keys above already exist — stringData is merged).
 kubectl apply -k deploy/k8s/r6-stage/
 
-# 3. Seed the default tenant (slug='lurus') — required for v2 multi-tenant
-#    routes; without it /api/v2/lurus/* returns 404 "record not found".
+# 3. (Optional/legacy) Seed the default tenant (slug='lurus') by hand — migration
+#    021 §4 now self-seeds this idempotently on boot (resolves by id='default' OR
+#    slug='lurus', creates only if truly absent), so this manual step is no longer
+#    required for a fresh deploy. Keep it only for pre-021 bootstrap or recovery;
+#    if run, the script now uses the canonical id='default' (021's compat branch
+#    still tolerates a legacy id='lurus-default' row from old STAGE data, but new
+#    seeds must not create more of it).
 #    db name is `newhub` (owner-confirmed 2026-06-14); `lurus_api` in the service
 #    CLAUDE.md is the *schema* inside it, not the database. The PG pod is lurus-pg-1
 #    in ns `database` (live-verified 2026-06-13).

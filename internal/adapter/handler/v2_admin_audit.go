@@ -9,6 +9,7 @@ import (
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
 	"github.com/LurusTech/lurus-hub/internal/app/governance"
 	"github.com/LurusTech/lurus-hub/internal/domain/entity"
+	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 
 	"github.com/gin-gonic/gin"
 )
@@ -112,6 +113,7 @@ func writeAuditEventsCSV(c *gin.Context, events []*entity.AuditEvent, nextCursor
 		"action", "resource", "resource_id", "ip", "request_id",
 		"retention_until", "details",
 	})
+	rowsWritten := 0
 	for _, e := range events {
 		_ = w.Write([]string{
 			strconv.FormatInt(e.ID, 10),
@@ -127,6 +129,18 @@ func writeAuditEventsCSV(c *gin.Context, events []*entity.AuditEvent, nextCursor
 			strconv.FormatInt(e.RetentionUntil, 10),
 			e.Details,
 		})
+		rowsWritten++
+		// csv.Writer buffers the first write error; bail out early instead of
+		// spinning through the remaining rows once the underlying stream is broken.
+		if w.Error() != nil {
+			break
+		}
 	}
 	w.Flush()
+	// The response status (200) is already committed by the time we get here,
+	// so a broken pipe / disk-full mid-export can only be surfaced via logs —
+	// this keeps a truncated compliance export from failing silently.
+	if err := w.Error(); err != nil {
+		common.SysError(fmt.Sprintf("audit CSV export truncated: wrote %d/%d rows, error=%v", rowsWritten, len(events), err))
+	}
 }

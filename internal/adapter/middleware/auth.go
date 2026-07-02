@@ -234,6 +234,25 @@ func authHelper(c *gin.Context, minRole int) {
 	if userCache, cacheErr := repo.GetUserCache(userId); cacheErr == nil && userCache.TenantId != "" {
 		tenantId = userCache.TenantId
 	}
+
+	// TI-5: reject console/relay access for a disabled or suspended tenant so
+	// an admin-suspended tenant is actually locked out, not just cosmetically
+	// flagged. Skip the bootstrap/system tenant ("default") — it predates the
+	// tenants table on some deployments and must never be lockable out from
+	// here; if the lookup itself fails, fail OPEN (preserve prior behavior)
+	// rather than hard-erroring every request on a transient DB hiccup.
+	if tenantId != "default" {
+		if tenant, tErr := repo.GetTenantByID(tenantId); tErr == nil && tenant != nil && tenant.IsDisabled() {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success":    false,
+				"message":    "所属租户已被禁用或暂停",
+				"error_code": "TENANT_DISABLED",
+			})
+			c.Abort()
+			return
+		}
+	}
+
 	repo.InjectTenantContext(c, tenantId, userId)
 
 	// Also set the structured TenantContext so v2 handlers (which call

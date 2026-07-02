@@ -542,7 +542,28 @@ func debitTenantPool(relayInfo *relaycommon.RelayInfo, quota int) {
 		return
 	}
 	pool, perr := repo.GetTenantCreditPool(tok.TenantId)
-	if perr != nil || pool == nil || pool.IsUnlimited() {
+	if perr != nil {
+		if errors.Is(perr, repo.ErrPoolNotFound) {
+			// Distinct from IsUnlimited(): this tenant has NO pool row at all,
+			// which is either a legitimate "no pool configured" tenant or a
+			// tenant-id/pool drift (orphaned token pointing at a tenant that
+			// never got a pool row). Surface it — a silent return here would
+			// hide the same class of bug the tenant-id drift incident found.
+			metrics.CreditPoolLookupMissTotal.WithLabelValues(tok.TenantId, "no_pool").Inc()
+			common.SysLog(fmt.Sprintf(
+				`{"event":"pool_lookup_miss","who":"tenant:%s","what":"post-consume debit %d skipped: no credit pool row (token %d)","result":"treated as unlimited, verify tenant-id is not drifted"}`,
+				tok.TenantId, quota, relayInfo.TokenId))
+			return
+		}
+		// Hard DB error resolving the pool row — same severity as a lost debit,
+		// since we can't even tell whether this tenant is pool-gated.
+		metrics.CreditPoolLookupMissTotal.WithLabelValues(tok.TenantId, "lookup_error").Inc()
+		common.SysError(fmt.Sprintf(
+			`{"event":"pool_lookup_error","who":"tenant:%s","what":"post-consume debit %d: credit pool lookup failed (token %d)","result":"debit skipped, conservation broken: %s"}`,
+			tok.TenantId, quota, relayInfo.TokenId, perr.Error()))
+		return
+	}
+	if pool == nil || pool.IsUnlimited() {
 		return
 	}
 
@@ -550,6 +571,10 @@ func debitTenantPool(relayInfo *relaycommon.RelayInfo, quota int) {
 	if derr == nil {
 		metrics.CreditPoolDebitTotal.WithLabelValues(tok.TenantId).Inc()
 		metrics.CreditPoolBalance.WithLabelValues(tok.TenantId).Set(float64(pool.CurrentBalance - int64(quota)))
+		governance.RecordAuditEvent(governance.NewDetachedAuditEvent(
+			tok.TenantId, governance.ActorSystem, relayInfo.UserId,
+			governance.ActionBillingDebit, governance.ResourceTenant, int(pool.ID),
+			fmt.Sprintf(`{"quota":%d,"pool_id":%d,"token_id":%d}`, quota, pool.ID, relayInfo.TokenId)))
 		return
 	}
 

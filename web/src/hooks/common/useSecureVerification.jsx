@@ -44,6 +44,7 @@ export const useSecureVerification = ({
     has2FA: false,
     hasPasskey: false,
     passkeySupported: false,
+    hasSession: false,
   });
 
   // 模态框状态
@@ -89,7 +90,7 @@ export const useSecureVerification = ({
       // 检查验证方式
       const methods = await checkVerificationMethods();
 
-      if (!methods.has2FA && !methods.hasPasskey) {
+      if (!methods.has2FA && !methods.hasPasskey && !methods.hasSession) {
         const errorMessage = t('您需要先启用两步验证或 Passkey 才能执行此操作');
         showError(errorMessage);
         onError?.(new Error(errorMessage));
@@ -103,6 +104,8 @@ export const useSecureVerification = ({
           defaultMethod = 'passkey';
         } else if (methods.has2FA) {
           defaultMethod = '2fa';
+        } else if (methods.hasSession) {
+          defaultMethod = 'session';
         }
       }
 
@@ -196,6 +199,8 @@ export const useSecureVerification = ({
             verificationMethods.hasPasskey &&
             verificationMethods.passkeySupported
           );
+        case 'session':
+          return verificationMethods.hasSession;
         default:
           return false;
       }
@@ -213,6 +218,9 @@ export const useSecureVerification = ({
     }
     if (verificationMethods.has2FA) {
       return '2fa';
+    }
+    if (verificationMethods.hasSession) {
+      return 'session';
     }
     return null;
   }, [verificationMethods]);
@@ -266,7 +274,9 @@ export const useSecureVerification = ({
 
     // 便捷属性
     hasAnyVerificationMethod:
-      verificationMethods.has2FA || verificationMethods.hasPasskey,
+      verificationMethods.has2FA ||
+      verificationMethods.hasPasskey ||
+      verificationMethods.hasSession,
     isLoading: verificationState.loading,
     currentMethod: verificationState.method,
     code: verificationState.code,

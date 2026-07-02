@@ -172,6 +172,10 @@ var (
 	oidcClientID        string
 	oidcEnabled         bool
 	jwksRefreshInterval time.Duration = 1 * time.Hour
+	// oidcAllowedAudiences holds the parsed set of accepted "aud" values
+	// (OIDC_ALLOWED_AUDIENCES, comma-separated). When empty, audience
+	// enforcement is skipped entirely (see checkAudience).
+	oidcAllowedAudiences []string
 )
 
 // InitOIDCAuth initializes the OIDC authentication system.
@@ -182,6 +186,19 @@ func InitOIDCAuth() error {
 	if !oidcEnabled {
 		common.SysLog("OIDC authentication is disabled")
 		return nil
+	}
+
+	// Re-read the configurable claim keys here (post-.env). The package-level
+	// oidcClaimKeys initializer runs at program init, which is BEFORE main()
+	// calls godotenv.Load(".env"); without this refresh any OIDC_CLAIM_* set only
+	// in a .env file would be silently ignored and the vendor-neutral defaults
+	// used instead. Real process env (K8s) is honoured either way.
+	oidcClaimKeys = claimKeySet{
+		OrgID:             envOr("OIDC_CLAIM_ORG_ID", "org_id"),
+		OrgDomain:         envOr("OIDC_CLAIM_ORG_DOMAIN", "org_domain"),
+		ResourceOwnerID:   envOr("OIDC_CLAIM_RESOURCE_OWNER_ID", "resource_owner_id"),
+		ResourceOwnerName: envOr("OIDC_CLAIM_RESOURCE_OWNER_NAME", "resource_owner_name"),
+		Roles:             envOr("OIDC_CLAIM_ROLES", "roles"),
 	}
 
 	// OIDC_ISSUER accepts a comma-separated list so that two issuers
@@ -199,6 +216,20 @@ func InitOIDCAuth() error {
 	// and stays IdP-neutral. See doc/oidc-setup-guide.md.
 	oidcJwksURI = os.Getenv("OIDC_JWKS_URI")
 	oidcClientID = os.Getenv("OIDC_CLIENT_ID")
+
+	// OIDC_ALLOWED_AUDIENCES: optional comma-separated allow-list for the JWT
+	// "aud" claim. Audience enforcement is opt-in: when set, a token must carry
+	// at least one matching audience; when unset/empty, no aud check is done
+	// (many IdPs mint tokens whose "aud" is a project/resource id rather than
+	// the client_id, so requiring the client_id by default would reject valid
+	// tokens — operators opt in explicitly via this var).
+	oidcAllowedAudiences = nil
+	rawAudiences := os.Getenv("OIDC_ALLOWED_AUDIENCES")
+	for _, part := range strings.Split(rawAudiences, ",") {
+		if v := strings.TrimSpace(part); v != "" {
+			oidcAllowedAudiences = append(oidcAllowedAudiences, v)
+		}
+	}
 
 	// Validate required environment variables
 	if len(oidcIssuers) == 0 {
@@ -502,6 +533,17 @@ func handleSessionFallback(c *gin.Context) bool {
 			return false
 		}
 
+		// SECURITY: reject a disabled/banned user even though their session
+		// cookie is still valid — mirrors authHelper (auth.go).
+		if user.Status == common.UserStatusDisabled {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "account disabled",
+			})
+			c.Abort()
+			return true
+		}
+
 		// SECURITY (cross-tenant isolation): scope the tenant to the
 		// authenticated user's OWN record — never the URL :tenant_slug.
 		// Deriving it from the slug let any session-authenticated user
@@ -540,6 +582,16 @@ func handleSessionFallback(c *gin.Context) bool {
 		user, err := repo.GetUserById(userID, false)
 		if err != nil {
 			return false
+		}
+
+		// SECURITY: reject a disabled/banned user (see non-expired branch above).
+		if user.Status == common.UserStatusDisabled {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "account disabled",
+			})
+			c.Abort()
+			return true
 		}
 
 		// SECURITY (cross-tenant isolation): see the non-expired branch
@@ -682,8 +734,15 @@ func OIDCAuth() gin.HandlerFunc {
 			return
 		}
 
-		// Verify audience (optional, can include client ID validation)
-		// Note: the IdP may use a project/resource ID as audience.
+		// Verify audience: reject tokens minted for a different client/resource.
+		if !checkAudience(claims.Audience) {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"message": fmt.Sprintf("Invalid audience: got %v", []string(claims.Audience)),
+			})
+			c.Abort()
+			return
+		}
 
 		// Map OIDC user to lurus user and tenant
 		tenantID, lurusUserID, err := mapOIDCUserToLurus(claims)
@@ -692,6 +751,28 @@ func OIDCAuth() gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
 				"message": "用户身份映射失败 / User identity mapping failed",
+			})
+			c.Abort()
+			return
+		}
+
+		// SECURITY: reject a disabled/banned local user even though their OIDC
+		// token is otherwise valid — mirrors authHelper (auth.go) and the
+		// session-fallback branches above.
+		lurusUser, err := repo.GetUserById(lurusUserID, false)
+		if err != nil {
+			common.SysError(fmt.Sprintf("Failed to load mapped user %d: %v", lurusUserID, err))
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "用户身份映射失败 / User identity mapping failed",
+			})
+			c.Abort()
+			return
+		}
+		if lurusUser.Status == common.UserStatusDisabled {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "account disabled",
 			})
 			c.Abort()
 			return
@@ -730,6 +811,27 @@ func OIDCAuth() gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// checkAudience validates a token's "aud" claim against the accepted set.
+// Enforcement is opt-in: it applies only when OIDC_ALLOWED_AUDIENCES is
+// configured (oidcAllowedAudiences non-empty), in which case the token must
+// carry at least one matching audience. When unset, no audience check is
+// performed — many IdPs mint tokens whose "aud" is a project/resource id
+// rather than the client_id, so requiring the client_id as audience by
+// default would reject otherwise-valid tokens.
+func checkAudience(aud jwt.ClaimStrings) bool {
+	if len(oidcAllowedAudiences) == 0 {
+		return true
+	}
+	for _, a := range aud {
+		for _, want := range oidcAllowedAudiences {
+			if a == want {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // applyConfigurableClaims overlays the deploy-configured org/role claim keys

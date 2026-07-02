@@ -12,6 +12,13 @@ func CORS() gin.HandlerFunc {
 	corsConfig.AllowOrigins = config.Get().CORS.AllowedOrigins
 	corsConfig.AllowCredentials = true
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	corsConfig.AllowHeaders = []string{"*"}
+	// A literal "*" is NOT treated as a wildcard by the CORS spec when
+	// AllowCredentials is true — browsers reject the response. List the
+	// headers actual callers set (frontend api.js + relay TokenAuth key
+	// extraction + internal API key auth) instead.
+	corsConfig.AllowHeaders = []string{
+		"Origin", "Content-Type", "Authorization",
+		"X-API-Key", "lurus-api-User", "New-Api-User", "Cache-Control",
+	}
 	return cors.New(corsConfig)
 }

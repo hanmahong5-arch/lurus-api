@@ -8,8 +8,13 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// TenantPlugin is a GORM plugin that automatically filters queries by tenant_id
-// and sets tenant_id on create operations
+// TenantPlugin is a GORM plugin that filters queries by tenant_id and sets
+// tenant_id on create operations. It only engages when the gorm.DB in use
+// carries a tenant-scoped context.Context (via WithTenantID / GetTenantDB*) —
+// most repo call sites use their own explicit .Where("tenant_id = ?", ...)
+// filters instead and never touch a tenant-bound DB handle, so this plugin is
+// NOT the primary enforcement layer; it is a defense-in-depth backstop for the
+// call sites that do route through a tenant-scoped handle.
 type TenantPlugin struct{}
 
 // Name returns the plugin name
@@ -76,7 +81,7 @@ func beforeCreate(db *gorm.DB) {
 	}
 
 	// Check if the table has tenant_id column FIRST
-	// Tables without tenant_id (like logs) should skip this check entirely
+	// Tables without a tenant_id column should skip this check entirely
 	if !hasTenantIDColumn(db) {
 		return
 	}
@@ -174,17 +179,20 @@ func skipTenantIsolation(db *gorm.DB) bool {
 
 // hasTenantIDColumn checks if the current table has tenant_id column
 func hasTenantIDColumn(db *gorm.DB) bool {
-	// Tables that have tenant_id column
-	// Note: logs table does NOT have tenant_id, removed from list
+	// Tables that have tenant_id column and opt into auto-scoping.
+	// Note: the logs table HAS a tenant_id column (entity/log.go) but is
+	// deliberately excluded — admin/cross-tenant log views legitimately span
+	// tenants, so log isolation relies on an explicit .Where("tenant_id = ?")
+	// at each call site rather than this plugin's auto-filter.
 	tablesWithTenantID := map[string]bool{
-		"users":              true,
-		"tokens":             true,
-		"channels":           true,
-		"topups":             true,
-		"subscriptions":      true,
-		"redemptions":        true,
-		"passkeys":           true,
-		"twofa":              true,
+		"users":         true,
+		"tokens":        true,
+		"channels":      true,
+		"topups":        true,
+		"subscriptions": true,
+		"redemptions":   true,
+		"passkeys":      true,
+		"twofa":         true,
 		// Add more tables as needed
 	}
 

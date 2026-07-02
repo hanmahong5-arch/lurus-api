@@ -1,51 +1,40 @@
 import { test, expect } from '@playwright/test';
+import {
+  BRIDGE_TOKEN,
+  BRIDGE_SKIP,
+  gotoDashboard,
+  v2,
+  backend,
+} from './helpers/auth';
 
 /**
- * Phase E2 — per-token relay scope allowlist (commit ebb646f7).
+ * Phase E2 — per-token relay scope allowlist.
  *
- * Spec: a token with scopes=["chat"] should:
- *   - succeed on /v1/chat/completions
- *   - return 403 on /v1/embeddings
- *   - record an auth.scope_rejected audit row with the rejected scope name
+ * REWRITTEN 2026-06-20:
+ *   - bridge login is POST + user_id; slug = lurus.
+ *   - audit endpoint is ROOT-level /api/v2/admin/audit/* (the old tenant-scoped
+ *     /api/v2/:slug/admin/audit/* path 404s on this branch).
+ *   - The chat happy-path (200) needs a real channel/provider → STAGE-only; here
+ *     we assert the LOCAL-testable core: a chat-scoped token is REJECTED with 403
+ *     on /v1/embeddings and the rejection is audited as auth.scope_rejected.
  *
- * Required env:
- *   E2E_BASE_URL              default https://test-newhub.lurus.cn
- *   E2E_BRIDGE_TOKEN          Layer C bridge auth token
- *   E2E_TENANT_SLUG           default "default"
- *
- * Skips with a clear reason if env missing — never silently passes
- * (avoids §4.1 ⑥ marker-vs-measurement trap).
+ * Verified shapes (2026-06-20 live local stack):
+ *   embeddings 403 body: {error:{message:"令牌未授权 embedding 范围..."}}
+ *   audit row: action=auth.scope_rejected, details={"required_scope":"embedding",...}
  */
-
-const BRIDGE_TOKEN = process.env.E2E_BRIDGE_TOKEN;
-const TENANT_SLUG = process.env.E2E_TENANT_SLUG || 'default';
-
 test.describe('Phase E2 — token scope rejection', () => {
-  test.skip(
-    !BRIDGE_TOKEN,
-    'E2E_BRIDGE_TOKEN not set — skipping STAGE e2e. ' +
-      'Configure STAGING_KUBECONFIG + bridge token to run. ' +
-      'See _bmad-output/planning-artifacts/story-11-2-v2-wiring-mvp.md',
-  );
+  test.skip(!BRIDGE_TOKEN, BRIDGE_SKIP);
 
   const tokenName = `e2e-scope-${Date.now()}`;
   let scopedToken: { id: string; key: string } | null = null;
 
-  test('chat-scoped token: chat allowed, embeddings rejected with 403 + audit', async ({
+  test('chat-scoped token: embeddings rejected with 403 + scope_rejected audit', async ({
     page,
-    request,
   }) => {
-    await page.goto(`/api/v2/bridge/exchange?token=${BRIDGE_TOKEN}`);
-    await expect(page).toHaveURL(/\/console\/v2\/dashboard/, {
-      timeout: 10_000,
-    });
+    await gotoDashboard(page);
 
-    const createRes = await request.post(`/api/v2/${TENANT_SLUG}/tokens`, {
-      data: {
-        name: tokenName,
-        remain_quota: 1_000_000,
-        scopes: ['chat'],
-      },
+    const createRes = await page.request.post(v2('/tokens'), {
+      data: { name: tokenName, remain_quota: 1_000_000, scopes: ['chat'] },
     });
     expect(createRes.ok()).toBeTruthy();
     const created = await createRes.json();
@@ -56,50 +45,41 @@ test.describe('Phase E2 — token scope rejection', () => {
     expect(scopedToken.id).toBeTruthy();
     expect(scopedToken.key).toBeTruthy();
 
-    const auditBefore = await request.get(
-      `/api/v2/${TENANT_SLUG}/admin/audit/events?action=auth.scope_rejected&limit=1`,
+    // Baseline audit count for auth.scope_rejected.
+    const before = await page.request.get(
+      '/api/v2/admin/audit/events?action=auth.scope_rejected&limit=1',
     );
-    const auditBeforeJson = await auditBefore.json();
-    const baselineCount = auditBeforeJson?.data?.total ?? 0;
+    const baseline = (await before.json())?.data?.total ?? 0;
 
-    const chatRes = await request.post('/v1/chat/completions', {
-      headers: { Authorization: `Bearer ${scopedToken.key}` },
-      data: {
-        model: 'gpt-3.5-turbo',
-        messages: [{ role: 'user', content: 'ping' }],
-        max_tokens: 1,
-      },
-    });
-    expect([200, 502, 503]).toContain(chatRes.status());
-
-    const embedRes = await request.post('/v1/embeddings', {
+    // chat-scoped token on /v1/embeddings → 403 + scope message (no upstream needed).
+    // Relay is backend-direct (vite doesn't proxy /v1).
+    const embedRes = await page.request.post(backend('/v1/embeddings'), {
       headers: { Authorization: `Bearer ${scopedToken.key}` },
       data: { model: 'text-embedding-3-small', input: 'foo' },
     });
     expect(embedRes.status()).toBe(403);
-    const embedBody = await embedRes.json();
-    expect(JSON.stringify(embedBody)).toMatch(/scope/i);
+    expect(JSON.stringify(await embedRes.json())).toMatch(/scope|范围|embedding/i);
 
-    await new Promise((r) => setTimeout(r, 2_000));
-    const auditAfter = await request.get(
-      `/api/v2/${TENANT_SLUG}/admin/audit/events?action=auth.scope_rejected&limit=10`,
+    // The rejection is audited.
+    await page.waitForTimeout(1_500);
+    const after = await page.request.get(
+      '/api/v2/admin/audit/events?action=auth.scope_rejected&limit=10',
     );
-    expect(auditAfter.ok()).toBeTruthy();
-    const auditAfterJson = await auditAfter.json();
-    expect(auditAfterJson?.data?.total ?? 0).toBeGreaterThan(baselineCount);
-
-    const recent = (auditAfterJson?.data?.events ?? []).find((e: any) =>
+    expect(after.ok()).toBeTruthy();
+    const afterJson = await after.json();
+    expect(afterJson?.data?.total ?? 0).toBeGreaterThan(baseline);
+    const row = (afterJson?.data?.events ?? []).find((e: any) =>
       String(e?.details ?? '').includes('embedding'),
     );
-    expect(
-      recent,
-      'audit row with rejected scope=embedding should exist',
-    ).toBeTruthy();
+    expect(row, 'audit row with required_scope=embedding should exist').toBeTruthy();
+
+    // NOTE: the chat happy-path (POST /v1/chat/completions → 200) requires a real
+    // channel + provider key and is asserted on STAGE, not here.
   });
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ page }) => {
     if (scopedToken?.id) {
-      await request.delete(`/api/v2/${TENANT_SLUG}/tokens/${scopedToken.id}`);
+      await page.request.delete(v2(`/tokens/${scopedToken.id}`));
     }
   });
 });

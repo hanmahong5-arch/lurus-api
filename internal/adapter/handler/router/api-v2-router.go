@@ -12,6 +12,10 @@ import (
 // Admin operations use AdminJWTAuth; billing uses OIDCAuth.
 func SetApiV2Router(router *gin.Engine) {
 	apiV2 := router.Group("/api/v2")
+	// Every other group (v1, dashboard, relay) wires middleware.CORS(); v2 was
+	// missing it, so browser cross-origin calls (console SPA, Switch app) had
+	// no Access-Control-* response headers and silently failed preflight.
+	apiV2.Use(middleware.CORS())
 	// Non-blocking SDK identity injector: resolves the lurus_session cookie
 	// (set by the platform SDK bridge) into the context so middleware.UserAuth
 	// / AdminAuth can admit SDK-authenticated console users whose only
@@ -54,7 +58,7 @@ func SetApiV2Router(router *gin.Engine) {
 		}
 
 		// Tenant-scoped user endpoint (session auth — called by frontend in V2 mode)
-		apiV2.GET("/:tenant_slug/user/me", middleware.UserAuth(), handler.GetSelf)
+		apiV2.GET("/:tenant_slug/user/me", middleware.UserAuth(), middleware.TenantSlugGuard(), handler.GetSelf)
 
 		// EndUser pool readback (Tier 1.2, 2026-05-19). OIDCAuth →
 		// tenantCtx.TenantID must match the URL slug; otherwise the handler
@@ -68,12 +72,13 @@ func SetApiV2Router(router *gin.Engine) {
 		// existing TokenAuth → Distribute → Relay pipeline. Per-column
 		// errors do not fail the whole call (each cell carries its own
 		// {content, latency_ms, prompt_tokens, completion_tokens, error_code}).
-		apiV2.POST("/:tenant_slug/playground/run", middleware.UserAuth(), handler.PlaygroundFanOut)
+		apiV2.POST("/:tenant_slug/playground/run", middleware.UserAuth(), middleware.TenantSlugGuard(), handler.PlaygroundFanOut)
 
 		// Playground named presets (Wave 3 Phase 1). User-scoped CRUD —
 		// each user manages their own preset list, isolated by (tenant, user).
 		playgroundPresets := apiV2.Group("/:tenant_slug/playground/presets")
 		playgroundPresets.Use(middleware.UserAuth())
+		playgroundPresets.Use(middleware.TenantSlugGuard())
 		{
 			playgroundPresets.GET("", handler.ListPresetsV2)
 			playgroundPresets.POST("", handler.CreatePresetV2)
@@ -86,6 +91,7 @@ func SetApiV2Router(router *gin.Engine) {
 
 		tenantTokens := apiV2.Group("/:tenant_slug/tokens")
 		tenantTokens.Use(middleware.UserAuth())
+		tenantTokens.Use(middleware.TenantSlugGuard())
 		{
 			tenantTokens.GET("", handler.ListTokensV2)
 			tenantTokens.POST("", handler.CreateTokenV2)
@@ -101,6 +107,7 @@ func SetApiV2Router(router *gin.Engine) {
 
 		tenantChannels := apiV2.Group("/:tenant_slug/channels")
 		tenantChannels.Use(middleware.AdminAuth())
+		tenantChannels.Use(middleware.TenantSlugGuard())
 		{
 			tenantChannels.GET("", handler.ListChannelsV2)
 			tenantChannels.GET("/:id", handler.GetChannelV2)
@@ -117,6 +124,7 @@ func SetApiV2Router(router *gin.Engine) {
 
 		tenantLogs := apiV2.Group("/:tenant_slug/logs")
 		tenantLogs.Use(middleware.UserAuth())
+		tenantLogs.Use(middleware.TenantSlugGuard())
 		{
 			tenantLogs.GET("", handler.GetLogsV2)
 			tenantLogs.GET("/all", handler.GetAllLogsV2)
@@ -137,15 +145,17 @@ func SetApiV2Router(router *gin.Engine) {
 
 		tenantRedemptions := apiV2.Group("/:tenant_slug/redemptions")
 		tenantRedemptions.Use(middleware.UserAuth())
+		tenantRedemptions.Use(middleware.TenantSlugGuard())
 		{
 			tenantRedemptions.GET("", handler.ListRedemptionsV2)
 			tenantRedemptions.POST("", handler.CreateRedemptionV2)
 			tenantRedemptions.DELETE("/:id", handler.DeleteRedemptionV2)
 		}
-		apiV2.POST("/:tenant_slug/redeem", middleware.UserAuth(), handler.RedeemCodeV2)
+		apiV2.POST("/:tenant_slug/redeem", middleware.UserAuth(), middleware.TenantSlugGuard(), handler.RedeemCodeV2)
 
 		tenantSessions := apiV2.Group("/:tenant_slug/sessions")
 		tenantSessions.Use(middleware.UserAuth())
+		tenantSessions.Use(middleware.TenantSlugGuard())
 		{
 			tenantSessions.GET("", handler.ListSessionsV2)
 			tenantSessions.DELETE("/current", handler.RevokeCurrentSessionV2)
@@ -160,6 +170,7 @@ func SetApiV2Router(router *gin.Engine) {
 
 		tenantModels := apiV2.Group("/:tenant_slug/models")
 		tenantModels.Use(middleware.UserAuth())
+		tenantModels.Use(middleware.TenantSlugGuard())
 		{
 			tenantModels.GET("", handler.ListModelsV2)
 			// Wave 3 Phase 1 (2026-05-20): add / delete wired.
@@ -170,6 +181,7 @@ func SetApiV2Router(router *gin.Engine) {
 
 		tenantPricing := apiV2.Group("/:tenant_slug/pricing")
 		tenantPricing.Use(middleware.UserAuth())
+		tenantPricing.Use(middleware.TenantSlugGuard())
 		{
 			tenantPricing.GET("", handler.GetPricingV2)
 			// Wave 3 Phase 1 (2026-05-20): markup write path.
@@ -178,6 +190,7 @@ func SetApiV2Router(router *gin.Engine) {
 
 		tenantBilling := apiV2.Group("/:tenant_slug/billing")
 		tenantBilling.Use(middleware.UserAuth())
+		tenantBilling.Use(middleware.TenantSlugGuard())
 		{
 			tenantBilling.GET("/invoices", handler.ListInvoicesV2)
 		}
@@ -186,12 +199,13 @@ func SetApiV2Router(router *gin.Engine) {
 		// conversation client-side (no chat_session table yet).
 		tenantChat := apiV2.Group("/:tenant_slug/chat")
 		tenantChat.Use(middleware.UserAuth())
+		tenantChat.Use(middleware.TenantSlugGuard())
 		{
 			tenantChat.POST("/send", handler.ChatSend)
 		}
 
 		// Settings — PUT for profile update (GET already registered above)
-		apiV2.PUT("/:tenant_slug/user/me", middleware.UserAuth(), handler.UpdateSelfV2)
+		apiV2.PUT("/:tenant_slug/user/me", middleware.UserAuth(), middleware.TenantSlugGuard(), handler.UpdateSelfV2)
 
 		// ================================================================
 		// Switch Public Routes (no authentication required)

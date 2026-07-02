@@ -74,7 +74,7 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 	if common2.DebugEnabled {
 		println("fullRequestURL:", fullRequestURL)
 	}
-	req, err := http.NewRequest(c.Request.Method, fullRequestURL, requestBody)
+	req, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, fullRequestURL, requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("new request failed: %w", err)
 	}
@@ -105,7 +105,7 @@ func DoFormRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBod
 	if common2.DebugEnabled {
 		println("fullRequestURL:", fullRequestURL)
 	}
-	req, err := http.NewRequest(c.Request.Method, fullRequestURL, requestBody)
+	req, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, fullRequestURL, requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("new request failed: %w", err)
 	}
@@ -301,6 +301,13 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 		return nil, errors.New("resp is nil")
 	}
 
+	// Bound a stuck non-stream body read (RELAY_TIMEOUT=0 leaves it otherwise
+	// unbounded). Streams are excluded: their body is governed per-chunk by
+	// StreamScannerHandler's streamingTimeout, not this.
+	if !info.IsStream && resp.Body != nil {
+		resp.Body = app.WrapNonStreamReadDeadline(resp.Body)
+	}
+
 	_ = req.Body.Close()
 	_ = c.Request.Body.Close()
 	return resp, nil
@@ -311,7 +318,7 @@ func DoTaskApiRequest(a TaskAdaptor, c *gin.Context, info *common.RelayInfo, req
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest(c.Request.Method, fullRequestURL, requestBody)
+	req, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, fullRequestURL, requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("new request failed: %w", err)
 	}

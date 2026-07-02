@@ -483,6 +483,10 @@ func InitResources(ctx context.Context) error {
 	// 加载环境变量
 	common.InitEnv()
 
+	// Re-read identity/session/billing env vars whose package-level initializers
+	// ran before godotenv.Load above (see RefreshIdentityClientEnv comment).
+	common.RefreshIdentityClientEnv()
+
 	// Initialize structured logging from env vars (LOG_FORMAT, LOG_LEVEL)
 	common.InitSlog(common.SlogConfigFromEnv())
 

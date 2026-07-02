@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/LurusTech/lurus-hub/internal/adapter/repo"
+	"github.com/LurusTech/lurus-hub/internal/app/governance"
 	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 
 	"github.com/gin-gonic/gin"
@@ -145,6 +146,10 @@ func CreateTenant(c *gin.Context) {
 		common.SysError("Failed to initialize tenant configs: " + err.Error())
 	}
 
+	actorID, _ := repo.GetUserID(c)
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, actorID,
+		governance.ActionTenantCreated, governance.ResourceTenant, 0, tenant.Id))
+
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"message": "Tenant created successfully",
@@ -222,6 +227,10 @@ func UpdateTenant(c *gin.Context) {
 		return
 	}
 
+	actorID, _ := repo.GetUserID(c)
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, actorID,
+		governance.ActionTenantUpdated, governance.ResourceTenant, 0, tenantID))
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Tenant updated successfully",
@@ -265,6 +274,10 @@ func DeleteTenant(c *gin.Context) {
 		return
 	}
 
+	actorID, _ := repo.GetUserID(c)
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, actorID,
+		governance.ActionTenantDeleted, governance.ResourceTenant, 0, tenantID))
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Tenant deleted successfully",
@@ -287,6 +300,12 @@ func EnableTenant(c *gin.Context) {
 		})
 		return
 	}
+
+	// No dedicated "tenant.enabled" action constant exists yet — ActionTenantUpdated
+	// is the closest fit (a status-field update); details disambiguates the verb.
+	actorID, _ := repo.GetUserID(c)
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, actorID,
+		governance.ActionTenantUpdated, governance.ResourceTenant, 0, "enable: "+tenantID))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -319,6 +338,12 @@ func DisableTenant(c *gin.Context) {
 		return
 	}
 
+	// No dedicated "tenant.disabled" action constant exists yet — ActionTenantUpdated
+	// is the closest fit (a status-field update); details disambiguates the verb.
+	actorID, _ := repo.GetUserID(c)
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, actorID,
+		governance.ActionTenantUpdated, governance.ResourceTenant, 0, "disable: "+tenantID))
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Tenant disabled successfully",
@@ -349,6 +374,12 @@ func SuspendTenant(c *gin.Context) {
 		})
 		return
 	}
+
+	// No dedicated "tenant.suspended" action constant exists yet — ActionTenantUpdated
+	// is the closest fit (a status-field update); details disambiguates the verb.
+	actorID, _ := repo.GetUserID(c)
+	governance.RecordAuditEvent(governance.NewAuditEvent(c, governance.ActorAdmin, actorID,
+		governance.ActionTenantUpdated, governance.ResourceTenant, 0, "suspend: "+tenantID))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
