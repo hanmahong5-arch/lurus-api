@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"sync/atomic"
-	"time"
 )
 
 // billingUnifiedEnabled is an atomic flag controlling the pre-authorize billing path.
@@ -68,6 +67,11 @@ func PreAuthorize(ctx context.Context, accountID int64, amount float64, productI
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+IdentityServiceInternalKey)
+	// Platform requires an Idempotency-Key on this money endpoint (else 400). The
+	// relay request reference is the natural per-freeze dedupe key.
+	if referenceID != "" {
+		req.Header.Set("Idempotency-Key", referenceID)
+	}
 
 	resp, err := identityClient.Do(req)
 	if err != nil {
@@ -117,6 +121,8 @@ func SettlePreAuth(ctx context.Context, preAuthID int64, actualAmount float64) (
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+IdentityServiceInternalKey)
+	// Settle is keyed on the pre-auth row id — a retried settle must not charge twice.
+	req.Header.Set("Idempotency-Key", fmt.Sprintf("settle:%d", preAuthID))
 
 	resp, err := identityClient.Do(req)
 	if err != nil {
@@ -147,6 +153,8 @@ func ReleasePreAuth(ctx context.Context, preAuthID int64) error {
 		return fmt.Errorf("release request failed")
 	}
 	req.Header.Set("Authorization", "Bearer "+IdentityServiceInternalKey)
+	// Release is keyed on the pre-auth row id — a retried release is a safe no-op.
+	req.Header.Set("Idempotency-Key", fmt.Sprintf("release:%d", preAuthID))
 
 	resp, err := identityClient.Do(req)
 	if err != nil {
@@ -172,9 +180,4 @@ func parseErrorResponse(body io.Reader) string {
 		return errResp.Error
 	}
 	return "unknown"
-}
-
-// billingGRPCTimeout wraps a context with a 5s timeout for billing gRPC calls.
-func billingGRPCTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(grpcCtx(ctx), 5*time.Second)
 }

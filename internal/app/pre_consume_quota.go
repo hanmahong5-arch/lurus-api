@@ -14,6 +14,7 @@ import (
 	"github.com/LurusTech/lurus-hub/internal/pkg/types"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // ReturnPreConsumedQuota refunds local quota and releases platform pre-auth
@@ -149,7 +150,7 @@ func platformPreAuthorize(c *gin.Context, estimatedQuota int, relayInfo *relayco
 
 	preAuthStart := time.Now()
 	result, err := common.PreAuthorizeWithBreaker(ctx, accountID, estimatedLB,
-		sourceProductOf(relayInfo), "", fmt.Sprintf("relay userId=%d model=%s", relayInfo.UserId, relayInfo.OriginModelName), 300)
+		sourceProductOf(relayInfo), "preauth:"+uuid.NewString(), fmt.Sprintf("relay userId=%d model=%s", relayInfo.UserId, relayInfo.OriginModelName), 300)
 	metrics.BillingPreAuthDuration.Observe(time.Since(preAuthStart).Seconds())
 
 	if err != nil {

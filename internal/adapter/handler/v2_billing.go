@@ -242,7 +242,7 @@ func TopUpV2(c *gin.Context) {
 		c.Request.Context(), accountID, req.AmountCNY,
 		"product_purchase",
 		fmt.Sprintf("Wallet to lurus-api quota transfer (%.2f CNY)", req.AmountCNY),
-		"lurus-api",
+		"lurus-api", idempotencyKey,
 	)
 	if err != nil {
 		status := http.StatusServiceUnavailable
@@ -266,7 +266,7 @@ func TopUpV2(c *gin.Context) {
 			c.Request.Context(), accountID, req.AmountCNY,
 			"refund",
 			fmt.Sprintf("Rollback: quota credit failed for transfer %.2f CNY", req.AmountCNY),
-			"lurus-api",
+			"lurus-api", idempotencyKey+":rollback",
 		)
 		if rollbackErr != nil {
 			slog.Error("CRITICAL: wallet debited but quota credit AND rollback both failed",

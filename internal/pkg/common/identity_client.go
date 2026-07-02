@@ -443,7 +443,7 @@ type DebitWalletResult struct {
 
 // DebitWallet deducts credits from an account's wallet in lurus-platform.
 // Returns the remaining balance after the debit, or an error if insufficient balance.
-func DebitWallet(ctx context.Context, accountID int64, amount float64, txType, description, productID string) (*DebitWalletResult, error) {
+func DebitWallet(ctx context.Context, accountID int64, amount float64, txType, description, productID, idempotencyKey string) (*DebitWalletResult, error) {
 	if IdentityServiceURL == "" {
 		return nil, fmt.Errorf("identity service not configured")
 	}
@@ -460,6 +460,11 @@ func DebitWallet(ctx context.Context, accountID int64, amount float64, txType, d
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+IdentityServiceInternalKey)
+	// Platform money-mutation endpoints require an Idempotency-Key (else 400). A
+	// stable per-operation key also dedupes retries against double-charge.
+	if idempotencyKey != "" {
+		req.Header.Set("Idempotency-Key", idempotencyKey)
+	}
 
 	resp, err := identityClient.Do(req)
 	if err != nil {
@@ -488,7 +493,7 @@ func DebitWallet(ctx context.Context, accountID int64, amount float64, txType, d
 
 // CreditWallet adds credits to an account's wallet in lurus-platform.
 // Used for refunds or corrections.
-func CreditWallet(ctx context.Context, accountID int64, amount float64, txType, description, productID string) error {
+func CreditWallet(ctx context.Context, accountID int64, amount float64, txType, description, productID, idempotencyKey string) error {
 	if IdentityServiceURL == "" {
 		return fmt.Errorf("identity service not configured")
 	}
@@ -505,6 +510,9 @@ func CreditWallet(ctx context.Context, accountID int64, amount float64, txType, 
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+IdentityServiceInternalKey)
+	if idempotencyKey != "" {
+		req.Header.Set("Idempotency-Key", idempotencyKey)
+	}
 
 	resp, err := identityClient.Do(req)
 	if err != nil {
