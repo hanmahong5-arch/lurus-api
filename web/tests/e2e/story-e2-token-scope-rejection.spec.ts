@@ -58,7 +58,9 @@ test.describe('Phase E2 — token scope rejection', () => {
       data: { model: 'text-embedding-3-small', input: 'foo' },
     });
     expect(embedRes.status()).toBe(403);
-    expect(JSON.stringify(await embedRes.json())).toMatch(/scope|范围|embedding/i);
+    expect(JSON.stringify(await embedRes.json())).toMatch(
+      /scope|范围|embedding/i,
+    );
 
     // The rejection is audited.
     await page.waitForTimeout(1_500);
@@ -71,7 +73,10 @@ test.describe('Phase E2 — token scope rejection', () => {
     const row = (afterJson?.data?.events ?? []).find((e: any) =>
       String(e?.details ?? '').includes('embedding'),
     );
-    expect(row, 'audit row with required_scope=embedding should exist').toBeTruthy();
+    expect(
+      row,
+      'audit row with required_scope=embedding should exist',
+    ).toBeTruthy();
 
     // NOTE: the chat happy-path (POST /v1/chat/completions → 200) requires a real
     // channel + provider key and is asserted on STAGE, not here.

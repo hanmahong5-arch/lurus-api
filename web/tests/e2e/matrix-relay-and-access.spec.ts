@@ -13,13 +13,19 @@ test.describe('matrix — relay gates + access + settings', () => {
   test('relay rejects missing/invalid token with 401', async ({ page }) => {
     // Relay is backend-direct (vite doesn't proxy /v1).
     const noAuth = await page.request.post(backend('/v1/chat/completions'), {
-      data: { model: 'gpt-3.5-turbo', messages: [{ role: 'user', content: 'hi' }] },
+      data: {
+        model: 'gpt-3.5-turbo',
+        messages: [{ role: 'user', content: 'hi' }],
+      },
     });
     expect(noAuth.status()).toBe(401);
 
     const badAuth = await page.request.post(backend('/v1/chat/completions'), {
       headers: { Authorization: 'Bearer sk-definitely-invalid' },
-      data: { model: 'gpt-3.5-turbo', messages: [{ role: 'user', content: 'hi' }] },
+      data: {
+        model: 'gpt-3.5-turbo',
+        messages: [{ role: 'user', content: 'hi' }],
+      },
     });
     expect(badAuth.status()).toBe(401);
   });
@@ -29,7 +35,11 @@ test.describe('matrix — relay gates + access + settings', () => {
   }) => {
     // Ensure a pool exists (get-or-create; POOL_ALREADY_EXISTS is fine).
     await page.request.post('/api/v2/admin/tenants/default/credit-pool', {
-      data: { max_balance: 1_000_000, reset_period: 'monthly', alert_threshold_pct: 80 },
+      data: {
+        max_balance: 1_000_000,
+        reset_period: 'monthly',
+        alert_threshold_pct: 80,
+      },
     });
 
     const topup = await page.request.post(
@@ -65,7 +75,10 @@ test.describe('matrix — relay gates + access + settings', () => {
     const put = await page.request.put(v2('/user/me'), {
       data: { display_name: newName },
     });
-    expect(put.ok(), `PUT user/me: HTTP ${put.status()} ${await put.text()}`).toBeTruthy();
+    expect(
+      put.ok(),
+      `PUT user/me: HTTP ${put.status()} ${await put.text()}`,
+    ).toBeTruthy();
 
     const me = await page.request.get(v2('/user/me'));
     expect(me.ok()).toBeTruthy();
@@ -74,7 +87,10 @@ test.describe('matrix — relay gates + access + settings', () => {
     const restore = await page.request.put(v2('/user/me'), {
       data: { display_name: originalDisplayName },
     });
-    expect(restore.ok(), `restore user/me: HTTP ${restore.status()}`).toBeTruthy();
+    expect(
+      restore.ok(),
+      `restore user/me: HTTP ${restore.status()}`,
+    ).toBeTruthy();
   });
 
   test('access: root session reaches both UserAuth and RootJWTAuth routes', async ({

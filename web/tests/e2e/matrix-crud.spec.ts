@@ -33,7 +33,13 @@ test.describe('matrix — CRUD + projections', () => {
     expect((await get.json())?.data?.name).toBe(name);
 
     const upd = await page.request.put(v2(`/channels/${id}`), {
-      data: { id: Number(id), name: `${name}-upd`, type: 1, key: 'sk-e2e-secret', models: 'gpt-3.5-turbo' },
+      data: {
+        id: Number(id),
+        name: `${name}-upd`,
+        type: 1,
+        key: 'sk-e2e-secret',
+        models: 'gpt-3.5-turbo',
+      },
     });
     expect(upd.ok()).toBeTruthy();
 
@@ -68,13 +74,24 @@ test.describe('matrix — CRUD + projections', () => {
     // rather than removing the row — so this is get-or-create, not delete+create.
     const create = await page.request.post(
       '/api/v2/admin/tenants/default/credit-pool',
-      { data: { max_balance: 1_000_000, reset_period: 'monthly', alert_threshold_pct: 80 } },
+      {
+        data: {
+          max_balance: 1_000_000,
+          reset_period: 'monthly',
+          alert_threshold_pct: 80,
+        },
+      },
     );
     const createBody = await create.json();
     const ok = create.ok() || createBody?.error_code === 'POOL_ALREADY_EXISTS';
-    expect(ok, `create credit-pool: ${create.status()} ${JSON.stringify(createBody)}`).toBeTruthy();
+    expect(
+      ok,
+      `create credit-pool: ${create.status()} ${JSON.stringify(createBody)}`,
+    ).toBeTruthy();
 
-    const get = await page.request.get('/api/v2/admin/tenants/default/credit-pool');
+    const get = await page.request.get(
+      '/api/v2/admin/tenants/default/credit-pool',
+    );
     expect(get.ok()).toBeTruthy();
     const pool = (await get.json())?.data;
     expect(pool?.tenant_id).toBe('default');

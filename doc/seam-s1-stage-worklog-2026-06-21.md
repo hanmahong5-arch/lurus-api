@@ -47,7 +47,7 @@ owner 决策:① 我直接在 STAGE 接通+跑 E2E;② 构建源 = main 重建;�
 | 项 | 状态 |
 |----|------|
 | platform-core (ns lurus-platform) | 2 pod healthy 39h,NodePort `30104`(HTTP)/`30105`(gRPC),svc ClusterIP 10.43.38.164:18104,image `main-fc7dabf`。`/health`=200 |
-| platform internal key | `INTERNAL_API_KEY=84ae40117c4b6507fdbdad928b8a9e021ead50294bc6092c90b2713a22695c8a` |
+| platform internal key | `INTERNAL_API_KEY=«redacted — see 重要信息.md, rotated after 2026-07-02 leak found in this file»` |
 | newhub `IDENTITY_SERVICE_URL` | `http://platform-core.lurus-platform.svc.cluster.local:18104`(同集群 DNS 可达)✓ |
 | newhub `IDENTITY_SERVICE_INTERNAL_KEY` | = `84ae40…c8a` **与 platform 一致** ✓ |
 | newhub `IDENTITY_GRPC_ADDR` | `platform-core...:18105` ✓ |
@@ -94,9 +94,9 @@ newhub `TopupCreditPool` → `DebitWalletGRPC`:优先 gRPC,失败回退 HTTP。�
 
 ### STAGE 当前真实状态(已持久,供续跑)
 - platform account **38**(seam-s1-root),`billing.wallets` balance=**999**(1000 充值 − 1 探测 debit;真账本)。
-- newhub root user id=1:`lurus_account_id=38`,`access_token=330e781659d02f532a68abe51ec1d1ec`。
+- newhub root user id=1:`lurus_account_id=38`,`access_token=«redacted — session token, treat as burned after 2026-07-02 leak found in this file»`。
 - tenant `lurus-default` credit-pool 已建(id=1,max=1e7,current=0)。
-- 访问:newhub NodePort `30850`(svc 10.43.215.25:8850);platform NodePort `30104`,internal key `84ae40117c4b6507fdbdad928b8a9e021ead50294bc6092c90b2713a22695c8a`。
+- 访问:newhub NodePort `30850`(svc 10.43.215.25:8850);platform NodePort `30104`,internal key `«redacted — see 重要信息.md, rotated after 2026-07-02 leak found in this file»`。
 - **下一步**:实现上述修复 → build(worktree:`cd web && bun install && bun run build` 后 `go build`,因 web/embed.go embed dist)→ 部署 R6 k3s `lurus-newhub`(image `ghcr.io/hanmahong5-arch/lurus-newhub:main`)→ 重跑 topup(期望 wallet 999→899、pool 0→100000)→ relay /v1/chat/completions 扣费 → 账单 → §B 转 PASS。
 
 ### gRPC 腿 follow-up(platform 侧,非本次修)
@@ -122,7 +122,7 @@ clean worktree `../2b-svc-newhub-main-seam`(branch `seam-s1-idem-fix` off origin
 ### 待 owner(review 后)
 1. review + merge PR #34 → GHA 构建 `ghcr.io/hanmahong5-arch/lurus-newhub:main`。
 2. `kubectl -n lurus-newhub rollout restart deployment/lurus-newhub`(R6 k3s,`ssh root@100.122.83.20` + KUBECONFIG=/etc/rancher/k3s/k3s.yaml)。
-3. 重跑 topup(actor=root token `330e781659d02f532a68abe51ec1d1ec`,account 38 钱包=999):期望 wallet 999→899、pool 0→100000、§B 转 PASS;再跑 relay /v1/chat/completions 扣费 + 账单。
+3. 重跑 topup(actor=root token `«redacted — session token, treat as burned after 2026-07-02 leak found in this file»`,account 38 钱包=999):期望 wallet 999→899、pool 0→100000、§B 转 PASS;再跑 relay /v1/chat/completions 扣费 + 账单。
 4. (可选)platform 侧修 gRPC serviceKeys legacy-key fold。
 5. STAGE 测试残留(account 38、root 的 lurus_account_id/access_token、pool)= E2E 夹具,验证后可清理。
 

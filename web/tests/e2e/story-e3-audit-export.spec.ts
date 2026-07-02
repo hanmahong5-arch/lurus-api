@@ -32,7 +32,8 @@ test.describe('Phase E3 — audit export round-trip', () => {
     // Action taxonomy.
     const actionsRes = await page.request.get('/api/v2/admin/audit/actions');
     expect(actionsRes.ok()).toBeTruthy();
-    const actions = ((await actionsRes.json())?.data?.actions ?? []) as string[];
+    const actions = ((await actionsRes.json())?.data?.actions ??
+      []) as string[];
     expect(actions.length).toBeGreaterThanOrEqual(50);
     expect(actions).toContain('token.updated');
     expect(actions).toContain('billing.quota_threshold');
@@ -59,7 +60,9 @@ test.describe('Phase E3 — audit export round-trip', () => {
     expect(csvRes.ok()).toBeTruthy();
     expect(csvRes.headers()['content-type']).toMatch(/text\/csv/);
     const csvBody = await csvRes.text();
-    expect(csvBody.split('\n')[0]).toMatch(/^id,tenant_id,timestamp,actor_type/);
+    expect(csvBody.split('\n')[0]).toMatch(
+      /^id,tenant_id,timestamp,actor_type/,
+    );
     expect(csvBody).toContain('token.updated');
     expect(csvBody).toContain(createdId);
 

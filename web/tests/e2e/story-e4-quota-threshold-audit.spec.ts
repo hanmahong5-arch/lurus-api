@@ -22,7 +22,8 @@ test.describe('Phase E4 — quota threshold audit', () => {
 
     const actionsRes = await page.request.get('/api/v2/admin/audit/actions');
     expect(actionsRes.ok()).toBeTruthy();
-    const actions = ((await actionsRes.json())?.data?.actions ?? []) as string[];
+    const actions = ((await actionsRes.json())?.data?.actions ??
+      []) as string[];
     expect(actions).toContain('billing.quota_threshold');
 
     const eventsRes = await page.request.get(

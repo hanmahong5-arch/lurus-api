@@ -51,7 +51,9 @@ test.describe('channel-key reveal — secure-verification gate (#33)', () => {
     expect(oldGet.status()).toBe(404);
 
     // 3. Step-up verify → 200.
-    const verify = await page.request.post('/api/verify', { data: { method: 'session' } });
+    const verify = await page.request.post('/api/verify', {
+      data: { method: 'session' },
+    });
     expect(verify.status()).toBe(200);
     expect((await verify.json())?.data?.verified).toBe(true);
 
@@ -61,7 +63,10 @@ test.describe('channel-key reveal — secure-verification gate (#33)', () => {
 
     // 4. Reveal AFTER verification → 200 + the raw key.
     const reveal = await page.request.post(`/api/channel/${channelId}/key`);
-    expect(reveal.status(), `reveal after verify: ${reveal.status()} ${await reveal.text()}`).toBe(200);
+    expect(
+      reveal.status(),
+      `reveal after verify: ${reveal.status()} ${await reveal.text()}`,
+    ).toBe(200);
     const body = await reveal.json();
     expect(body?.success).toBe(true);
     expect(body?.data?.key).toBe('sk-reveal-canary');

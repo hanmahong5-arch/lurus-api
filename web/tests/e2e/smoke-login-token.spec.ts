@@ -33,7 +33,8 @@ test.describe('smoke — bridge login + token CRUD', () => {
     const listRes = await page.request.get(v2('/tokens?p=1&size=100'));
     expect(listRes.ok()).toBeTruthy();
     const listBody = await listRes.json();
-    const items = listBody?.data?.items ?? listBody?.data?.records ?? listBody?.data ?? [];
+    const items =
+      listBody?.data?.items ?? listBody?.data?.records ?? listBody?.data ?? [];
     const names = JSON.stringify(items);
     expect(names).toContain(tokenName);
 
