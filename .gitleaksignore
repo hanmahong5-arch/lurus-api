@@ -1,3 +1,13 @@
 # Test fixture, not a secret: fakeToken.key = 'abcd1234efgh' in the Token page
 # unit test. Fingerprint pins the exact commit+line gitleaks flagged.
 4c6b7a7d14e46dd9d93f274e780ea602adcde410:web/src/pages/v2/Token/index.test.jsx:generic-api-key:78
+
+# STAGE credentials that leaked into a worklog doc in commit fbff5649 and were
+# redacted at HEAD by 4fa3011f. Both are DEAD: the platform INTERNAL_API_KEY was
+# rotated and the newhub root access_token was burned after the 2026-07-02 leak
+# was found (see the redaction notes in the current file). These fingerprints pin
+# the historical blob so the pre-existing leak does not block the gate; the live
+# working tree carries no secret. If the history blob itself must go, that is a
+# separate (force-push) rewrite decision — not required since the creds are dead.
+fbff5649ac0d66be63b135cccd40217ae08856d4:doc/seam-s1-stage-worklog-2026-06-21.md:generic-api-key:50
+fbff5649ac0d66be63b135cccd40217ae08856d4:doc/seam-s1-stage-worklog-2026-06-21.md:generic-api-key:97

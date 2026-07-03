@@ -92,13 +92,13 @@ func setupIntegrationTest(t *testing.T) *integrationTestContext {
 
 	// Create test tenant
 	tenant := &repo.Tenant{
-		Id:           "integration-test-tenant",
-		Name:         "Integration Test Tenant",
-		Slug:         "integration-test",
-		Status:       repo.TenantStatusEnabled,
-		IDPOrgID: "org_integration_test",
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		Id:        "integration-test-tenant",
+		Name:      "Integration Test Tenant",
+		Slug:      "integration-test",
+		Status:    repo.TenantStatusEnabled,
+		IDPOrgID:  "org_integration_test",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 	db.Create(tenant)
 
@@ -116,13 +116,13 @@ func setupIntegrationTest(t *testing.T) *integrationTestContext {
 
 	// Create user mapping
 	mapping := &repo.UserIdentityMapping{
-		TenantID:      tenant.Id,
-		IDPSubject: "zitadel_integration_user",
-		LurusUserID:   user.Id,
-		Email:         user.Email,
-		IsActive:      true,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
+		TenantID:    tenant.Id,
+		IDPSubject:  "zitadel_integration_user",
+		LurusUserID: user.Id,
+		Email:       user.Email,
+		IsActive:    true,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
 	}
 	db.Create(mapping)
 
@@ -130,12 +130,17 @@ func setupIntegrationTest(t *testing.T) *integrationTestContext {
 	issuer := "https://zitadel.integration.test"
 	clientID := "integration-client-id"
 
-	os.Setenv("OIDC_ENABLED", "true")
-	os.Setenv("OIDC_ISSUER", issuer)
-	os.Setenv("OIDC_JWKS_URI", jwksServer.URL)
-	os.Setenv("OIDC_CLIENT_ID", clientID)
-	os.Setenv("OIDC_AUTO_CREATE_TENANT", "false")
-	os.Setenv("OIDC_AUTO_CREATE_USER", "false")
+	_ = os.Setenv("OIDC_ENABLED", "true")
+
+	_ = os.Setenv("OIDC_ISSUER", issuer)
+
+	_ = os.Setenv("OIDC_JWKS_URI", jwksServer.URL)
+
+	_ = os.Setenv("OIDC_CLIENT_ID", clientID)
+
+	_ = os.Setenv("OIDC_AUTO_CREATE_TENANT", "false")
+
+	_ = os.Setenv("OIDC_AUTO_CREATE_USER", "false")
 
 	// Initialize Zitadel auth
 	oidcEnabled = true
@@ -173,10 +178,14 @@ func setupIntegrationTest(t *testing.T) *integrationTestContext {
 		if sqlDB != nil {
 			sqlDB.Close()
 		}
-		os.Unsetenv("OIDC_ENABLED")
-		os.Unsetenv("OIDC_ISSUER")
-		os.Unsetenv("OIDC_JWKS_URI")
-		os.Unsetenv("OIDC_CLIENT_ID")
+		_ = os.Unsetenv("OIDC_ENABLED")
+
+		_ = os.Unsetenv("OIDC_ISSUER")
+
+		_ = os.Unsetenv("OIDC_JWKS_URI")
+
+		_ = os.Unsetenv("OIDC_CLIENT_ID")
+
 	}
 
 	return &integrationTestContext{
