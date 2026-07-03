@@ -41,8 +41,11 @@ spec:
         fsGroup: 65534
       containers:
         - name: lurus-newhub
-          image: ghcr.io/hanmahong5-arch/lurus-newhub:staging
-          imagePullPolicy: Always
+          # Pinned to an immutable digest (was floating "staging"). Digest resolved
+          # 2026-07-03 from the registry :staging manifest. Roll forward by
+          # re-resolving the :staging digest after a new deploy-staging build.
+          image: ghcr.io/hanmahong5-arch/lurus-newhub@sha256:3eabea1a49604aeb6771607423b33b95a641e493b008fd157d150517fa67c88d
+          imagePullPolicy: IfNotPresent
           # Container hardening (parity with base): no priv-escalation, read-only
           # root FS (writes go to the /data + /tmp emptyDirs below), drop all caps.
           securityContext:

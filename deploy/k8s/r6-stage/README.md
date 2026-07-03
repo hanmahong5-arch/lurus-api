@@ -6,7 +6,7 @@ Live deployment of `2b-svc-newhub` on the R6 STAGE cluster, fronted by R6 host n
 - Namespace: `lurus-staging` (PG `pg-access-control` netpol whitelists this ns, not `lurus-newhub` — see runbook Infra-1, 2026-06-13)
 - Domain: https://test-newhub.lurus.cn
 - Service: NodePort 30850 -> container port 3000
-- Image: `ghcr.io/hanmahong5-arch/lurus-newhub:main` (floating tag, `imagePullPolicy: Always`)
+- Image: `ghcr.io/hanmahong5-arch/lurus-newhub@sha256:f97c72b4…` (pinned digest, `imagePullPolicy: IfNotPresent`) — resolved 2026-07-03 from the live R6 pod imageID and registry `:main` (they agree). Roll forward by re-resolving `:main` and updating `deployment.yaml`.
 
 ## Which overlay when (staging/ vs r6-stage/)
 
