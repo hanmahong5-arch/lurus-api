@@ -221,6 +221,10 @@ func TestIntegration021_ClosesGaps_AndIdempotent(t *testing.T) {
 // history) must not trip uni_tenants_slug when 021 tries to create id='default',
 // and 021 must resolve/seed configs against the EXISTING row instead of
 // aborting the whole migration transaction on a unique violation.
+//
+// The Runner has no "stop at version" bound, so r.Run() applies the full chain;
+// 022_converge_default_tenant_id then converges the legacy id onto 'default'.
+// The post-state assertions below reflect that converged end state (see inline).
 func TestIntegration021_PreExistingLegacyDefaultTenant_NoUniqueViolation(t *testing.T) {
 	db := setupPG(t)
 	autoMigratePrereqs(t, db)
@@ -245,14 +249,20 @@ func TestIntegration021_PreExistingLegacyDefaultTenant_NoUniqueViolation(t *test
 	if n := scalarInt(t, db, `SELECT count(*) FROM tenants WHERE slug = 'lurus'`); n != 1 {
 		t.Errorf("tenants(slug='lurus') rows = %d, want 1 (021 must not create a second 'default' row)", n)
 	}
-	if n := scalarInt(t, db, `SELECT count(*) FROM tenants WHERE id = 'default'`); n != 0 {
-		t.Errorf("tenants(id='default') rows = %d, want 0 (legacy id must be preserved, not duplicated)", n)
+	// r.Run() applies the FULL chain, so 022_converge_default_tenant_id runs after
+	// 021 and renames the legacy slug='lurus' tenant from its non-canonical id onto
+	// the canonical 'default', cascading every tenant-id column. The post-state
+	// therefore reflects convergence: the tenant and the configs 021 seeded against
+	// the legacy row both end up under id='default'. (021's own contract — not
+	// aborting on uni_tenants_slug — is asserted by the r.Run() error check above.)
+	if n := scalarInt(t, db, `SELECT count(*) FROM tenants WHERE id = 'default'`); n != 1 {
+		t.Errorf("tenants(id='default') rows = %d, want 1 (022 converges the legacy id onto 'default')", n)
 	}
-	if n := scalarInt(t, db, `SELECT count(*) FROM tenants WHERE id = $1`, legacyID); n != 1 {
-		t.Errorf("tenants(id=%q) rows = %d, want 1 (legacy row must survive untouched)", legacyID, n)
+	if n := scalarInt(t, db, `SELECT count(*) FROM tenants WHERE id = $1`, legacyID); n != 0 {
+		t.Errorf("tenants(id=%q) rows = %d, want 0 (022 converges the legacy id away)", legacyID, n)
 	}
-	if n := scalarInt(t, db, `SELECT count(*) FROM tenant_configs WHERE tenant_id = $1`, legacyID); n != 16 {
-		t.Errorf("tenant_configs rows for legacy tenant id = %d, want 16 (seed must resolve to the existing legacy id)", n)
+	if n := scalarInt(t, db, `SELECT count(*) FROM tenant_configs WHERE tenant_id = 'default'`); n != 16 {
+		t.Errorf("tenant_configs rows under 'default' = %d, want 16 (021 seeds against the legacy row, 022 repoints them to 'default')", n)
 	}
 }
 
