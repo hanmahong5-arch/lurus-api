@@ -134,7 +134,7 @@ func TestEnvOr(t *testing.T) {
 		t.Errorf("unset env = %q, want fallback", got)
 	}
 	_ = os.Setenv(key, "actual")
-	defer os.Unsetenv(key)
+	defer func() { _ = os.Unsetenv(key) }()
 	if got := envOr(key, "fallback"); got != "actual" {
 		t.Errorf("set env = %q, want actual", got)
 	}

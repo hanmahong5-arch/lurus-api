@@ -40,7 +40,7 @@ func TestNewAPIError_Accessors(t *testing.T) {
 		errorCode:  ErrorCodeBadResponse,
 		StatusCode: 502,
 	}
-	if e.Unwrap() != inner {
+	if !errors.Is(e.Unwrap(), inner) {
 		t.Errorf("Unwrap() did not return underlying error")
 	}
 	if e.GetErrorCode() != ErrorCodeBadResponse {

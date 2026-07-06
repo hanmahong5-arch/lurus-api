@@ -39,7 +39,8 @@ func TestGetRandomString(t *testing.T) {
 		t.Errorf("expected length 16, got %d", len(s))
 	}
 	// Two draws should (essentially always) differ.
-	if GetRandomString(24) == GetRandomString(24) {
+	draw1, draw2 := GetRandomString(24), GetRandomString(24)
+	if draw1 == draw2 {
 		t.Error("two random strings unexpectedly equal")
 	}
 }
@@ -207,7 +208,8 @@ func TestGenerateHMAC(t *testing.T) {
 		t.Error("HMAC not deterministic")
 	}
 	// GenerateHMAC uses the package CryptoSecret — deterministic within a run.
-	if GenerateHMAC("x") != GenerateHMAC("x") {
+	hmac1, hmac2 := GenerateHMAC("x"), GenerateHMAC("x")
+	if hmac1 != hmac2 {
 		t.Error("GenerateHMAC not deterministic")
 	}
 }

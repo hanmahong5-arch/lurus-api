@@ -46,18 +46,18 @@ func minimalWAV(samples int) []byte {
 	data := make([]byte, samples)
 	dataLen := uint32(len(data))
 	buf.WriteString("RIFF")
-	binary.Write(buf, binary.LittleEndian, uint32(36+dataLen)) // file size - 8
+	_ = binary.Write(buf, binary.LittleEndian, uint32(36+dataLen)) // file size - 8
 	buf.WriteString("WAVE")
 	buf.WriteString("fmt ")
-	binary.Write(buf, binary.LittleEndian, uint32(16))         // fmt chunk size
-	binary.Write(buf, binary.LittleEndian, uint16(1))          // PCM
-	binary.Write(buf, binary.LittleEndian, uint16(1))          // mono
-	binary.Write(buf, binary.LittleEndian, uint32(sampleRate)) // sample rate
-	binary.Write(buf, binary.LittleEndian, uint32(sampleRate)) // byte rate
-	binary.Write(buf, binary.LittleEndian, uint16(1))          // block align
-	binary.Write(buf, binary.LittleEndian, uint16(8))          // bits/sample
+	_ = binary.Write(buf, binary.LittleEndian, uint32(16))         // fmt chunk size
+	_ = binary.Write(buf, binary.LittleEndian, uint16(1))          // PCM
+	_ = binary.Write(buf, binary.LittleEndian, uint16(1))          // mono
+	_ = binary.Write(buf, binary.LittleEndian, uint32(sampleRate)) // sample rate
+	_ = binary.Write(buf, binary.LittleEndian, uint32(sampleRate)) // byte rate
+	_ = binary.Write(buf, binary.LittleEndian, uint16(1))          // block align
+	_ = binary.Write(buf, binary.LittleEndian, uint16(8))          // bits/sample
 	buf.WriteString("data")
-	binary.Write(buf, binary.LittleEndian, dataLen)
+	_ = binary.Write(buf, binary.LittleEndian, dataLen)
 	buf.Write(data)
 	return buf.Bytes()
 }

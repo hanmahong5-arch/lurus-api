@@ -25,7 +25,9 @@ func makeResp(status int, body string, header http.Header) *http.Response {
 func TestRelayErrorHandler_StructuredOpenAIError(t *testing.T) {
 	body := `{"error":{"message":"rate limit exceeded","type":"rate_limit_error","code":"429"}}`
 	h := http.Header{"X-Ratelimit-Reset": {"60"}}
-	apiErr := RelayErrorHandler(context.Background(), makeResp(http.StatusTooManyRequests, body, h), true)
+	resp := makeResp(http.StatusTooManyRequests, body, h)
+	defer func() { _ = resp.Body.Close() }()
+	apiErr := RelayErrorHandler(context.Background(), resp, true)
 
 	if apiErr == nil {
 		t.Fatal("expected a NewAPIError")
@@ -46,7 +48,9 @@ func TestRelayErrorHandler_StructuredOpenAIError(t *testing.T) {
 }
 
 func TestRelayErrorHandler_NonJSONBody_ShowBody(t *testing.T) {
-	apiErr := RelayErrorHandler(context.Background(), makeResp(http.StatusBadGateway, "upstream is down", nil), true)
+	resp := makeResp(http.StatusBadGateway, "upstream is down", nil)
+	defer func() { _ = resp.Body.Close() }()
+	apiErr := RelayErrorHandler(context.Background(), resp, true)
 	if apiErr == nil {
 		t.Fatal("expected a NewAPIError")
 	}
@@ -60,7 +64,9 @@ func TestRelayErrorHandler_NonJSONBody_ShowBody(t *testing.T) {
 }
 
 func TestRelayErrorHandler_NonJSONBody_HideBody(t *testing.T) {
-	apiErr := RelayErrorHandler(context.Background(), makeResp(http.StatusInternalServerError, "not json at all", nil), false)
+	resp := makeResp(http.StatusInternalServerError, "not json at all", nil)
+	defer func() { _ = resp.Body.Close() }()
+	apiErr := RelayErrorHandler(context.Background(), resp, false)
 	if apiErr == nil {
 		t.Fatal("expected a NewAPIError")
 	}
@@ -76,7 +82,9 @@ func TestRelayErrorHandler_NonJSONBody_HideBody(t *testing.T) {
 
 func TestRelayErrorHandler_OversizedBodyTruncated(t *testing.T) {
 	big := strings.Repeat("x", 20*1024) // > 16KB cap
-	apiErr := RelayErrorHandler(context.Background(), makeResp(http.StatusBadGateway, big, nil), false)
+	resp := makeResp(http.StatusBadGateway, big, nil)
+	defer func() { _ = resp.Body.Close() }()
+	apiErr := RelayErrorHandler(context.Background(), resp, false)
 	if apiErr == nil {
 		t.Fatal("expected a NewAPIError")
 	}

@@ -59,7 +59,7 @@ func (f *fakeS3) handler() http.HandlerFunc {
 				b.WriteString("<Key>" + key + "</Key>")
 				b.WriteString("<LastModified>2024-01-01T00:00:00.000Z</LastModified>")
 				b.WriteString(`<ETag>"d41d8cd98f00b204e9800998ecf8427e"</ETag>`)
-				b.WriteString(fmt.Sprintf("<Size>%d</Size>", size))
+				fmt.Fprintf(&b, "<Size>%d</Size>", size)
 				b.WriteString("<StorageClass>STANDARD</StorageClass>")
 				b.WriteString("</Contents>")
 			}

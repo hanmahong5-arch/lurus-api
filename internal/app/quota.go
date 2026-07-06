@@ -29,6 +29,15 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// AsyncGo dispatches PostConsumeQuota's fire-and-forget side effects (usage
+// reporting, wallet debit, cost-spike window, quota-threshold notify). In
+// production it is gopool.Go, i.e. the same async behaviour as before. Tests
+// (in this package and in other packages such as relay that call
+// PostConsumeQuota) override it to run the work inline so those goroutines
+// cannot outlive the test and race a later test's global-state teardown under
+// the -race gate. Exported only so cross-package test binaries can set it.
+var AsyncGo = gopool.Go
+
 type TokenDetails struct {
 	TextTokens  int
 	AudioTokens int
@@ -698,7 +707,7 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 			relayInfo.PlatformPreAuthID = 0
 
 			// Report usage for VIP accumulation (async, non-critical)
-			gopool.Go(func() {
+			AsyncGo(func() {
 				rptCtx, rptCancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer rptCancel()
 				common.ReportLLMUsageGRPC(rptCtx, accountID, amountLB)
@@ -707,7 +716,7 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 			})
 		} else {
 			// Legacy path: fire-and-forget debit (no pre-auth)
-			gopool.Go(func() {
+			AsyncGo(func() {
 				debitCtx, debitCancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer debitCancel()
 				if _, debitErr := common.DebitWalletGRPC(debitCtx, accountID, amountLB, "llm_usage",
@@ -774,7 +783,7 @@ func reportQuotaThreshold(ctx context.Context, relayInfo *relaycommon.RelayInfo,
 }
 
 func checkAndSendQuotaNotify(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int) {
-	gopool.Go(func() {
+	AsyncGo(func() {
 		userSetting := relayInfo.UserSetting
 		threshold := common.QuotaRemindThreshold
 		if userSetting.QuotaWarningThreshold != 0 {

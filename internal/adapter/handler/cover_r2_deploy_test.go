@@ -700,9 +700,9 @@ func TestR2Depl_ResolvePlaygroundBaseURL(t *testing.T) {
 	t.Cleanup(func() {
 		playgroundUpstreamBaseURL = prevOverride
 		if hadPort {
-			os.Setenv("PORT", prevPort)
+			_ = os.Setenv("PORT", prevPort)
 		} else {
-			os.Unsetenv("PORT")
+			_ = os.Unsetenv("PORT")
 		}
 	})
 
@@ -715,7 +715,7 @@ func TestR2Depl_ResolvePlaygroundBaseURL(t *testing.T) {
 
 	t.Run("port_env", func(t *testing.T) {
 		playgroundUpstreamBaseURL = ""
-		os.Setenv("PORT", "8123")
+		_ = os.Setenv("PORT", "8123")
 		if got := resolvePlaygroundBaseURL(); got != "http://127.0.0.1:8123" {
 			t.Errorf("got %q, want port-derived", got)
 		}
@@ -723,7 +723,7 @@ func TestR2Depl_ResolvePlaygroundBaseURL(t *testing.T) {
 
 	t.Run("default_port", func(t *testing.T) {
 		playgroundUpstreamBaseURL = ""
-		os.Unsetenv("PORT")
+		_ = os.Unsetenv("PORT")
 		if got := resolvePlaygroundBaseURL(); got != "http://127.0.0.1:3000" {
 			t.Errorf("got %q, want default 3000", got)
 		}

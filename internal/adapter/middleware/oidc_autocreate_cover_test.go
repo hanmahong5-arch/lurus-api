@@ -55,7 +55,7 @@ func TestMapOIDCUserToLurus_AutoCreateUserOnly(t *testing.T) {
 		t.Fatalf("create tenant: %v", err)
 	}
 	_ = os.Setenv("OIDC_AUTO_CREATE_USER", "true")
-	defer os.Unsetenv("OIDC_AUTO_CREATE_USER")
+	defer func() { _ = os.Unsetenv("OIDC_AUTO_CREATE_USER") }()
 
 	claims := &OIDCClaims{OrgID: "existing-org", Email: "fresh@existing.test", Name: "Fresh", PreferredUsername: "fresh"}
 	claims.Subject = "fresh-sub"

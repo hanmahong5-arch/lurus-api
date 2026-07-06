@@ -65,7 +65,7 @@ func TestDoDownloadRequest_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DoDownloadRequest: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want 200", resp.StatusCode)
 	}
@@ -79,7 +79,10 @@ func TestDoDownloadRequest_SSRFReject(t *testing.T) {
 	fs.AllowPrivateIp = false
 	t.Cleanup(func() { fs.EnableSSRFProtection, fs.AllowPrivateIp = prevSSRF, prevPriv })
 
-	_, err := DoDownloadRequest("http://127.0.0.1:1/x")
+	resp, err := DoDownloadRequest("http://127.0.0.1:1/x")
+	if resp != nil {
+		defer func() { _ = resp.Body.Close() }()
+	}
 	if err == nil {
 		t.Fatal("expected SSRF rejection for loopback download")
 	}
@@ -87,7 +90,10 @@ func TestDoDownloadRequest_SSRFReject(t *testing.T) {
 
 func TestDoWorkerRequest_NotEnabled(t *testing.T) {
 	// Worker mode is off by default => immediate error.
-	_, err := DoWorkerRequest(&WorkerRequest{URL: "https://example.com"})
+	resp, err := DoWorkerRequest(&WorkerRequest{URL: "https://example.com"})
+	if resp != nil {
+		defer func() { _ = resp.Body.Close() }()
+	}
 	if err == nil {
 		t.Fatal("expected error when worker mode is disabled")
 	}
@@ -105,7 +111,10 @@ func TestDoWorkerRequest_HTTPTargetRejectedWhenNotAllowed(t *testing.T) {
 		system_setting.WorkerAllowHttpImageRequestEnabled = prevAllow
 	})
 
-	_, err := DoWorkerRequest(&WorkerRequest{URL: "http://insecure.example.com/x"})
+	resp, err := DoWorkerRequest(&WorkerRequest{URL: "http://insecure.example.com/x"})
+	if resp != nil {
+		defer func() { _ = resp.Body.Close() }()
+	}
 	if err == nil {
 		t.Fatal("expected 'only support https url' rejection")
 	}

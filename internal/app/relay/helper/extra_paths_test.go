@@ -84,12 +84,15 @@ func wsDial(t *testing.T) (*websocket.Conn, func()) {
 		}
 	}))
 	url := "ws" + strings.TrimPrefix(srv.URL, "http")
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	conn, resp, err := websocket.DefaultDialer.Dial(url, nil)
+	if resp != nil {
+		defer func() { _ = resp.Body.Close() }()
+	}
 	if err != nil {
 		srv.Close()
 		t.Fatalf("dial: %v", err)
 	}
-	return conn, func() { conn.Close(); srv.Close() }
+	return conn, func() { _ = conn.Close(); srv.Close() }
 }
 
 func TestWssHelpers(t *testing.T) {

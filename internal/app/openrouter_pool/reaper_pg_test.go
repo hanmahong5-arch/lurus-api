@@ -2,6 +2,7 @@ package openrouter_pool
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -233,7 +234,7 @@ func TestReapOnce_CancelledContext_ReturnsErr(t *testing.T) {
 	cancel() // cancel before the loop reaches the channel
 
 	err := ReapOnce(ctx, fixedNow(now))
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}
 }

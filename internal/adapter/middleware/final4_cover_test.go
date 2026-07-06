@@ -26,7 +26,7 @@ func TestReleaseDownloadGate_EndToEnd_NoEntitlement(t *testing.T) {
 	}
 
 	_ = os.Setenv("RELEASE_GATED_PRODUCTS", "lurus-switch")
-	defer os.Unsetenv("RELEASE_GATED_PRODUCTS")
+	defer func() { _ = os.Unsetenv("RELEASE_GATED_PRODUCTS") }()
 
 	r := gin.New()
 	r.Use(gin.Recovery())

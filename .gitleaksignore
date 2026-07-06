@@ -11,3 +11,13 @@
 # separate (force-push) rewrite decision — not required since the creds are dead.
 fbff5649ac0d66be63b135cccd40217ae08856d4:doc/seam-s1-stage-worklog-2026-06-21.md:generic-api-key:50
 fbff5649ac0d66be63b135cccd40217ae08856d4:doc/seam-s1-stage-worklog-2026-06-21.md:generic-api-key:97
+
+# Fake placeholder keys in coverage test files (commit ed0b260c), not secrets:
+#   writer_pg_test.go: UsingKey "sk-or-v1-anything" — a non-existent OpenRouter
+#     key used to drive MaybeMarkCooldown's GetChannelById-miss branch.
+#   relay_coverage_gap_test.go: ContextKeyChannelKey "sk-ant-key" — a dummy
+#     Anthropic key set on a gin context for a relay dispatch unit test.
+# Both are literal test placeholders; no live credential. Fingerprints pin the
+# exact commit+line the generic-api-key entropy rule flagged.
+ed0b260cd7604fe746f36cb2bd6bd37973dad47e:internal/app/openrouter_pool/writer_pg_test.go:generic-api-key:134
+ed0b260cd7604fe746f36cb2bd6bd37973dad47e:internal/app/relay/relay_coverage_gap_test.go:generic-api-key:238

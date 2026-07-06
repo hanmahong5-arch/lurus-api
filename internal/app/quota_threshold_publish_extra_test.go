@@ -27,7 +27,6 @@ func (f *fakeThresholdPublisher) Publish(_ context.Context, _ string, payload an
 
 type fakeDeduper struct {
 	setResults map[string]bool
-	firstCall  bool
 }
 
 func (f *fakeDeduper) SetNXBool(_ context.Context, key string, _ time.Duration) (bool, error) {

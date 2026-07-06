@@ -42,7 +42,9 @@ func TestStreamScannerHandler_NilGuards(t *testing.T) {
 	info := &relaycommon.RelayInfo{}
 	// nil resp / nil handler must return immediately without panic.
 	StreamScannerHandler(c, nil, info, func(string) bool { return true })
-	StreamScannerHandler(c, respFromString("data: x\n"), info, nil)
+	resp := respFromString("data: x\n")
+	defer func() { _ = resp.Body.Close() }()
+	StreamScannerHandler(c, resp, info, nil)
 }
 
 func TestStreamScannerHandler_ParsesFramesUntilDone(t *testing.T) {
@@ -60,7 +62,9 @@ func TestStreamScannerHandler_ParsesFramesUntilDone(t *testing.T) {
 		collected []string
 	)
 	sawDone := false
-	StreamScannerHandler(c, respFromString(body), info, func(data string) bool {
+	resp := respFromString(body)
+	defer func() { _ = resp.Body.Close() }()
+	StreamScannerHandler(c, resp, info, func(data string) bool {
 		mu.Lock()
 		collected = append(collected, data)
 		mu.Unlock()
@@ -88,7 +92,9 @@ func TestStreamScannerHandler_HandlerFalseStops(t *testing.T) {
 		mu        sync.Mutex
 		collected []string
 	)
-	StreamScannerHandler(c, respFromString(body), info, func(data string) bool {
+	resp := respFromString(body)
+	defer func() { _ = resp.Body.Close() }()
+	StreamScannerHandler(c, resp, info, func(data string) bool {
 		mu.Lock()
 		collected = append(collected, data)
 		n := len(collected)
@@ -116,7 +122,9 @@ func TestStreamScannerHandler_EOFWithoutDone(t *testing.T) {
 	var count int
 	var mu sync.Mutex
 	sawDone := false
-	StreamScannerHandler(c, respFromString(body), info, func(string) bool {
+	resp := respFromString(body)
+	defer func() { _ = resp.Body.Close() }()
+	StreamScannerHandler(c, resp, info, func(string) bool {
 		mu.Lock()
 		count++
 		mu.Unlock()
@@ -149,7 +157,9 @@ func TestStreamScannerHandler_SkipsShortAndNonDataLines(t *testing.T) {
 		mu        sync.Mutex
 		collected []string
 	)
-	StreamScannerHandler(c, respFromString(body), info, func(data string) bool {
+	resp := respFromString(body)
+	defer func() { _ = resp.Body.Close() }()
+	StreamScannerHandler(c, resp, info, func(data string) bool {
 		mu.Lock()
 		collected = append(collected, data)
 		mu.Unlock()
