@@ -13,14 +13,15 @@ import (
 // is why this lives in-package.
 func resetInitGlobals(t *testing.T) {
 	t.Helper()
-	prevOnce := globalOnce
+	// sync.Once cannot be copied (copylocks); restore to a fresh Once, which is
+	// the clean "Init not yet run" baseline, instead of snapshotting the value.
 	prevGlobal := global
 	prevErr := globalErr
 	globalOnce = sync.Once{}
 	global = nil
 	globalErr = nil
 	t.Cleanup(func() {
-		globalOnce = prevOnce
+		globalOnce = sync.Once{}
 		global = prevGlobal
 		globalErr = prevErr
 	})
