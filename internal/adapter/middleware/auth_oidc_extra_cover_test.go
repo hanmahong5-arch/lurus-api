@@ -136,15 +136,19 @@ func TestInitOIDCAuth_Success(t *testing.T) {
 	jwks := JWKSet{Keys: []JWK{rsaPublicKeyToJWK(pub, "init-kid")}}
 	srv := createTestJWKSServer(t, jwks)
 
-	// Pre-build a cancelable JWKS manager and consume jwksManagerOnce so that
-	// InitOIDCAuth's own jwksManagerOnce.Do is a no-op. InitOIDCAuth otherwise
-	// constructs the manager via NewJWKSManager (context.Background()), whose
-	// background refresh goroutine can never be stopped — a leak that
-	// accumulates in the shared test binary. This keeps the success path fully
-	// exercised while leaving no dangling goroutine.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	jwksManager = NewJWKSManagerWithContext(ctx, srv.URL)
+	// Pre-build the JWKS manager as a plain struct — deliberately NOT via
+	// NewJWKSManagerWithContext — so it spawns no background auto-refresh
+	// goroutine. That goroutine reads the package global jwksRefreshInterval at
+	// startup, and (SafeGoWithContext offers no join, so cancel only signals) it
+	// can outlive this test and race the very next test, which mutates
+	// jwksRefreshInterval. getKeyWithRefresh below fetches synchronously, which
+	// is all the success-path assertion needs. Consuming jwksManagerOnce makes
+	// InitOIDCAuth's own manager construction a no-op.
+	jwksManager = &JWKSManager{
+		jwksURI:            srv.URL,
+		publicKeys:         make(map[string]*rsa.PublicKey),
+		minRefreshInterval: 30 * time.Second,
+	}
 	jwksManagerOnce.Do(func() {})
 
 	_ = os.Setenv("OIDC_ENABLED", "true")
