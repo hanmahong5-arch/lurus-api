@@ -1,0 +1,132 @@
+package middleware
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/LurusTech/lurus-hub/internal/pkg/common"
+	"github.com/LurusTech/lurus-hub/internal/pkg/setting"
+
+	"github.com/gin-gonic/gin"
+)
+
+// rateLimitFactory's Redis branch is only taken when RedisEnabled is true; wire
+// miniredis so the returned closure drives redisRateLimiter (not the in-memory
+// path) and enforces the limit end-to-end.
+func TestRateLimitFactory_RedisBranch_Enforces(t *testing.T) {
+	_, _, cleanup := withMiniRedis(t)
+	defer cleanup()
+
+	f := rateLimitFactory(1, 3600, "FAC")
+	run := func(ip string) int {
+		r := gin.New()
+		r.GET("/f", f, func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+		req := httptest.NewRequest(http.MethodGet, "/f", nil)
+		req.RemoteAddr = ip + ":1"
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w.Code
+	}
+	if code := run("198.51.100.5"); code != http.StatusOK {
+		t.Fatalf("first = %d, want 200", code)
+	}
+	if code := run("198.51.100.5"); code != http.StatusTooManyRequests {
+		t.Errorf("second = %d, want 429", code)
+	}
+}
+
+// InternalApiRateLimit → keyedRateLimitFactory's Redis branch, keyed by the
+// authenticated internal_api_key_id. A second call from the SAME key id (even
+// from a different source IP) shares one bucket and is throttled, proving the
+// P0-3 per-key bucketing rather than per-IP.
+func TestInternalApiRateLimit_RedisBranch_PerKey(t *testing.T) {
+	_, _, cleanup := withMiniRedis(t)
+	defer cleanup()
+
+	prevEnable := common.InternalApiRateLimitEnable
+	common.InternalApiRateLimitEnable = true
+	defer func() { common.InternalApiRateLimitEnable = prevEnable }()
+
+	mw := InternalApiRateLimit(1, 3600, "IK1")
+	run := func(keyID int, ip string) int {
+		r := gin.New()
+		r.Use(func(c *gin.Context) { c.Set("internal_api_key_id", keyID); c.Next() })
+		r.GET("/i", mw, func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+		req := httptest.NewRequest(http.MethodGet, "/i", nil)
+		req.RemoteAddr = ip + ":1"
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w.Code
+	}
+	if code := run(4242, "203.0.113.1"); code != http.StatusOK {
+		t.Fatalf("first (key 4242) = %d, want 200", code)
+	}
+	// Same key id, different IP → same bucket → throttled.
+	if code := run(4242, "203.0.113.99"); code != http.StatusTooManyRequests {
+		t.Errorf("second (key 4242, new IP) = %d, want 429 (per-key bucket)", code)
+	}
+	// A different key id is unaffected.
+	if code := run(4343, "203.0.113.99"); code != http.StatusOK {
+		t.Errorf("other key 4343 = %d, want 200 (buckets isolate by key id)", code)
+	}
+}
+
+// InternalApiRateLimit returns a no-op passthrough when the feature is disabled.
+func TestInternalApiRateLimit_Disabled_Passthrough(t *testing.T) {
+	prevEnable := common.InternalApiRateLimitEnable
+	common.InternalApiRateLimitEnable = false
+	defer func() { common.InternalApiRateLimitEnable = prevEnable }()
+
+	r := gin.New()
+	r.GET("/i", InternalApiRateLimit(1, 3600, "OFF"), func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+	for i := 0; i < 3; i++ {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/i", nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("disabled limiter must always pass, got %d on call %d", w.Code, i)
+		}
+	}
+}
+
+// redisRateLimitHandler must return 500 when the success-count check errors
+// (a corrupt stored timestamp at capacity is unparseable).
+func TestRedisRateLimitHandler_SuccessCheckError_500(t *testing.T) {
+	_, rdb, cleanup := withMiniRedis(t)
+	defer cleanup()
+
+	prevEnabled := setting.ModelRequestRateLimitEnabled
+	prevCount := setting.ModelRequestRateLimitCount
+	prevSuccess := setting.ModelRequestRateLimitSuccessCount
+	setting.ModelRequestRateLimitEnabled = true
+	setting.ModelRequestRateLimitCount = 0
+	setting.ModelRequestRateLimitSuccessCount = 1
+	defer func() {
+		setting.ModelRequestRateLimitEnabled = prevEnabled
+		setting.ModelRequestRateLimitCount = prevCount
+		setting.ModelRequestRateLimitSuccessCount = prevSuccess
+	}()
+
+	const uid = 990301
+	// Pre-seed the success key at capacity (len==1) with an unparseable entry so
+	// checkRedisRateLimit reaches the time.Parse error branch → handler 500.
+	if err := rdb.LPush(context.Background(), "rateLimit:MRRLS:990301", "corrupt").Err(); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	code, _ := runModelRateLimitMR(uid)
+	if code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500 (rate-limit check failure)", code)
+	}
+}
+
+// RootJWTAuth must reject a malformed Bearer token with 401 once OIDC is active.
+func TestRootJWTAuth_InvalidToken_401(t *testing.T) {
+	ctx := setupIntegrationTest(t)
+	defer ctx.Cleanup()
+
+	w := doBearer(mountJWT(RootJWTAuth()), "not.a.valid.jwt")
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401 for malformed token; body=%s", w.Code, w.Body.String())
+	}
+}
