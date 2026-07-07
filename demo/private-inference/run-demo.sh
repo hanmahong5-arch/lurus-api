@@ -62,6 +62,20 @@ if [ "${1:-}" = "stop" ]; then
   exit 0
 fi
 
+# --- 0) prerequisites --------------------------------------------------------
+step "0/5 prerequisites"
+missing=""
+for cmd in docker go bun curl; do
+  command -v "$cmd" >/dev/null 2>&1 || missing="$missing $cmd"
+done
+if [ -n "$missing" ]; then
+  echo "!! missing required tool(s):$missing"
+  echo "   install them first (README.md Prerequisites): docker (demo PG), go (backend),"
+  echo "   bun (mock endpoint), curl (proof call)."
+  exit 1
+fi
+echo "docker/go/bun/curl all present"
+
 # --- 1) demo Postgres (docker) -----------------------------------------------
 step "1/5 Postgres (docker container '$PG_CONTAINER', port $PG_PORT)"
 
@@ -162,7 +176,20 @@ if curl -s "http://127.0.0.1:${MOCK_PORT}/v1/models" >/dev/null 2>&1; then
 else
   nohup bun "$DEMO_DIR/mock-openai-endpoint.mjs" > "$LOG_DIR/mock.log" 2>&1 &
   echo $! > "$LOG_DIR/mock.pid"
-  sleep 1
+  # Poll for the port to actually bind before the step-5 proof call fires —
+  # a bare `sleep 1` races a slow bun startup and yields a flaky connection-refused.
+  echo -n "waiting for mock endpoint to bind :$MOCK_PORT"
+  mock_ok=false
+  for _ in $(seq 1 30); do
+    if curl -s "http://127.0.0.1:${MOCK_PORT}/v1/models" >/dev/null 2>&1; then mock_ok=true; echo " ok"; break; fi
+    if grep -qiE "^error|Error:" "$LOG_DIR/mock.log" 2>/dev/null; then
+      echo; echo "!! mock endpoint failed to start — tail of $LOG_DIR/mock.log:"; tail -n 20 "$LOG_DIR/mock.log" || true; exit 1
+    fi
+    echo -n "."; sleep 1
+  done
+  if [ "$mock_ok" != true ]; then
+    echo; echo "!! mock endpoint did not bind :$MOCK_PORT within 30s — tail of $LOG_DIR/mock.log:"; tail -n 20 "$LOG_DIR/mock.log" || true; exit 1
+  fi
 fi
 
 # --- 5) the proof: one real relay call as tenant privacy-demo ----------------

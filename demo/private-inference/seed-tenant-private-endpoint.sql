@@ -34,7 +34,7 @@ INSERT INTO users (id, tenant_id, username, role, status, quota, "group")
 VALUES (9100, 'privacy-demo', 'privacy-demo-user', 1, 1, 100000000, 'default')
 ON CONFLICT (id) DO NOTHING;
 
--- 3) A relay token for that user. Key is 48 chars, NO dashes (a dash would be
+-- 3) A relay token for that user. Key is 45 chars, NO dashes (a dash would be
 --    parsed as an admin "specify channel id" suffix). group='' => inherits the
 --    user's 'default' group, side-stepping per-group ratio validation.
 INSERT INTO tokens (user_id, tenant_id, key, status, name, "group", unlimited_quota, remain_quota, expired_time, created_time, accessed_time)

@@ -76,10 +76,17 @@ on faith:
    recording the hit (in this demo, that's the mock's `[PRIVATE-ENDPOINT HIT]`
    banner; in production it's whatever access log their vLLM/Ollama/TGI
    instance already keeps).
-3. **Tenant isolation is structural, not a filter** — the routing decision is
-   made by which `channel`/`ability` rows exist for that tenant's group, not
-   by an if-statement that could special-case around it; the same code path
-   that dispatches every other tenant's requests is what this uses.
+3. **Tenant isolation is by channel-group scoping, not a per-tenant `if`** — the
+   relay dispatches by the `channel`/`ability` rows matching the request's
+   **group** (`"group" = ? AND model = ? AND enabled = ?`); there is no
+   per-tenant special-case branch, and the same code path serves every tenant.
+   Two honest preconditions for a security reviewer: (a) this private-inference
+   delivery is a **dedicated instance** for the customer, so their traffic is
+   isolated by construction — no other tenant's channels exist to route to;
+   (b) on a *shared* multi-tenant instance the guarantee is only as strong as
+   group assignment — each tenant must get a **unique group** (not the
+   schema-default `"default"`), because isolation is enforced at the group
+   boundary, not by a `tenant_id` column on the channel-selection query.
 4. **No code fork** — this is stock New API channel abstraction
    (`ChannelTypeCustom`); nothing about the private-routing capability
    required a patch to newhub itself. If a customer's security review wants

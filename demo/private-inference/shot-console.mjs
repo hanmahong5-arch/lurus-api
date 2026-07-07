@@ -20,7 +20,16 @@
 //                        — NOT the role=1 user from seed-tenant-private-endpoint.sql,
 //                        since GET .../channels is admin-gated)
 //   TENANT_SLUG         default privacy-demo
-import pw from 'file:///C:/Users/Anita/Desktop/lurus/2b-svc-newhub/web/node_modules/playwright-core/index.js';
+import path from 'node:path';
+import os from 'node:os';
+import fs from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+// Resolve playwright-core RELATIVE to this script (it lives in web/node_modules)
+// so the demo runs on any clone / any OS — never tied to one absolute checkout.
+const _here = path.dirname(fileURLToPath(import.meta.url));
+const _pwEntry = path.join(_here, '..', '..', 'web', 'node_modules', 'playwright-core', 'index.js');
+const pw = (await import(pathToFileURL(_pwEntry).href)).default;
 const { chromium } = pw;
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8099';
@@ -99,6 +108,10 @@ await page.setContent(`<!doctype html><html><head><meta charset="utf-8"/>
 </div></body></html>`);
 
 await page.waitForTimeout(800);
-await page.screenshot({ path: 'C:/Users/Anita/AppData/Local/Temp/hifi-preview/private-routing-console.png', fullPage: true });
+const _shotDir = path.join(os.tmpdir(), 'hifi-preview');
+fs.mkdirSync(_shotDir, { recursive: true });
+const _shotPath = path.join(_shotDir, 'private-routing-console.png');
+await page.screenshot({ path: _shotPath, fullPage: true });
+console.log('[shot-console] screenshot →', _shotPath);
 console.log('rendered channels:', JSON.stringify(data.map((c) => ({ id: c.id, name: c.name, type: c.type, base_url: c.base_url }))));
 await browser.close();

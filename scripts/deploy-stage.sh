@@ -19,8 +19,12 @@
 #   LURUS_WHITELABEL_MASTER_SECRET
 #
 # Overrides (env):
-#   SSH_HOST     default root@100.98.57.55  — kubectl-capable jump host (lurus/CLAUDE.md)
-#   NAMESPACE    default lurus-staging       — PG pg-access-control netpol-whitelisted ns
+#   SSH_HOST     default root@100.122.83.20 — R6 STAGE node itself (Tailscale); root's
+#                bare kubectl is k3s-configured, so no KUBECONFIG export is needed.
+#                (The old default root@100.98.57.55 is a DIFFERENT host, not R6.)
+#   NAMESPACE    default lurus-newhub        — the ns the live serving Deployment/Service
+#                actually runs in. (The `database` PG netpol that once forced
+#                lurus-staging is gone — `kubectl get netpol -n database` is empty.)
 #   OVERLAY      default deploy/k8s/r6-stage — platform-identity path (secret
 #                lurus-newhub-secrets). Set to deploy/k8s/staging for the Zitadel
 #                overlay (its secret is lurus-newhub-staging-secrets — see
@@ -36,8 +40,8 @@
 
 set -euo pipefail
 
-SSH_HOST="${SSH_HOST:-root@100.98.57.55}"
-NAMESPACE="${NAMESPACE:-lurus-staging}"
+SSH_HOST="${SSH_HOST:-root@100.122.83.20}"
+NAMESPACE="${NAMESPACE:-lurus-newhub}"
 DEPLOYMENT="lurus-newhub"
 OVERLAY="${OVERLAY:-deploy/k8s/r6-stage}"
 SECRET_NAME="${SECRET_NAME:-lurus-newhub-secrets}"
