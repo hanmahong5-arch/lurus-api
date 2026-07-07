@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: lurus-newhub
-  namespace: lurus-staging
+  namespace: lurus-newhub
   labels:
     app: lurus-newhub
     environment: stage
@@ -37,12 +37,13 @@ spec:
         fsGroup: 65534
       containers:
         - name: lurus-newhub
-          # NOTE: STAGE tracks the floating "main" tag with imagePullPolicy=Always.
-          # Pin to ghcr.io/hanmahong5-arch/lurus-newhub:main-<sha7> before promoting to PROD.
-          # GHCR repository name follows GitHub repo name (hanmahong5-arch/lurus-newhub);
-          # the legacy `lurus-api` tag still exists with stale 4-23 image.
-          image: ghcr.io/hanmahong5-arch/lurus-newhub:main
-          imagePullPolicy: Always
+          # Pinned to an immutable digest (was floating "main"). Digest resolved
+          # 2026-07-03 from BOTH the live R6 pod imageID and the registry :main
+          # manifest — they agree, so this is exactly what STAGE runs today.
+          # To roll forward: repull :main, re-resolve the digest, update here.
+          # GHCR repository name follows the GitHub repo name (hanmahong5-arch/lurus-newhub).
+          image: ghcr.io/hanmahong5-arch/lurus-newhub@sha256:f97c72b499c7a208819af0e5cd35f6e857fe72d988643348a2d1d62547976c2d
+          imagePullPolicy: IfNotPresent
           # Container hardening (parity with base): no priv-escalation, read-only
           # root FS (writes go to the /data + /tmp emptyDirs below), drop all caps.
           securityContext:
@@ -74,7 +75,7 @@ spec:
               value: "redis://redis.lurus-system.svc.cluster.local:6379/2"
             - name: SESSION_COOKIE_DOMAIN
               value: "test-newhub.lurus.cn"
-            - name: ZITADEL_ENABLED
+            - name: OIDC_ENABLED
               value: "false"
             - name: MEILISEARCH_ENABLED
               value: "false"

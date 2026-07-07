@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
 	relaycommon "github.com/LurusTech/lurus-hub/internal/adapter/provider/common"
@@ -13,7 +14,7 @@ import (
 
 func geminiInfo() *relaycommon.RelayInfo {
 	return &relaycommon.RelayInfo{
-		IsStream:   false,
+		IsStream:    false,
 		ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: "gpt-4o"},
 	}
 }
@@ -168,5 +169,84 @@ func TestGeminiToOpenAIRequest_InlineImage(t *testing.T) {
 	}
 	if img := parts[0].GetImageMedia(); img == nil || img.Url != "data:image/png;base64,QUJD" {
 		t.Errorf("image url = %v, want data:image/png;base64,QUJD", img)
+	}
+}
+
+func TestGeminiToOpenAIRequest_FileDataBecomesImageUrl(t *testing.T) {
+	req := &dto.GeminiChatRequest{
+		Contents: []dto.GeminiChatContent{
+			{Role: "user", Parts: []dto.GeminiPart{
+				{FileData: &dto.GeminiFileData{MimeType: "image/jpeg", FileUri: "gs://bucket/pic.jpg"}},
+			}},
+		},
+	}
+	out, err := GeminiToOpenAIRequest(req, geminiInfo())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	parts := out.Messages[0].ParseContent()
+	if len(parts) != 1 || parts[0].Type != "image_url" {
+		t.Fatalf("parts = %+v, want one image_url", parts)
+	}
+	if img := parts[0].GetImageMedia(); img == nil || img.Url != "gs://bucket/pic.jpg" {
+		t.Errorf("file uri = %v, want gs://bucket/pic.jpg", img)
+	}
+}
+
+func TestGeminiToOpenAIRequest_FunctionCallBecomesToolCall(t *testing.T) {
+	req := &dto.GeminiChatRequest{
+		Contents: []dto.GeminiChatContent{
+			{Role: "model", Parts: []dto.GeminiPart{
+				{FunctionCall: &dto.FunctionCall{
+					FunctionName: "get_weather",
+					Arguments:    map[string]any{"city": "SF"},
+				}},
+			}},
+		},
+	}
+	out, err := GeminiToOpenAIRequest(req, geminiInfo())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out.Messages) != 1 {
+		t.Fatalf("expected one assistant message, got %+v", out.Messages)
+	}
+	tcs := out.Messages[0].ParseToolCalls()
+	if len(tcs) != 1 {
+		t.Fatalf("expected one tool call, got %d", len(tcs))
+	}
+	if tcs[0].Function.Name != "get_weather" {
+		t.Errorf("tool call name = %q, want get_weather", tcs[0].Function.Name)
+	}
+}
+
+func TestGeminiToOpenAIRequest_FunctionResponseBecomesToolMessage(t *testing.T) {
+	req := &dto.GeminiChatRequest{
+		Contents: []dto.GeminiChatContent{
+			{Role: "user", Parts: []dto.GeminiPart{
+				{FunctionResponse: &dto.GeminiFunctionResponse{
+					Name:     "get_weather",
+					Response: map[string]interface{}{"temp": "25C"},
+				}},
+			}},
+		},
+	}
+	out, err := GeminiToOpenAIRequest(req, geminiInfo())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// A function response is emitted as a standalone role:"tool" message.
+	var toolMsg *dto.Message
+	for i := range out.Messages {
+		if out.Messages[i].Role == "tool" {
+			toolMsg = &out.Messages[i]
+			break
+		}
+	}
+	if toolMsg == nil {
+		t.Fatalf("expected a role:tool message, got %+v", out.Messages)
+	}
+	if !strings.Contains(toolMsg.StringContent(), "25C") {
+		t.Errorf("tool message content = %q, want the response payload", toolMsg.StringContent())
 	}
 }

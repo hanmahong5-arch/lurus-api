@@ -33,7 +33,10 @@ func SetBillingUnifiedEnabled(v bool) {
 }
 
 func init() {
-	// Preserve backward compat: BILLING_UNIFIED_ENABLED=true starts the flag ON.
+	// Safe default only: package init runs BEFORE main() loads .env, so a
+	// .env-only BILLING_UNIFIED_ENABLED=true would not be visible here yet.
+	// The authoritative read happens in RefreshIdentityClientEnv (identity_client.go),
+	// called post-.env from InitResources.
 	SetBillingUnifiedEnabled(os.Getenv("BILLING_UNIFIED_ENABLED") == "true")
 }
 

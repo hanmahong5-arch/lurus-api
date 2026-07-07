@@ -1,73 +1,70 @@
 import { test, expect } from '@playwright/test';
+import {
+  BRIDGE_TOKEN,
+  BRIDGE_SKIP,
+  loginViaBridge,
+  gotoDashboard,
+  v2,
+} from './helpers/auth';
 
 /**
  * Story 11-2 DoD §e2e:
  *   "log in via Layer C bridge → land on v2 dashboard → create token →
  *    see it in token list → log out → log back in → token still there."
  *
- * Required env (not committed; injected at runtime):
- *   E2E_BASE_URL              default https://test-newhub.lurus.cn
- *   E2E_BRIDGE_TOKEN          Layer C bridge auth token (skip OIDC interactive flow)
- *   E2E_TENANT_SLUG           e.g. "default"
+ * REWRITTEN 2026-06-20: the bridge is POST + required user_id (was GET in the
+ * old spec); tenant slug is `lurus` (the seeded default tenant's routable slug,
+ * not the bridge's cosmetic "default"). See helpers/auth.ts.
  *
- * When credentials are not set the spec test.skip()s with a clear reason —
- * it does NOT silently pass (avoid §4.1 ⑥ marker-vs-measurement trap).
+ * Fully local-testable (no external provider needed).
  */
-
-const BRIDGE_TOKEN = process.env.E2E_BRIDGE_TOKEN;
-const TENANT_SLUG = process.env.E2E_TENANT_SLUG || 'default';
-
 test.describe('Story 11-2 — token persistence across re-login', () => {
-  test.skip(
-    !BRIDGE_TOKEN,
-    'E2E_BRIDGE_TOKEN not set — skipping STAGE e2e. ' +
-      'Set the Layer C bridge token to run this spec. ' +
-      'See _bmad-output/planning-artifacts/story-11-2-v2-wiring-mvp.md',
-  );
+  test.skip(!BRIDGE_TOKEN, BRIDGE_SKIP);
 
   const tokenName = `e2e-persistence-${Date.now()}`;
-  let createdTokenId: string | null = null;
+  let createdTokenId = '';
 
-  test('create → relogin → token persists', async ({ page, request }) => {
-    // ── Step 1: log in via Layer C bridge ──────────────────────────────
-    await page.goto(`/api/v2/bridge/exchange?token=${BRIDGE_TOKEN}`);
+  test('create → relogin → token persists', async ({ page }) => {
+    // Step 1: shared session lands on dashboard.
+    await gotoDashboard(page);
 
-    // Expect redirect to v2 dashboard.
-    await expect(page).toHaveURL(/\/console\/v2\/dashboard/, {
-      timeout: 10_000,
-    });
-
-    // ── Step 2: create a token via API (faster than UI form) ───────────
-    const createRes = await request.post(`/api/v2/${TENANT_SLUG}/tokens`, {
+    // Step 2: create a token via API (faster than the UI form).
+    const createRes = await page.request.post(v2('/tokens'), {
       data: { name: tokenName, remain_quota: 1000 },
     });
-    expect(createRes.ok()).toBeTruthy();
-    const created = await createRes.json();
-    createdTokenId = String(created?.data?.id ?? '');
+    expect(
+      createRes.ok(),
+      `create token: HTTP ${createRes.status()} ${await createRes.text()}`,
+    ).toBeTruthy();
+    createdTokenId = String((await createRes.json())?.data?.id ?? '');
     expect(createdTokenId).toBeTruthy();
 
-    // ── Step 3: confirm in v2 Token page UI ────────────────────────────
+    // Step 3: confirm in the v2 Token page UI.
     await page.goto('/console/v2/token');
-    await expect(page.getByText(tokenName)).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.getByText(tokenName, { exact: true }).first(),
+    ).toBeVisible({ timeout: 15_000 });
 
-    // ── Step 4: log out ────────────────────────────────────────────────
+    // Step 4: log out (drop the session cookie).
     await page.context().clearCookies();
-    await page.goto('/');
 
-    // ── Step 5: log back in via bridge ─────────────────────────────────
-    await page.goto(`/api/v2/bridge/exchange?token=${BRIDGE_TOKEN}`);
+    // Step 5: log back in via bridge.
+    await loginViaBridge(page);
+    await page.goto('/console/v2/dashboard');
     await expect(page).toHaveURL(/\/console\/v2\/dashboard/, {
-      timeout: 10_000,
+      timeout: 15_000,
     });
 
-    // ── Step 6: assert token still in list ─────────────────────────────
+    // Step 6: token still present after re-login.
     await page.goto('/console/v2/token');
-    await expect(page.getByText(tokenName)).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.getByText(tokenName, { exact: true }).first(),
+    ).toBeVisible({ timeout: 15_000 });
   });
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ page }) => {
     if (createdTokenId) {
-      await request.delete(`/api/v2/${TENANT_SLUG}/tokens/${createdTokenId}`);
+      await page.request.delete(v2(`/tokens/${createdTokenId}`));
     }
   });
 });

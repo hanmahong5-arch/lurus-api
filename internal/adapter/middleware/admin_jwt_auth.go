@@ -12,7 +12,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// AdminJWTAuth validates a Zitadel JWT and requires the "admin" role.
+// AdminJWTAuth validates a OIDC JWT and requires the "admin" role.
 // Used by v2 API routes that receive JWT tokens from external clients.
 // For v1 web UI routes, use AdminAuth() (session-based) instead.
 func AdminJWTAuth() gin.HandlerFunc {
@@ -25,16 +25,17 @@ func AdminJWTAuth() gin.HandlerFunc {
 			return
 		}
 
-		if !zitadelEnabled || jwksManager == nil {
+		if !oidcEnabled || jwksManager == nil {
 			authHelper(c, common.RoleAdminUser)
 			return
 		}
 
 		claims, err := validateJWT(c)
 		if err != nil {
+			common.SysError(fmt.Sprintf("AdminJWTAuth: token validation failed: %v", err))
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
-				"message": err.Error(),
+				"message": "unauthorized",
 			})
 			c.Abort()
 			return
@@ -71,16 +72,17 @@ func RootJWTAuth() gin.HandlerFunc {
 			return
 		}
 
-		if !zitadelEnabled || jwksManager == nil {
+		if !oidcEnabled || jwksManager == nil {
 			authHelper(c, common.RoleRootUser)
 			return
 		}
 
 		claims, err := validateJWT(c)
 		if err != nil {
+			common.SysError(fmt.Sprintf("RootJWTAuth: token validation failed: %v", err))
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
-				"message": err.Error(),
+				"message": "unauthorized",
 			})
 			c.Abort()
 			return
@@ -105,7 +107,7 @@ func RootJWTAuth() gin.HandlerFunc {
 }
 
 // validateJWT extracts and validates a Bearer JWT from the Authorization header.
-func validateJWT(c *gin.Context) (*ZitadelClaims, error) {
+func validateJWT(c *gin.Context) (*OIDCClaims, error) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
 		return nil, errors.New("Authorization header required")
@@ -117,7 +119,7 @@ func validateJWT(c *gin.Context) (*ZitadelClaims, error) {
 		return nil, errors.New("Bearer token required")
 	}
 
-	token, err := jwt.ParseWithClaims(tokenString, &ZitadelClaims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &OIDCClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
@@ -133,22 +135,30 @@ func validateJWT(c *gin.Context) (*ZitadelClaims, error) {
 		return nil, errors.New("invalid or expired token")
 	}
 
-	claims, ok := token.Claims.(*ZitadelClaims)
+	claims, ok := token.Claims.(*OIDCClaims)
 	if !ok {
 		return nil, errors.New("invalid or expired token")
 	}
 
-	// Use the same multi-issuer set as the main ZitadelAuth middleware so that
+	// Use the same multi-issuer set as the main OIDCAuth middleware so that
 	// a domain rebrand does not selectively break the admin path.
 	adminIssuerOK := false
-	for _, accepted := range zitadelIssuers {
+	for _, accepted := range oidcIssuers {
 		if claims.Issuer == accepted {
 			adminIssuerOK = true
 			break
 		}
 	}
 	if !adminIssuerOK {
-		common.SysLog(fmt.Sprintf("admin JWT issuer mismatch: got %s, accepted %v", claims.Issuer, zitadelIssuers))
+		common.SysLog(fmt.Sprintf("admin JWT issuer mismatch: got %s, accepted %v", claims.Issuer, oidcIssuers))
+		return nil, errors.New("invalid or expired token")
+	}
+
+	// Reject tokens minted for a different client/resource when audience
+	// enforcement is opted in (OIDC_ALLOWED_AUDIENCES); see checkAudience in
+	// oidc_auth.go. No-op when that var is unset.
+	if !checkAudience(claims.Audience) {
+		common.SysLog(fmt.Sprintf("admin JWT audience mismatch: got %v", []string(claims.Audience)))
 		return nil, errors.New("invalid or expired token")
 	}
 

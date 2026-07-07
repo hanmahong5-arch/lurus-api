@@ -54,7 +54,7 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/user/models", middleware.UserAuth(), handler.GetUserModels)
 
 		// -- Secure verification (session-based step-up re-confirmation) --
-		// Strong auth factor (MFA) is performed at Zitadel login; this records a
+		// Strong auth factor (MFA) is performed at the OIDC IdP login; this records a
 		// short-lived (5min) session re-confirmation that gates sensitive ops such
 		// as channel-key reveal. Frontend contract: web/src/services/secureVerification.js.
 		apiRouter.POST("/verify", middleware.UserAuth(), handler.UniversalVerify)

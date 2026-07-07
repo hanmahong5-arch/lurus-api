@@ -100,11 +100,12 @@ func TestGeneratePKCE_Base64URLEncoding(t *testing.T) {
 
 func TestValidateIDToken_InvalidIssuer(t *testing.T) {
 	// Set up expected issuer
-	originalIssuer := os.Getenv("ZITADEL_ISSUER")
-	os.Setenv("ZITADEL_ISSUER", "https://expected-issuer.example.com")
-	defer os.Setenv("ZITADEL_ISSUER", originalIssuer)
+	originalIssuer := os.Getenv("OIDC_ISSUER")
+	_ = os.Setenv("OIDC_ISSUER", "https://expected-issuer.example.com")
 
-	os.Setenv("ZITADEL_CLIENT_ID", "test-client-id")
+	defer func() { _ = os.Setenv("OIDC_ISSUER", originalIssuer) }()
+
+	_ = os.Setenv("OIDC_CLIENT_ID", "test-client-id")
 
 	// Build claims with wrong issuer. We exercise the claim-only validator so
 	// the test does not need a live JWKS manager (signature verification is a
@@ -125,13 +126,17 @@ func TestValidateIDToken_InvalidIssuer(t *testing.T) {
 
 func TestValidateIDToken_InvalidAudience(t *testing.T) {
 	// Set up expected client ID
-	originalClientID := os.Getenv("ZITADEL_CLIENT_ID")
-	originalIssuer := os.Getenv("ZITADEL_ISSUER")
-	os.Setenv("ZITADEL_CLIENT_ID", "expected-client-id")
-	os.Setenv("ZITADEL_ISSUER", "https://issuer.example.com")
+	originalClientID := os.Getenv("OIDC_CLIENT_ID")
+	originalIssuer := os.Getenv("OIDC_ISSUER")
+	_ = os.Setenv("OIDC_CLIENT_ID", "expected-client-id")
+
+	_ = os.Setenv("OIDC_ISSUER", "https://issuer.example.com")
+
 	defer func() {
-		os.Setenv("ZITADEL_CLIENT_ID", originalClientID)
-		os.Setenv("ZITADEL_ISSUER", originalIssuer)
+		_ = os.Setenv("OIDC_CLIENT_ID", originalClientID)
+
+		_ = os.Setenv("OIDC_ISSUER", originalIssuer)
+
 	}()
 
 	claims := IDTokenClaims{}
@@ -149,13 +154,17 @@ func TestValidateIDToken_InvalidAudience(t *testing.T) {
 }
 
 func TestValidateIDToken_ExpiredToken(t *testing.T) {
-	originalClientID := os.Getenv("ZITADEL_CLIENT_ID")
-	originalIssuer := os.Getenv("ZITADEL_ISSUER")
-	os.Setenv("ZITADEL_CLIENT_ID", "test-client-id")
-	os.Setenv("ZITADEL_ISSUER", "https://issuer.example.com")
+	originalClientID := os.Getenv("OIDC_CLIENT_ID")
+	originalIssuer := os.Getenv("OIDC_ISSUER")
+	_ = os.Setenv("OIDC_CLIENT_ID", "test-client-id")
+
+	_ = os.Setenv("OIDC_ISSUER", "https://issuer.example.com")
+
 	defer func() {
-		os.Setenv("ZITADEL_CLIENT_ID", originalClientID)
-		os.Setenv("ZITADEL_ISSUER", originalIssuer)
+		_ = os.Setenv("OIDC_CLIENT_ID", originalClientID)
+
+		_ = os.Setenv("OIDC_ISSUER", originalIssuer)
+
 	}()
 
 	claims := IDTokenClaims{}
@@ -174,13 +183,17 @@ func TestValidateIDToken_ExpiredToken(t *testing.T) {
 }
 
 func TestValidateIDToken_InvalidNonce(t *testing.T) {
-	originalClientID := os.Getenv("ZITADEL_CLIENT_ID")
-	originalIssuer := os.Getenv("ZITADEL_ISSUER")
-	os.Setenv("ZITADEL_CLIENT_ID", "test-client-id")
-	os.Setenv("ZITADEL_ISSUER", "https://issuer.example.com")
+	originalClientID := os.Getenv("OIDC_CLIENT_ID")
+	originalIssuer := os.Getenv("OIDC_ISSUER")
+	_ = os.Setenv("OIDC_CLIENT_ID", "test-client-id")
+
+	_ = os.Setenv("OIDC_ISSUER", "https://issuer.example.com")
+
 	defer func() {
-		os.Setenv("ZITADEL_CLIENT_ID", originalClientID)
-		os.Setenv("ZITADEL_ISSUER", originalIssuer)
+		_ = os.Setenv("OIDC_CLIENT_ID", originalClientID)
+
+		_ = os.Setenv("OIDC_ISSUER", originalIssuer)
+
 	}()
 
 	claims := IDTokenClaims{}
@@ -199,13 +212,17 @@ func TestValidateIDToken_InvalidNonce(t *testing.T) {
 }
 
 func TestValidateIDToken_FutureIssuedAt(t *testing.T) {
-	originalClientID := os.Getenv("ZITADEL_CLIENT_ID")
-	originalIssuer := os.Getenv("ZITADEL_ISSUER")
-	os.Setenv("ZITADEL_CLIENT_ID", "test-client-id")
-	os.Setenv("ZITADEL_ISSUER", "https://issuer.example.com")
+	originalClientID := os.Getenv("OIDC_CLIENT_ID")
+	originalIssuer := os.Getenv("OIDC_ISSUER")
+	_ = os.Setenv("OIDC_CLIENT_ID", "test-client-id")
+
+	_ = os.Setenv("OIDC_ISSUER", "https://issuer.example.com")
+
 	defer func() {
-		os.Setenv("ZITADEL_CLIENT_ID", originalClientID)
-		os.Setenv("ZITADEL_ISSUER", originalIssuer)
+		_ = os.Setenv("OIDC_CLIENT_ID", originalClientID)
+
+		_ = os.Setenv("OIDC_ISSUER", originalIssuer)
+
 	}()
 
 	claims := IDTokenClaims{}
@@ -270,9 +287,10 @@ func TestIsValidTenantSlug_EdgeCases(t *testing.T) {
 
 func TestIsValidRedirectURL_OpenRedirect(t *testing.T) {
 	// Set allowed domains for testing
-	originalDomains := os.Getenv("ZITADEL_ALLOWED_REDIRECT_DOMAINS")
-	os.Setenv("ZITADEL_ALLOWED_REDIRECT_DOMAINS", "example.com,trusted.org")
-	defer os.Setenv("ZITADEL_ALLOWED_REDIRECT_DOMAINS", originalDomains)
+	originalDomains := os.Getenv("OIDC_ALLOWED_REDIRECT_DOMAINS")
+	_ = os.Setenv("OIDC_ALLOWED_REDIRECT_DOMAINS", "example.com,trusted.org")
+
+	defer func() { _ = os.Setenv("OIDC_ALLOWED_REDIRECT_DOMAINS", originalDomains) }()
 
 	tests := []struct {
 		name  string
@@ -299,8 +317,10 @@ func TestIsValidRedirectURL_OpenRedirect(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Special case: test without allowed domains
 			if tt.name == "no allowed domains configured" {
-				os.Setenv("ZITADEL_ALLOWED_REDIRECT_DOMAINS", "")
-				defer os.Setenv("ZITADEL_ALLOWED_REDIRECT_DOMAINS", "example.com,trusted.org")
+				_ = os.Setenv("OIDC_ALLOWED_REDIRECT_DOMAINS", "")
+
+				defer func() { _ = os.Setenv("OIDC_ALLOWED_REDIRECT_DOMAINS", "example.com,trusted.org") }()
+
 			}
 
 			result := isValidRedirectURL(tt.url)
@@ -331,7 +351,7 @@ func TestOAuthState_TimingAttack(t *testing.T) {
 	state := payload + "." + sig
 
 	router := gin.New()
-	router.GET("/api/v2/oauth/callback", ZitadelCallback)
+	router.GET("/api/v2/oauth/callback", OIDCCallback)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v2/oauth/callback?code=test&state="+state, nil)
 	w := httptest.NewRecorder()
@@ -375,4 +395,3 @@ func TestOAuthState_NonceUniqueness(t *testing.T) {
 		}
 	}
 }
-

@@ -126,6 +126,12 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	// 检查是否为音频模型
 	isAudioModel := strings.Contains(strings.ToLower(model), "audio")
 
+	// sawDone tracks whether the upstream stream ended with a recognized "[DONE]"
+	// terminator vs. an abnormal exit (client cancel, streaming timeout, upstream
+	// EOF mid-stream). Used below to suppress billing on the abnormal path instead
+	// of silently charging for a truncated/dropped response.
+	var sawDone bool
+
 	helper.StreamScannerHandler(c, resp, info, func(data string) bool {
 		if lastStreamData != "" {
 			err := HandleStreamFormat(c, info, lastStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent)
@@ -143,7 +149,7 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 			streamItems = append(streamItems, data)
 		}
 		return true
-	})
+	}, &sawDone)
 
 	// 对音频模型，从倒数第二个stream data中提取usage信息
 	if isAudioModel && secondLastStreamData != "" {
@@ -184,6 +190,15 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	if !containStreamUsage {
 		usage = app.ResponseText2Usage(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
 		usage.CompletionTokens += toolCount * 7
+	}
+
+	// Abnormal stream end (no "[DONE]" seen): do not bill. ResponseText2Usage always
+	// sets PromptTokens to the pre-estimate, so totalTokens is never 0 here even when
+	// the response was truncated/dropped mid-stream — zero it out so the existing
+	// totalTokens==0 safety net in postConsumeQuota suppresses the charge. Streams that
+	// completed normally (sawDone==true) are untouched.
+	if !sawDone {
+		usage = &dto.Usage{}
 	}
 
 	applyUsagePostProcessing(info, usage, common.StringToByteSlice(lastStreamData))

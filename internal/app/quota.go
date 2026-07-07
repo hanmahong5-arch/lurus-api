@@ -29,6 +29,15 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// AsyncGo dispatches PostConsumeQuota's fire-and-forget side effects (usage
+// reporting, wallet debit, cost-spike window, quota-threshold notify). In
+// production it is gopool.Go, i.e. the same async behaviour as before. Tests
+// (in this package and in other packages such as relay that call
+// PostConsumeQuota) override it to run the work inline so those goroutines
+// cannot outlive the test and race a later test's global-state teardown under
+// the -race gate. Exported only so cross-package test binaries can set it.
+var AsyncGo = gopool.Go
+
 type TokenDetails struct {
 	TextTokens  int
 	AudioTokens int
@@ -543,7 +552,28 @@ func debitTenantPool(relayInfo *relaycommon.RelayInfo, quota int) {
 		return
 	}
 	pool, perr := repo.GetTenantCreditPool(tok.TenantId)
-	if perr != nil || pool == nil || pool.IsUnlimited() {
+	if perr != nil {
+		if errors.Is(perr, repo.ErrPoolNotFound) {
+			// Distinct from IsUnlimited(): this tenant has NO pool row at all,
+			// which is either a legitimate "no pool configured" tenant or a
+			// tenant-id/pool drift (orphaned token pointing at a tenant that
+			// never got a pool row). Surface it — a silent return here would
+			// hide the same class of bug the tenant-id drift incident found.
+			metrics.CreditPoolLookupMissTotal.WithLabelValues(tok.TenantId, "no_pool").Inc()
+			common.SysLog(fmt.Sprintf(
+				`{"event":"pool_lookup_miss","who":"tenant:%s","what":"post-consume debit %d skipped: no credit pool row (token %d)","result":"treated as unlimited, verify tenant-id is not drifted"}`,
+				tok.TenantId, quota, relayInfo.TokenId))
+			return
+		}
+		// Hard DB error resolving the pool row — same severity as a lost debit,
+		// since we can't even tell whether this tenant is pool-gated.
+		metrics.CreditPoolLookupMissTotal.WithLabelValues(tok.TenantId, "lookup_error").Inc()
+		common.SysError(fmt.Sprintf(
+			`{"event":"pool_lookup_error","who":"tenant:%s","what":"post-consume debit %d: credit pool lookup failed (token %d)","result":"debit skipped, conservation broken: %s"}`,
+			tok.TenantId, quota, relayInfo.TokenId, perr.Error()))
+		return
+	}
+	if pool == nil || pool.IsUnlimited() {
 		return
 	}
 
@@ -551,6 +581,10 @@ func debitTenantPool(relayInfo *relaycommon.RelayInfo, quota int) {
 	if derr == nil {
 		metrics.CreditPoolDebitTotal.WithLabelValues(tok.TenantId).Inc()
 		metrics.CreditPoolBalance.WithLabelValues(tok.TenantId).Set(float64(pool.CurrentBalance - int64(quota)))
+		governance.RecordAuditEvent(governance.NewDetachedAuditEvent(
+			tok.TenantId, governance.ActorSystem, relayInfo.UserId,
+			governance.ActionBillingDebit, governance.ResourceTenant, int(pool.ID),
+			fmt.Sprintf(`{"quota":%d,"pool_id":%d,"token_id":%d}`, quota, pool.ID, relayInfo.TokenId)))
 		return
 	}
 
@@ -673,7 +707,7 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 			relayInfo.PlatformPreAuthID = 0
 
 			// Report usage for VIP accumulation (async, non-critical)
-			gopool.Go(func() {
+			AsyncGo(func() {
 				rptCtx, rptCancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer rptCancel()
 				common.ReportLLMUsageGRPC(rptCtx, accountID, amountLB)
@@ -682,7 +716,7 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 			})
 		} else {
 			// Legacy path: fire-and-forget debit (no pre-auth)
-			gopool.Go(func() {
+			AsyncGo(func() {
 				debitCtx, debitCancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer debitCancel()
 				if _, debitErr := common.DebitWalletGRPC(debitCtx, accountID, amountLB, "llm_usage",
@@ -749,7 +783,7 @@ func reportQuotaThreshold(ctx context.Context, relayInfo *relaycommon.RelayInfo,
 }
 
 func checkAndSendQuotaNotify(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int) {
-	gopool.Go(func() {
+	AsyncGo(func() {
 		userSetting := relayInfo.UserSetting
 		threshold := common.QuotaRemindThreshold
 		if userSetting.QuotaWarningThreshold != 0 {

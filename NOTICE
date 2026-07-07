@@ -1,0 +1,91 @@
+Lurus Newhub (module github.com/LurusTech/lurus-hub)
+Copyright (c) LurusTech.
+
+This product is licensed under the terms described in the accompanying
+LICENSE file (GNU AGPLv3, with the dual-licensing terms inherited from the
+New API project). This NOTICE file records third-party attributions and is
+provided for convenience; it does not modify the LICENSE.
+
+================================================================================
+1. Upstream provenance
+================================================================================
+
+Lurus Newhub is a customized derivative of:
+
+  * New API — https://github.com/QuantumNous/new-api
+    License: GNU AGPLv3 (dual-licensed; commercial license available from the
+    New API team). New API is the direct upstream base that this project
+    tracks and cherry-picks from.
+
+  * One API — https://github.com/songquanpeng/one-api
+    License: MIT. One API is the earlier project from which New API itself
+    derives.
+
+Per the AGPLv3 additional terms in LICENSE, original upstream branding, logos,
+and copyright notices are preserved. Modifications made by LurusTech are
+likewise offered under AGPLv3.
+
+================================================================================
+2. Bundled third-party components
+================================================================================
+
+The compiled binary and frontend bundle include open-source components that
+remain licensed under their own upstream terms. The authoritative license text
+for each ships inside that dependency's source (Go module cache / node_modules).
+The identifiers below are a convenience summary of the principal components and
+are not exhaustive; see go.mod / go.sum and web/package.json for the full set.
+
+--- Backend (Go) ---
+
+Apache-2.0:
+  github.com/aws/aws-sdk-go-v2 (and submodules)
+  github.com/alibabacloud-go/* (Alibaba Cloud SDK)
+  go.opentelemetry.io/otel (and submodules)
+  github.com/prometheus/client_golang
+  github.com/grafana/pyroscope-go
+  github.com/minio/minio-go/v7
+  google.golang.org/grpc
+
+MIT:
+  github.com/gin-gonic/gin, github.com/gin-contrib/*
+  gorm.io/gorm, gorm.io/driver/postgres
+  github.com/glebarez/sqlite (test-only tier)
+  github.com/tidwall/gjson, github.com/tidwall/sjson
+  github.com/samber/lo
+  github.com/jinzhu/copier
+  github.com/meilisearch/meilisearch-go
+  github.com/tiktoken-go/tokenizer
+  github.com/golang-jwt/jwt/v5
+  github.com/joho/godotenv
+  github.com/shopspring/decimal
+  github.com/nats-io/nats.go
+  github.com/andybalholm/brotli
+
+BSD-2-Clause / BSD-3-Clause:
+  github.com/redis/go-redis/v9
+  github.com/gorilla/websocket
+  golang.org/x/* (crypto, net, image, sync, mod, text)
+  github.com/google/uuid
+  github.com/pkg/errors
+
+--- Frontend (web/) ---
+
+MIT:
+  react, react-dom, react-router-dom
+  @douyinfe/semi-ui, @douyinfe/semi-icons (Semi Design)
+  vite, @vitejs/plugin-react
+  axios, dayjs, i18next, react-i18next
+  marked, katex, mermaid, react-markdown, remark-*, rehype-*
+  tailwindcss, clsx
+  @fontsource/fraunces, @fontsource/inter-tight, @fontsource/jetbrains-mono
+
+ISC:
+  lucide-react
+
+Fonts (bundled via @fontsource): Fraunces, Inter Tight, and JetBrains Mono are
+distributed under the SIL Open Font License 1.1.
+
+================================================================================
+For any component not listed above, its license is the one shipped in that
+component's own repository / distributed package. This file is informational;
+the LICENSE file governs.

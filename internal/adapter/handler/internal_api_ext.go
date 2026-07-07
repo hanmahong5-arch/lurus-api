@@ -17,18 +17,22 @@ import (
 
 var usernameRegexp = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 
-// resolveAccountByZitadelSub resolves a Zitadel OIDC subject to its
-// lurus-platform account. Indirected through a package var (defaulting to the
+// resolveAccountByZitadelSub resolves an OIDC subject to its lurus-platform
+// account. Indirected through a package var (defaulting to the
 // gRPC-with-HTTP-fallback resolver) so provisioning tests can stub the platform
 // dependency without a live identity service. Production keeps the default.
+// NOTE(idp-migration): the underlying gRPC call keeps the GetAccountByZitadelSub
+// name because the shared lurus-proto-go stub has no idp_subject RPC yet (renaming
+// it would not compile); only the wire body/JSON fields are neutralized. The
+// function-name keeps the historical spelling for the same reason.
 var resolveAccountByZitadelSub = common.GetAccountByZitadelSubGRPC
 
-// InternalLogin is no longer supported — auth is delegated to Zitadel.
+// InternalLogin is no longer supported — auth is delegated to the OIDC provider.
 // POST /internal/auth/login
 func InternalLogin(c *gin.Context) {
 	c.JSON(http.StatusGone, gin.H{
 		"success":    false,
-		"message":    "Password-based login is no longer supported. Use Zitadel OIDC.",
+		"message":    "Password-based login is no longer supported. Use OIDC.",
 		"error_code": "DEPRECATED",
 	})
 }
@@ -84,10 +88,11 @@ func InternalCreateUser(c *gin.Context) {
 	// This endpoint's contract carries no tenant, but the GORM tenant plugin
 	// rejects INSERTs into tenant-scoped tables when the context has no tenant
 	// ("tenant_id is required for create operations" → spurious 500). Scope the
-	// whole handler to the default tenant — the same default used by
+	// whole handler to the resolved default tenant — the same default used by
 	// /internal/user/by-zitadel-sub and /internal/user/provision — so the
 	// uniqueness checks and the create all operate within one tenant.
-	db := repo.GetTenantDBWithID("default")
+	defaultTenantID := repo.ResolveDefaultTenantID()
+	db := repo.GetTenantDBWithID(defaultTenantID)
 
 	// Idempotency check
 	idempotencyKey := c.GetHeader("X-Idempotency-Key")
@@ -149,7 +154,7 @@ func InternalCreateUser(c *gin.Context) {
 		// Set on the struct as well as via the tenant-scoped context: the plugin
 		// only stamps the column when registered, and the struct must reflect the
 		// row that was written.
-		TenantId:    "default",
+		TenantId:    defaultTenantID,
 		Email:       req.Email,
 		DisplayName: displayName,
 		Group:       group,
@@ -159,6 +164,19 @@ func InternalCreateUser(c *gin.Context) {
 	}
 
 	if err := db.Create(user).Error; err != nil {
+		// The existingCount pre-check above is tenant-scoped, but users.username
+		// carries a GLOBAL unique index — two tenants racing to provision the same
+		// username both pass the pre-check and one loses here. Surface that as the
+		// same clean 409 the pre-check would have returned instead of a raw 500
+		// with leaked DB error text.
+		if isUsernameUniqueViolation(err) {
+			c.JSON(http.StatusConflict, gin.H{
+				"success":    false,
+				"message":    "Username already exists",
+				"error_code": "USER_EXISTS",
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to create user: " + err.Error(),
@@ -177,6 +195,21 @@ func InternalCreateUser(c *gin.Context) {
 			"quota":        user.Quota,
 		},
 	})
+}
+
+// isUsernameUniqueViolation reports whether a DB create error is a UNIQUE
+// constraint violation, across both PostgreSQL (error code 23505) and SQLite
+// ("UNIQUE constraint") — mirrors repo.isUniqueViolation's string-matching
+// idiom (unexported there, so duplicated here rather than exported cross-package
+// for this single call site).
+func isUsernameUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "duplicate key value") ||
+		strings.Contains(s, "UNIQUE constraint failed") ||
+		strings.Contains(s, "23505")
 }
 
 // InternalDeleteUser deletes a user by ID.
@@ -227,25 +260,25 @@ func InternalDeleteUser(c *gin.Context) {
 	})
 }
 
-// InternalGetUserByZitadelSub returns user by Zitadel subject ID.
+// InternalGetUserByZitadelSub returns user by OIDC subject ID.
 // GET /internal/user/by-zitadel-sub/:sub
 func InternalGetUserByZitadelSub(c *gin.Context) {
 	sub := c.Param("sub")
 	if sub == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "Zitadel subject ID is required",
+			"message": "OIDC subject ID is required",
 		})
 		return
 	}
 
 	tenantId := c.DefaultQuery("tenant_id", "default")
 
-	user, mapping, err := repo.GetUserByZitadelID(sub, tenantId)
+	user, mapping, err := repo.GetUserByIDPSubject(sub, tenantId)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success":    false,
-			"message":    "User not found for Zitadel sub: " + sub,
+			"message":    "User not found for OIDC subject: " + sub,
 			"error_code": "USER_NOT_FOUND",
 		})
 		return
@@ -263,8 +296,12 @@ func InternalGetUserByZitadelSub(c *gin.Context) {
 			"group":        user.Group,
 			"tenant_id":    user.TenantId,
 			"mapping": gin.H{
-				"id":                 mapping.Id,
-				"zitadel_user_id":    mapping.ZitadelUserID,
+				"id": mapping.Id,
+				// idp_subject is canonical; zitadel_user_id kept for back-compat
+				// with consumers not yet migrated. TODO(idp-migration): drop the
+				// deprecated key once all consumers read idp_subject.
+				"idp_subject":        mapping.IDPSubject,
+				"zitadel_user_id":    mapping.IDPSubject,
 				"tenant_id":          mapping.TenantID,
 				"preferred_username": mapping.PreferredUsername,
 			},
@@ -275,11 +312,17 @@ func InternalGetUserByZitadelSub(c *gin.Context) {
 // ===== User Provisioning =====
 
 // InternalProvisionUser atomically creates a user, identity mapping, and optional initial API token.
-// Idempotent: if the Zitadel sub already maps to a user, returns the existing user.
+// Idempotent: if the OIDC subject already maps to a user, returns the existing user.
 // POST /internal/user/provision
 func InternalProvisionUser(c *gin.Context) {
 	var req struct {
-		ZitadelSub         string `json:"zitadel_sub" binding:"required"`
+		// IDPSubject is the canonical OIDC subject field (idp_subject). ZitadelSub
+		// (zitadel_sub) is accepted for back-compat with callers not yet migrated;
+		// see the dual-accept normalization below. Neither carries binding:required
+		// because exactly one of the two must be present (validated manually) —
+		// gui-switch already sends idp_subject, older clients still send zitadel_sub.
+		IDPSubject         string `json:"idp_subject"`
+		ZitadelSub         string `json:"zitadel_sub"`
 		Email              string `json:"email" binding:"required"`
 		DisplayName        string `json:"display_name"`
 		TenantID           string `json:"tenant_id"`
@@ -293,6 +336,21 @@ func InternalProvisionUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	// Dual-accept: prefer the canonical idp_subject; fall back to the deprecated
+	// zitadel_sub. Collapse onto req.ZitadelSub so the rest of the handler (which
+	// threads that field through) is unchanged.
+	if req.IDPSubject != "" {
+		req.ZitadelSub = req.IDPSubject
+	}
+	if req.ZitadelSub == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success":    false,
+			"message":    "Missing OIDC subject: provide idp_subject (preferred) or zitadel_sub",
+			"error_code": "VALIDATION_FAILED",
 		})
 		return
 	}
@@ -311,7 +369,7 @@ func InternalProvisionUser(c *gin.Context) {
 		tenantId = "default"
 	}
 
-	// Best-effort resolve the platform account for this Zitadel subject so the
+	// Best-effort resolve the platform account for this OIDC subject so the
 	// provisioned user + token link to the unified wallet (the relay settlement
 	// path in quota.go engages only when token.IdentityAccountID > 0). FAIL-OPEN:
 	// a resolution miss or error must NEVER block provisioning — an identity
@@ -329,7 +387,7 @@ func InternalProvisionUser(c *gin.Context) {
 	}
 
 	// Idempotency: check if mapping already exists
-	existingUser, existingMapping, err := repo.GetUserByZitadelID(req.ZitadelSub, tenantId)
+	existingUser, existingMapping, err := repo.GetUserByIDPSubject(req.ZitadelSub, tenantId)
 	if err == nil && existingUser != nil {
 		// Self-heal: a prior provision may have created this user before its
 		// platform account existed (unlinked). If it is now resolvable, backfill
@@ -347,7 +405,7 @@ func InternalProvisionUser(c *gin.Context) {
 		return
 	}
 
-	// Derive a safe username from Zitadel sub
+	// Derive a safe username from OIDC subject
 	username := "u_" + req.ZitadelSub
 	if len(username) > 20 {
 		username = username[:20]
@@ -447,7 +505,7 @@ func InternalProvisionUser(c *gin.Context) {
 	now := time.Now()
 	mapping := &repo.UserIdentityMapping{
 		LurusUserID:       user.Id,
-		ZitadelUserID:     req.ZitadelSub,
+		IDPSubject:        req.ZitadelSub,
 		TenantID:          tenantId,
 		Email:             req.Email,
 		DisplayName:       displayName,
@@ -623,11 +681,11 @@ func provisionRaceWinner(zitadelSub, tenantID string, accountID int64) (*repo.Us
 		// through to the tenant-scoped sub probe (which finds nothing), so the
 		// create error surfaces instead of a false idempotent success.
 		if u, err := repo.GetUserByLurusAccountID(accountID); err == nil && u != nil && u.TenantId == tenantID {
-			_, m, _ := repo.GetUserByZitadelID(zitadelSub, tenantID)
+			_, m, _ := repo.GetUserByIDPSubject(zitadelSub, tenantID)
 			return u, m
 		}
 	}
-	if u, m, err := repo.GetUserByZitadelID(zitadelSub, tenantID); err == nil && u != nil {
+	if u, m, err := repo.GetUserByIDPSubject(zitadelSub, tenantID); err == nil && u != nil {
 		return u, m
 	}
 	return nil, nil

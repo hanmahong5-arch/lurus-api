@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
 	relaycommon "github.com/LurusTech/lurus-hub/internal/adapter/provider/common"
@@ -292,5 +293,65 @@ func TestClaudeToOpenAIRequest_ThinkingAddsModelSuffix(t *testing.T) {
 	}
 	if out.Model != "gpt-4o-thinking" {
 		t.Errorf("Model = %q, want gpt-4o-thinking (suffix appended when OriginModelName ends in -thinking)", out.Model)
+	}
+}
+
+// openRouterInfo builds a RelayInfo targeting the OpenRouter channel with an
+// anthropic/claude upstream so the OpenRouter-specific branches fire.
+func openRouterClaudeInfo() *relaycommon.RelayInfo {
+	return &relaycommon.RelayInfo{
+		OriginModelName: "claude-3-7-sonnet",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelType:       constant.ChannelTypeOpenRouter,
+			UpstreamModelName: "anthropic/claude-3.7-sonnet",
+		},
+	}
+}
+
+func TestClaudeToOpenAIRequest_OpenRouterThinkingEmitsReasoning(t *testing.T) {
+	budget := 2048
+	req := dto.ClaudeRequest{
+		Model:    "claude-3-7-sonnet",
+		Thinking: &dto.Thinking{Type: "enabled", BudgetTokens: &budget},
+		Messages: []dto.ClaudeMessage{{Role: "user", Content: "solve this"}},
+	}
+
+	out, err := ClaudeToOpenAIRequest(req, openRouterClaudeInfo())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// OpenRouter path serializes a reasoning object carrying the thinking budget.
+	if len(out.Reasoning) == 0 {
+		t.Fatal("expected Reasoning JSON to be populated on the OpenRouter thinking path")
+	}
+	if !strings.Contains(string(out.Reasoning), "2048") {
+		t.Errorf("Reasoning = %s, want the 2048 budget", string(out.Reasoning))
+	}
+	// Model suffix must NOT be appended on the OpenRouter path.
+	if strings.HasSuffix(out.Model, "-thinking") {
+		t.Errorf("Model = %q, must not gain -thinking suffix on OpenRouter path", out.Model)
+	}
+}
+
+func TestClaudeToOpenAIRequest_OpenRouterClaudeSystemMedia(t *testing.T) {
+	// An array system prompt on the OpenRouter-claude path is preserved as
+	// structured media content (not flattened to a string).
+	req := dto.ClaudeRequest{
+		Model: "claude-3-7-sonnet",
+		System: []dto.ClaudeMediaMessage{
+			{Type: "text", Text: sp("You are a careful assistant.")},
+		},
+		Messages: []dto.ClaudeMessage{{Role: "user", Content: "hi"}},
+	}
+
+	out, err := ClaudeToOpenAIRequest(req, openRouterClaudeInfo())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out.Messages) == 0 {
+		t.Fatal("expected at least a system message")
+	}
+	if out.Messages[0].Role != "system" {
+		t.Errorf("first message role = %q, want system", out.Messages[0].Role)
 	}
 }

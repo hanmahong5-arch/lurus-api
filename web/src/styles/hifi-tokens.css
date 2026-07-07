@@ -26,6 +26,11 @@
   --hf-err: #b3392b;
   --hf-info: #2c5fb0;
 
+  /* Accent-tinted focus ring, theme-aware. The old inputs used a fixed
+   * rgba(0,0,0,.04) shadow that was invisible on the dark canvas; this token
+   * is used for every keyboard/focus affordance so the ring adapts to theme. */
+  --hf-focus: rgba(255, 93, 31, 0.35);
+
   /* Latin webfonts (self-hosted, see index.css) followed by CJK system-font
    * fallbacks — Fraunces / Inter Tight carry no Chinese glyphs, so without the
    * CJK tail the console's Chinese text silently falls back to a serif/system
@@ -69,6 +74,8 @@
   --hf-warn: #e0a040;
   --hf-err: #ee6f5e;
   --hf-info: #7aaef5;
+
+  --hf-focus: rgba(255, 122, 58, 0.45);
 }
 
 .hf {
@@ -177,8 +184,8 @@
   font-size: 11px;
 }
 .hf .field:focus-within {
-  border-color: var(--hf-ink-3);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.04);
+  border-color: var(--hf-accent);
+  box-shadow: 0 0 0 3px var(--hf-focus);
 }
 
 .hf .kbd {
@@ -564,4 +571,68 @@
     linear-gradient(90deg, var(--hf-rule) 1px, transparent 1px);
   background-size: 40px 40px;
   background-position: -1px -1px;
+}
+
+/* ── Interaction polish ──────────────────────────────────────────────────
+ * Keyboard focus, scrollbars, selection and motion-safety. These live in the
+ * shared token layer so every v2 console page inherits them without edits.
+ * Previously buttons/nav had NO visible keyboard-focus affordance and the
+ * scrollbars/selection used unthemed browser defaults. */
+
+/* Visible keyboard focus for all interactive hi-fi controls (mouse clicks stay
+ * ring-free via :focus-visible). */
+.hf .btn:focus-visible,
+.hf .field:focus-visible,
+.hf .pill:focus-visible,
+.hf .kbd:focus-visible,
+.hf-side .nav-i:focus-visible {
+  outline: none;
+  border-color: var(--hf-accent);
+  box-shadow: 0 0 0 3px var(--hf-focus);
+}
+/* Keyboard focus on rows / cells that opt into interactivity. */
+.hf table.t tbody tr:focus-visible {
+  outline: 2px solid var(--hf-accent);
+  outline-offset: -2px;
+}
+
+/* Thin, theme-aware scrollbars that match the editorial surface instead of the
+ * default chunky OS bars. Scoped to .hf so the rest of the app is untouched. */
+.hf *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.hf *::-webkit-scrollbar-track {
+  background: transparent;
+}
+.hf *::-webkit-scrollbar-thumb {
+  background: var(--hf-rule-strong);
+  border: 3px solid var(--hf-bg);
+  border-radius: 999px;
+}
+.hf *::-webkit-scrollbar-thumb:hover {
+  background: var(--hf-ink-4);
+}
+.hf {
+  scrollbar-width: thin;
+  scrollbar-color: var(--hf-rule-strong) transparent;
+}
+
+/* Accent-tinted text selection instead of the browser default blue. */
+.hf ::selection {
+  background: var(--hf-accent);
+  color: #fff;
+}
+
+/* Respect users who ask for reduced motion — the live pulse becomes a static
+ * dot and transitions are neutralized. */
+@media (prefers-reduced-motion: reduce) {
+  .hf .live-dot {
+    animation: none;
+  }
+  .hf *,
+  .hf *::before,
+  .hf *::after {
+    transition-duration: 0.01ms !important;
+  }
 }

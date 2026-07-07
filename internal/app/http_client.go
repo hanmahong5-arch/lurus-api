@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -61,6 +62,58 @@ func applyRelayTransportTimeouts(t *http.Transport) {
 	if t.DialContext == nil {
 		t.DialContext = (&net.Dialer{Timeout: common.RelayDialTimeout}).DialContext
 	}
+}
+
+// defaultNonStreamReadTimeout bounds a NON-streaming response body read when
+// RELAY_TIMEOUT=0 (the default): with no http.Client.Timeout set, only
+// ResponseHeaderTimeout + dial are bounded, so a slow-trickling non-stream body
+// could otherwise hang the reading goroutine forever. Does not apply to SSE
+// streams, which are governed per-chunk by the existing streamingTimeout.
+const defaultNonStreamReadTimeout = 300 * time.Second
+
+// nonStreamReadTimeout resolves RELAY_NONSTREAM_READ_TIMEOUT (seconds) once per
+// call; cheap enough (a single os.Getenv) that per-request use is fine and it
+// avoids adding new package-level init-order coupling.
+func nonStreamReadTimeout() time.Duration {
+	return time.Duration(common.GetEnvOrDefault("RELAY_NONSTREAM_READ_TIMEOUT", int(defaultNonStreamReadTimeout/time.Second))) * time.Second
+}
+
+// deadlineReadCloser wraps a response body so that if no byte is read within
+// the configured timeout, the underlying body is closed to unblock the stuck
+// Read() call (net/http surfaces this to the caller as a read error, not a hang).
+// The timer is reset after every successful Read and stopped on Close, so a
+// body that IS being consumed steadily never trips it.
+type deadlineReadCloser struct {
+	io.ReadCloser
+	timeout time.Duration
+	timer   *time.Timer
+}
+
+// WrapNonStreamReadDeadline bounds reads from a non-streaming upstream response
+// body so a wedged/slow-trickling provider cannot hang the reading goroutine
+// forever under RELAY_TIMEOUT=0. Callers must only use this for non-stream
+// responses (info.IsStream == false); wrapping an SSE body would cut a
+// legitimate long-lived stream mid-flight.
+func WrapNonStreamReadDeadline(body io.ReadCloser) io.ReadCloser {
+	if body == nil {
+		return body
+	}
+	d := &deadlineReadCloser{ReadCloser: body, timeout: nonStreamReadTimeout()}
+	d.timer = time.AfterFunc(d.timeout, func() { _ = body.Close() })
+	return d
+}
+
+func (d *deadlineReadCloser) Read(p []byte) (int, error) {
+	n, err := d.ReadCloser.Read(p)
+	if err == nil {
+		d.timer.Reset(d.timeout)
+	}
+	return n, err
+}
+
+func (d *deadlineReadCloser) Close() error {
+	d.timer.Stop()
+	return d.ReadCloser.Close()
 }
 
 func InitHttpClient() {

@@ -10,8 +10,12 @@
 --     psql -U lurus -d newhub" < seed-default-tenant.sql
 --
 -- 幂等：ON CONFLICT DO NOTHING，重跑无副作用。
--- 后续：等 Zitadel confidential client 注册到位时，需把 zitadel_org_id
---       从占位值 'lurus-default-org' 改为真实 Zitadel organization ID。
+-- 后续：等 OIDC confidential client 注册到位时，需把 zitadel_org_id 列值
+--       从占位值 (lurus-default-org) 改为真实 OIDC organization ID（物理列名 zitadel_org_id 暂不改，待 migration）。
+--
+-- 现状（migration 021 §4 之后）：021 已自带幂等 self-seed（按 id='default' OR
+-- slug='lurus' 解析已存在的默认租户，缺失才建），本脚本已是可选/legacy 手段，
+-- 仅在需要绕过 021、提前手工建租户时使用。
 --
 -- 租户 id 必须用规范值 'default'：ORM struct tag (default:'default')、所有 Go
 -- 写入路径、以及 fresh-PG 的 migration 021 §4 种子全部用 'default'。早期本脚本
@@ -26,7 +30,7 @@ INSERT INTO tenants (
   created_at, updated_at
 ) VALUES (
   'default',            -- canonical tenant id (was 'lurus-default' — see note above)
-  'lurus-default-org',  -- TODO: replace with real Zitadel org ID after client registration
+  'lurus-default-org',  -- TODO: replace with real OIDC org ID after client registration
   'lurus',
   'Lurus',
   1,                    -- status: 1 = active

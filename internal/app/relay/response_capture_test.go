@@ -211,11 +211,11 @@ func TestExtractImageURL_GarbageBodyReturnsEmptyNoPanic(t *testing.T) {
 	cases := [][]byte{
 		[]byte("not json at all"),
 		[]byte("{"),
-		[]byte("[1,2,3]"),                      // top-level array, not object
-		[]byte(`{"data": "not-an-array"}`),     // wrong shape under "data"
-		[]byte(`{"data": [{"url": 42}]}`),      // url is a number
-		[]byte(`{"data": [{"url": null}]}`),    // url is null
-		[]byte(`{"output": {"weird": true}}`),  // output is object
+		[]byte("[1,2,3]"),                     // top-level array, not object
+		[]byte(`{"data": "not-an-array"}`),    // wrong shape under "data"
+		[]byte(`{"data": [{"url": 42}]}`),     // url is a number
+		[]byte(`{"data": [{"url": null}]}`),   // url is null
+		[]byte(`{"output": {"weird": true}}`), // output is object
 	}
 	for i, c := range cases {
 		if got := ExtractImageURL(c); got != "" {

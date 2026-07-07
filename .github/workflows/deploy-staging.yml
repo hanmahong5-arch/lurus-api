@@ -106,16 +106,18 @@ jobs:
   deploy:
     name: Deploy to K3s Staging
     needs: build
-    # Skip cleanly when no real staging cluster is wired up yet (empty
-    # STAGING_KUBECONFIG) instead of failing `main` CI on a tracked infra gap.
-    # Runs automatically once the secret is configured.
-    #
-    # NOTE (2026-06-13): the cluster API is Tailscale-only, so a GitHub-hosted
-    # runner cannot reach it and STAGING_KUBECONFIG stays empty — this job is
-    # effectively dead. The WORKING deploy path is SSH: scripts/deploy-stage.sh
-    # (see doc/runbook/staging-deploy.md). This job is kept (not deleted) so its
-    # skip-warning keeps documenting the gap until the cluster is reachable from CI.
-    if: ${{ needs.build.outputs.has_kubeconfig == 'true' }}
+    # HARD-DISABLED (if: false). The cluster API is Tailscale-only, so a
+    # GitHub-hosted runner can never reach it — this job has never worked. Worse,
+    # it applies deploy/k8s/staging/ (OIDC/Traefik overlay, ns lurus-staging),
+    # which is NOT the live overlay: the serving deployment is deploy/k8s/r6-stage/
+    # in ns lurus-newhub. Gating only on `has_kubeconfig` left a latent foot-gun —
+    # the day someone set STAGING_KUBECONFIG it would silently deploy the wrong
+    # overlay to the wrong namespace. The ONLY supported STAGE deploy path is SSH:
+    # scripts/deploy-stage.sh (see doc/runbook/staging-deploy.md). The build job
+    # above still emits the infra-gap ::warning::, so the gap stays documented.
+    # Re-enable only after the staging/-vs-r6-stage overlay ADR is settled AND CI
+    # can actually reach the cluster.
+    if: false
     runs-on: ubuntu-latest
     environment: staging
     steps:

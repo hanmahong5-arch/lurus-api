@@ -3,6 +3,8 @@ package currency
 import (
 	"math"
 	"testing"
+
+	"github.com/LurusTech/lurus-hub/internal/pkg/common"
 )
 
 func TestLucToLut(t *testing.T) {
@@ -207,6 +209,80 @@ func TestCalculateExchange(t *testing.T) {
 	info = CalculateExchange(0, 0)
 	if info.TargetAmount != 0 {
 		t.Errorf("0 LUC = %d LUT, want 0", info.TargetAmount)
+	}
+}
+
+// TestLutToLucDisplayZeroRate exercises the defensive rate==0 branch by
+// temporarily zeroing the live QuotaPerUnit var (restored via t.Cleanup).
+// A zero rate must never produce a divide-by-zero Inf/NaN; it returns 0 so a
+// misconfigured base unit never mis-states a displayed LUC balance.
+func TestLutToLucDisplayZeroRate(t *testing.T) {
+	orig := common.QuotaPerUnit
+	t.Cleanup(func() { common.QuotaPerUnit = orig })
+
+	common.QuotaPerUnit = 0
+	if got := LutToLucDisplay(5_000_000); got != 0 {
+		t.Errorf("LutToLucDisplay with zero rate = %v, want 0", got)
+	}
+	if got := LutToLugDisplay(5_000_000); got != 0 {
+		t.Errorf("LutToLugDisplay with zero rate = %v, want 0", got)
+	}
+}
+
+// TestFormatLutNegative covers the abs = -abs sign-normalization branch across
+// all three magnitude bands. Negative amounts (e.g. a refund/adjustment) must
+// pick the same wan/yi band as their positive counterpart and keep the sign.
+func TestFormatLutNegative(t *testing.T) {
+	tests := []struct {
+		amount int
+		wantEN string
+		wantCN string
+	}{
+		{-500, "-500 LUT", "-500路特"},
+		{-9999, "-9999 LUT", "-9999路特"},
+		{-10_000, "-1.0 wan LUT", "-1.0万路特"},
+		{-500_000, "-50.0 wan LUT", "-50.0万路特"},
+		{-100_000_000, "-1.00 yi LUT", "-1.00亿路特"},
+		{-250_000_000, "-2.50 yi LUT", "-2.50亿路特"},
+	}
+	for _, tt := range tests {
+		if got := FormatLut(tt.amount); got != tt.wantEN {
+			t.Errorf("FormatLut(%d) = %q, want %q", tt.amount, got, tt.wantEN)
+		}
+		if got := FormatLutCN(tt.amount); got != tt.wantCN {
+			t.Errorf("FormatLutCN(%d) = %q, want %q", tt.amount, got, tt.wantCN)
+		}
+	}
+}
+
+// TestModelPriceLutDefaults covers the two guard branches that clamp a
+// non-positive completionRatio or groupRatio up to 1.0, so an unset/garbage
+// ratio never zeroes out a model's billed price.
+func TestModelPriceLutDefaults(t *testing.T) {
+	// groupRatio <= 0 defaults to 1.0.
+	in, out := ModelPriceLut(1.25, 3.0, 0)
+	if in != 1250 || out != 3750 {
+		t.Errorf("zero groupRatio: in=%v out=%v, want 1250/3750", in, out)
+	}
+	in, out = ModelPriceLut(1.25, 3.0, -2)
+	if in != 1250 || out != 3750 {
+		t.Errorf("negative groupRatio: in=%v out=%v, want 1250/3750", in, out)
+	}
+
+	// completionRatio <= 0 defaults to 1.0 → output equals input price.
+	in, out = ModelPriceLut(1.25, 0, 1.0)
+	if in != 1250 || out != 1250 {
+		t.Errorf("zero completionRatio: in=%v out=%v, want 1250/1250", in, out)
+	}
+	in, out = ModelPriceLut(1.25, -1, 1.0)
+	if in != 1250 || out != 1250 {
+		t.Errorf("negative completionRatio: in=%v out=%v, want 1250/1250", in, out)
+	}
+
+	// Both guards fire at once.
+	in, out = ModelPriceLut(2.0, 0, 0)
+	if in != 2000 || out != 2000 {
+		t.Errorf("both defaults: in=%v out=%v, want 2000/2000", in, out)
 	}
 }
 

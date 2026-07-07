@@ -9,10 +9,27 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// internalApiPreAuthRateLimitNum/Duration bound invalid-key attempts per
+// source IP. Mounted BEFORE InternalApiAuth, so internal_api_key_id is never
+// set yet — InternalApiRateLimit's key func falls back to "ip:<ClientIP>",
+// giving an IP-keyed bucket for free without a new keying path. Looser than
+// the post-auth per-key buckets (IKR/IKW/IKP): it only needs to bound the
+// blast radius of a brute-force scan against invalid keys, not throttle
+// legitimate authenticated traffic.
+const (
+	internalApiPreAuthRateLimitNum            = 300
+	internalApiPreAuthRateLimitDuration int64 = 60
+)
+
 // SetInternalApiRouter sets up internal API routes for service-to-service communication
 // These routes use API Key authentication instead of user session auth
 func SetInternalApiRouter(router *gin.Engine) {
 	internalGroup := router.Group("/internal")
+	// IP-keyed guard mounted FIRST so a flood of invalid-key attempts is
+	// throttled before it ever reaches auth — otherwise each attempt burns a
+	// full auth check (hash compare / DB lookup) with no per-IP bound (F6).
+	internalGroup.Use(middleware.InternalApiRateLimit(
+		internalApiPreAuthRateLimitNum, internalApiPreAuthRateLimitDuration, "IKP-IP"))
 	internalGroup.Use(middleware.InternalApiAuth())
 	// Per-key general bucket on EVERY internal route (mounted after auth so the
 	// key id is in context). A stolen key is bounded even on read endpoints; the

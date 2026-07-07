@@ -304,6 +304,26 @@ var (
 		},
 	)
 
+	// CreditPoolLookupMissTotal counts post-consume debits that never reached the
+	// debit step because the tenant's pool row could not be resolved, labeled by
+	// reason:
+	//   no_pool      — ErrPoolNotFound: the tenant has no credit pool row. Either a
+	//                  legitimately un-pooled (unlimited) tenant, or a tenant-id
+	//                  drift where an orphaned token points at a tenant that never
+	//                  got a pool row. A rising rate on a tenant that SHOULD be
+	//                  pooled is the drift signal — the relay silently under-bills.
+	//   lookup_error — a hard DB error resolving the pool row; pool-gating state is
+	//                  unknown and the debit was skipped. Alert on any increase.
+	CreditPoolLookupMissTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "credit_pool_lookup_miss_total",
+			Help:      "Post-consume pool debits skipped because the pool row was unresolved, by tenant and reason (no_pool/lookup_error)",
+		},
+		[]string{"tenant_id", "reason"},
+	)
+
 	// ProvisioningKeysCreatedTotal counts Provisioning-API key creations.
 	// Bumped from the POST /internal/v1/provisioning/tenants/:slug/keys handler.
 	// Used to measure Switch-Reseller adoption rate during Q3 pilot.

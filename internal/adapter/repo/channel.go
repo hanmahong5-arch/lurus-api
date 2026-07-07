@@ -943,7 +943,9 @@ func (channel *Channel) GetSetting() dto.ChannelSettings {
 		if err != nil {
 			common.SysLog(fmt.Sprintf("failed to unmarshal setting: channel_id=%d, error=%v", channel.Id, err))
 			channel.Setting = nil // 清空设置以避免后续错误
-			_ = channel.Save()    // 保存修改
+			if saveErr := channel.Save(); saveErr != nil {
+				common.SysError(fmt.Sprintf("failed to self-heal corrupted setting: channel_id=%d, error=%v", channel.Id, saveErr))
+			}
 		}
 	}
 	return setting
@@ -965,7 +967,9 @@ func (channel *Channel) GetOtherSettings() dto.ChannelOtherSettings {
 		if err != nil {
 			common.SysLog(fmt.Sprintf("failed to unmarshal setting: channel_id=%d, error=%v", channel.Id, err))
 			channel.OtherSettings = "{}" // 清空设置以避免后续错误
-			_ = channel.Save()           // 保存修改
+			if saveErr := channel.Save(); saveErr != nil {
+				common.SysError(fmt.Sprintf("failed to self-heal corrupted other_settings: channel_id=%d, error=%v", channel.Id, saveErr))
+			}
 		}
 	}
 	return setting
