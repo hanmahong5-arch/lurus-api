@@ -225,6 +225,15 @@ const NAV_SECTIONS = [
         key: 'console.nav.cost_intelligence',
         badge: '',
       },
+      // Per-model performance analytics (requests/errors/latency).
+      {
+        id: 'admin-analytics',
+        href: '/console/v2/admin/model-performance',
+        glyph: '∿',
+        label: 'Model performance',
+        key: 'console.nav.model_performance',
+        badge: '',
+      },
       // Admin surfaces (deferred backlog round 2) — now wired.
       {
         id: 'admin-users',
