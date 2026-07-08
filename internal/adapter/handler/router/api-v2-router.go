@@ -223,6 +223,10 @@ func SetApiV2Router(router *gin.Engine) {
 			switchGroup.GET("/pricing", handler.GetSwitchPricing)
 			// Wave 1 W1.2: usage reconciliation (inline raw-token auth).
 			switchGroup.POST("/reconciliation", handler.SwitchReconciliation)
+			// CN-survivable self-update mirror: latest Switch desktop release
+			// (admin-published via switch_app.* options; 404 = unpublished,
+			// client falls back to GitHub Releases).
+			switchGroup.GET("/app/releases/latest", handler.GetSwitchAppRelease)
 		}
 
 		// Phase D Track 2.2: tenant-scoped heartbeat — sibling of /:tenant_slug/user/me.
