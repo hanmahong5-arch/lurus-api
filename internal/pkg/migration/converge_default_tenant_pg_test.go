@@ -140,9 +140,10 @@ func TestIntegration022_Converges_AndIdempotent(t *testing.T) {
 
 	runOnly022(t, db)
 
-	// 21 baselined (001-021) + 022 executed = 22.
-	if got := countApplied(t, db); got != 22 {
-		t.Errorf("schema_migrations = %d, want 22 (21 baseline + 022)", got)
+	// 21 baselined (001-021) + 022..024 executed = 24 (023/024 skip absent
+	// tables via their to_regclass guards but still record as applied).
+	if got := countApplied(t, db); got != 24 {
+		t.Errorf("schema_migrations = %d, want 24 (21 baseline + 022..024)", got)
 	}
 
 	// Tenant PK renamed; exactly one bootstrap tenant, under the canonical id.
@@ -202,8 +203,8 @@ func TestIntegration022_Converges_AndIdempotent(t *testing.T) {
 
 	// Idempotency 1 — a second Runner pass re-records and re-executes nothing.
 	runOnly022(t, db)
-	if got := countApplied(t, db); got != 22 {
-		t.Errorf("after rerun schema_migrations = %d, want 22", got)
+	if got := countApplied(t, db); got != 24 {
+		t.Errorf("after rerun schema_migrations = %d, want 24", got)
 	}
 
 	// Idempotency 2 — executing the SQL body itself again is a clean no-op
