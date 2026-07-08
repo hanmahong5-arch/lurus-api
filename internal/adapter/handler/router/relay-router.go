@@ -79,6 +79,7 @@ func SetRelayRouter(router *gin.Engine) {
 	relayV1Router.Use(middleware.CostSpikeLimit())
 	relayV1Router.Use(middleware.EntitlementCheck())
 	relayV1Router.Use(middleware.ModelRequestRateLimit())
+	relayV1Router.Use(middleware.BusinessRateLimit())
 	{
 		// WebSocket 路由（统一到 Relay）
 		wsRouter := relayV1Router.Group("")

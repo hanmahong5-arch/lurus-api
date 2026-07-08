@@ -24,6 +24,14 @@ type Tenant struct {
 	// Deprecated: superseded by tenant_credit_pools.max_balance in ADR 2026-05-18
 	// (Accepted §9 Q3). Kept for backward compatibility; removed in a Q4 migration.
 	MaxQuota  int64          `json:"max_quota" gorm:"type:bigint;default:1000000"`
+	// RateLimitRPM caps the tenant's aggregate relay requests per minute across
+	// all of its tokens (sliding window, enforced by
+	// middleware.BusinessRateLimit). 0 = unlimited (backward compat).
+	RateLimitRPM int `json:"rate_limit_rpm" gorm:"column:rpm_limit;default:0"`
+	// RateLimitTPM caps the tenant's aggregate LLM tokens per minute. The column
+	// exists (migration 023) but is NOT yet enforced — see the TPM TODO in
+	// middleware/business_rate_limit.go. 0 = unlimited.
+	RateLimitTPM int `json:"rate_limit_tpm" gorm:"column:tpm_limit;default:0"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`

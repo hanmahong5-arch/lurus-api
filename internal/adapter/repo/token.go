@@ -47,8 +47,15 @@ type Token struct {
 	// RotatedAt is the unix-second time of the last automatic rotation; 0 means
 	// never auto-rotated (the rotation interval is then measured from
 	// CreatedTime).
-	RotatedAt int64          `json:"rotated_at" gorm:"default:0"`
-	DeletedAt gorm.DeletedAt `gorm:"index"`
+	RotatedAt int64 `json:"rotated_at" gorm:"default:0"`
+	// RateLimitRPM / RateLimitTPM mirror domain/entity/token.go (canonical
+	// docs live there): per-minute request / LLM-token caps enforced by
+	// middleware.BusinessRateLimit, 0 = unlimited (migration 023 columns).
+	// Duplicated here because the token create/update handlers bind and
+	// persist through this independent struct.
+	RateLimitRPM int            `json:"rate_limit_rpm" gorm:"column:rpm_limit;default:0"`
+	RateLimitTPM int            `json:"rate_limit_tpm" gorm:"column:tpm_limit;default:0"`
+	DeletedAt    gorm.DeletedAt `gorm:"index"`
 }
 
 func (token *Token) Clean() {
@@ -270,7 +277,8 @@ func (token *Token) Update() (err error) {
 		}
 	}()
 	err = DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry", "scopes").Updates(token).Error
+		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry", "scopes",
+		"rpm_limit", "tpm_limit").Updates(token).Error
 	return err
 }
 

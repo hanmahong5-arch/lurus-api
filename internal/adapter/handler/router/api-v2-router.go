@@ -320,6 +320,13 @@ func SetApiV2Router(router *gin.Engine) {
 			adminRoute.GET("/audit/events", middleware.CriticalRateLimit(), handler.GetAuditEvents)
 			adminRoute.GET("/audit/actions", handler.ListAuditActionsV2)
 			adminRoute.GET("/audit/export", middleware.CriticalRateLimit(), handler.ExportAuditEventsV2)
+			// Tamper-evidence hash-chain verification (migration 024).
+			adminRoute.GET("/audit/chain-verify", middleware.CriticalRateLimit(), handler.VerifyAuditChainV2)
+
+			// Model performance analytics + platform-wide usage-log CSV export
+			// (rate-limited: heavy aggregation / bulk row scans over logs).
+			adminRoute.GET("/analytics/model-performance", middleware.CriticalRateLimit(), handler.GetModelPerformanceV2)
+			adminRoute.GET("/logs/export", middleware.CriticalRateLimit(), handler.ExportAdminLogsV2)
 		}
 
 		// ================================================================
