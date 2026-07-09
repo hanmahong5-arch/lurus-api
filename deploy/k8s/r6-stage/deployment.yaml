@@ -108,7 +108,10 @@ spec:
             - name: LLM_QUOTA_NATS_ENABLED
               value: "true"
             - name: NATS_URL
-              value: "nats://100.120.110.73:14222"
+              # In-cluster NATS (ns messaging). The old R5 bridge
+              # 100.120.110.73:14222 is dead; the LLM_EVENTS stream and the
+              # lurus-notification consumer both live on this cluster's NATS.
+              value: "nats://nats.messaging.svc:4222"
             - name: LLM_QUOTA_NATS_STREAM
               value: "LLM_EVENTS"
             - name: NODE_TYPE
