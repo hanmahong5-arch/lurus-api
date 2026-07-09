@@ -182,8 +182,12 @@ func hasTenantIDColumn(db *gorm.DB) bool {
 	// Tables that have tenant_id column and opt into auto-scoping.
 	// Note: the logs table HAS a tenant_id column (entity/log.go) but is
 	// deliberately excluded — admin/cross-tenant log views legitimately span
-	// tenants, so log isolation relies on an explicit .Where("tenant_id = ?")
-	// at each call site rather than this plugin's auto-filter.
+	// tenants, no log call site uses a tenant-bound handle (so listing it
+	// here would add no read protection), beforeCreate would error on the
+	// bare-handle relay write path, and LOG_DB may be a separate database
+	// (LOG_SQL_DSN) that never has this plugin registered. Log isolation is
+	// instead enforced structurally in repo/log.go: every exported query is
+	// principal-scoped or requires an explicit TenantScope argument.
 	tablesWithTenantID := map[string]bool{
 		"users":         true,
 		"tokens":        true,

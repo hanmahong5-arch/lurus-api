@@ -21,7 +21,9 @@ func GetAllLogs(c *gin.Context) {
 	modelName := c.Query("model_name")
 	channel, _ := strconv.Atoi(c.Query("channel"))
 	group := c.Query("group")
-	logs, total, err := repo.GetAllLogs(logType, startTimestamp, endTimestamp, modelName, username, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), channel, group)
+	// v1 admin console is the platform-operator surface (consistent with the
+	// v1 user/channel/redemption admin endpoints): deliberately cross-tenant.
+	logs, total, err := repo.GetAllLogs(repo.AllTenantsForAdmin(), logType, startTimestamp, endTimestamp, modelName, username, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), channel, group)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -160,8 +162,9 @@ func GetLogsStat(c *gin.Context) {
 	modelName := c.Query("model_name")
 	channel, _ := strconv.Atoi(c.Query("channel"))
 	group := c.Query("group")
-	stat := repo.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, group)
-	//tokenNum := repo.SumUsedToken(logType, startTimestamp, endTimestamp, modelName, username, "")
+	// Platform-admin stat (AdminAuth route): deliberately cross-tenant.
+	stat := repo.SumUsedQuota(repo.AllTenantsForAdmin(), logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, group)
+	//tokenNum := repo.SumUsedToken(repo.AllTenantsForAdmin(), logType, startTimestamp, endTimestamp, modelName, username, "")
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -183,8 +186,11 @@ func GetLogsSelfStat(c *gin.Context) {
 	modelName := c.Query("model_name")
 	channel, _ := strconv.Atoi(c.Query("channel"))
 	group := c.Query("group")
-	quotaNum := repo.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, group)
-	//tokenNum := repo.SumUsedToken(logType, startTimestamp, endTimestamp, modelName, username, tokenName)
+	// Self stat: scope to the caller's tenant (set by authHelper for every
+	// session/access-token request). The username filter alone is not an
+	// isolation boundary once usernames are only unique per tenant.
+	quotaNum := repo.SumUsedQuota(repo.ForTenant(c.GetString("tenant_id")), logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, group)
+	//tokenNum := repo.SumUsedToken(repo.ForTenant(c.GetString("tenant_id")), logType, startTimestamp, endTimestamp, modelName, username, tokenName)
 	c.JSON(200, gin.H{
 		"success": true,
 		"message": "",
@@ -207,7 +213,8 @@ func DeleteHistoryLogs(c *gin.Context) {
 		})
 		return
 	}
-	count, err := repo.DeleteOldLog(c.Request.Context(), targetTimestamp, 100)
+	// Platform retention cleanup (AdminAuth route): deliberately cross-tenant.
+	count, err := repo.DeleteOldLog(c.Request.Context(), repo.AllTenantsForAdmin(), targetTimestamp, 100)
 	if err != nil {
 		common.ApiError(c, err)
 		return
