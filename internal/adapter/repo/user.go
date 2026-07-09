@@ -21,18 +21,21 @@ type DailyQuotaInfo = entity.DailyQuotaInfo
 
 // User is the core user entity. Auth is delegated to the OIDC provider; billing is delegated to lurus-platform.
 type User struct {
-	Id             int            `json:"id"`
-	TenantId       string         `json:"tenant_id" gorm:"type:varchar(36);index;default:'default'"` // Tenant isolation
-	Username       string         `json:"username" gorm:"unique;index" validate:"max=20"`
-	DisplayName    string         `json:"display_name" gorm:"index" validate:"max=20"`
-	Role           int            `json:"role" gorm:"type:int;default:1"`   // admin, common
-	Status         int            `json:"status" gorm:"type:int;default:1"` // enabled, disabled
-	Email          string         `json:"email" gorm:"index" validate:"max=50"`
-	AccessToken    *string        `json:"access_token" gorm:"type:char(32);column:access_token;uniqueIndex"` // system management token
-	Quota          int            `json:"quota" gorm:"type:int;default:0"`
-	UsedQuota      int            `json:"used_quota" gorm:"type:int;default:0;column:used_quota"`
-	RequestCount   int            `json:"request_count" gorm:"type:int;default:0;"`
-	Group          string         `json:"group" gorm:"type:varchar(64);default:'default'"`
+	Id       int    `json:"id"`
+	TenantId string `json:"tenant_id" gorm:"type:varchar(36);index;uniqueIndex:uk_users_tenant_username,priority:1;default:'default'"` // Tenant isolation
+	// Username is unique PER TENANT (composite uk_users_tenant_username with
+	// TenantId, migration 025); mirrors entity.User — both tags must move
+	// together or AutoMigrate re-creates the dropped global unique at boot.
+	Username     string  `json:"username" gorm:"index;uniqueIndex:uk_users_tenant_username,priority:2" validate:"max=20"`
+	DisplayName  string  `json:"display_name" gorm:"index" validate:"max=20"`
+	Role         int     `json:"role" gorm:"type:int;default:1"`   // admin, common
+	Status       int     `json:"status" gorm:"type:int;default:1"` // enabled, disabled
+	Email        string  `json:"email" gorm:"index" validate:"max=50"`
+	AccessToken  *string `json:"access_token" gorm:"type:char(32);column:access_token;uniqueIndex"` // system management token
+	Quota        int     `json:"quota" gorm:"type:int;default:0"`
+	UsedQuota    int     `json:"used_quota" gorm:"type:int;default:0;column:used_quota"`
+	RequestCount int     `json:"request_count" gorm:"type:int;default:0;"`
+	Group        string  `json:"group" gorm:"type:varchar(64);default:'default'"`
 	// Subscription-based daily quota management
 	DailyQuota     int            `json:"daily_quota" gorm:"type:int;default:0;column:daily_quota"`
 	DailyUsed      int            `json:"daily_used" gorm:"type:int;default:0;column:daily_used"`
@@ -394,9 +397,12 @@ func (user *User) Insert() error {
 		return result.Error
 	}
 
-	// Initialize sidebar config based on role after user creation
+	// Initialize sidebar config based on role after user creation. Re-fetch by
+	// primary key (Create populates user.Id): username is only per-tenant
+	// unique since migration 025, so a bare username lookup could land on
+	// another tenant's row.
 	var createdUser User
-	if err := DB.Where("username = ?", user.Username).First(&createdUser).Error; err == nil {
+	if err := DB.Where("id = ?", user.Id).First(&createdUser).Error; err == nil {
 		defaultSidebarConfig := generateDefaultSidebarConfigForRole(createdUser.Role)
 		if defaultSidebarConfig != "" {
 			currentSetting := createdUser.GetSetting()
