@@ -108,6 +108,20 @@ func BusinessModelRateLimit() gin.HandlerFunc {
 			return
 		}
 
+		// RPM is checked (and its admission recorded) BEFORE TPM, mirroring the
+		// token/tenant dimensions in business_rate_limit.go. Consequence: a
+		// request admitted past RPM but then rejected by TPM has still consumed
+		// its RPM slot for the window — sustained TPM overage nibbles the RPM
+		// budget too. This is deliberate and uniform across all three
+		// dimensions (RPM = "requests that passed the RPM gate this minute");
+		// decoupling the two would need a two-phase check-all-then-commit
+		// restructure of the whole limiter, out of scope here.
+		//
+		// Key = prefix + tenantID + ":" + model. The model name is
+		// client-controlled and unescaped, but tenant IDs are system-generated
+		// ('default' or "tenant-"+timestamp — see repo.GenerateID) and never
+		// contain ':', so the first ':' after the prefix unambiguously bounds
+		// the tenant; no cross-(tenant,model) key collision is reachable.
 		if limits.RPM > 0 {
 			allowed, retryAfter := bizAllow(c, bizModelKeyPrefix+tenantID+":"+model, limits.RPM)
 			if !allowed {

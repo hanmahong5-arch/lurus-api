@@ -1,6 +1,6 @@
 -- 026_create_model_rate_limits.sql
 -- Idempotent PG-only creation of model_rate_limits: one row per
--- (tenant_id, model) carrying rpm_limit / tpm_limit (INT NOT NULL DEFAULT 0,
+-- (tenant_id, model) carrying rpm_limit / tpm_limit (BIGINT NOT NULL DEFAULT 0,
 -- 0 = unlimited) — the model dimension of the business rate limiter.
 --
 -- WHY: migration 023 gave the token and tenant dimensions their limit
@@ -26,13 +26,18 @@
 --     the AutoMigrate-first ordering are both no-ops.
 --   * Index names match the GORM uniqueIndex tag (uk_model_rate_limits_
 --     tenant_model) so the two creation paths converge on identical schema.
+--   * rpm_limit/tpm_limit are BIGINT, not INT: GORM maps a plain Go `int`
+--     field (entity.ModelRateLimit) to postgres bigint, so declaring INT here
+--     would DIVERGE from AutoMigrate — on a runner-first DB (DR restore) the
+--     next boot's AutoMigrate would then rewrite the column (integer→bigint)
+--     under an ACCESS EXCLUSIVE lock. BIGINT makes both paths identical.
 
 CREATE TABLE IF NOT EXISTS model_rate_limits (
     id         BIGSERIAL PRIMARY KEY,
     tenant_id  VARCHAR(36)  NOT NULL DEFAULT 'default',
     model      VARCHAR(255) NOT NULL,
-    rpm_limit  INT          NOT NULL DEFAULT 0,
-    tpm_limit  INT          NOT NULL DEFAULT 0,
+    rpm_limit  BIGINT       NOT NULL DEFAULT 0,
+    tpm_limit  BIGINT       NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ
 );

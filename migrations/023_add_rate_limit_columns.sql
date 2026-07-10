@@ -1,7 +1,14 @@
 -- 023_add_rate_limit_columns.sql
 -- Idempotent PG-only addition of business rate-limit columns to tokens and
 -- tenants: rpm_limit (requests per minute) and tpm_limit (LLM tokens per
--- minute), both INT NOT NULL DEFAULT 0 where 0 = unlimited.
+-- minute), both BIGINT NOT NULL DEFAULT 0 where 0 = unlimited.
+--
+-- BIGINT, not INT: GORM maps the plain Go `int` fields (repo Token /
+-- entity.Tenant) to postgres bigint, so declaring INT here would DIVERGE from
+-- AutoMigrate. On the normal boot path AutoMigrate runs first (bigint) and this
+-- ADD COLUMN is a no-op; but on a runner-first DB (DR restore) INT columns
+-- would later be rewritten integer→bigint by AutoMigrate under an ACCESS
+-- EXCLUSIVE lock — heavy on the large tokens table. BIGINT keeps both identical.
 --
 -- WHY: middleware.BusinessRateLimit adds per-token / per-tenant RPM sliding
 -- windows on the relay chain (rate-limit.go only covers the ClientIP
@@ -35,15 +42,15 @@ BEGIN
     IF to_regclass('public.tokens') IS NULL THEN
         RAISE WARNING '023_add_rate_limit_columns: tokens absent (AutoMigrate creates it at boot); skipping';
     ELSE
-        EXECUTE 'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS rpm_limit INT NOT NULL DEFAULT 0';
-        EXECUTE 'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS tpm_limit INT NOT NULL DEFAULT 0';
+        EXECUTE 'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS rpm_limit BIGINT NOT NULL DEFAULT 0';
+        EXECUTE 'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS tpm_limit BIGINT NOT NULL DEFAULT 0';
     END IF;
 
     IF to_regclass('public.tenants') IS NULL THEN
         RAISE WARNING '023_add_rate_limit_columns: tenants absent (AutoMigrate creates it at boot); skipping';
     ELSE
-        EXECUTE 'ALTER TABLE tenants ADD COLUMN IF NOT EXISTS rpm_limit INT NOT NULL DEFAULT 0';
-        EXECUTE 'ALTER TABLE tenants ADD COLUMN IF NOT EXISTS tpm_limit INT NOT NULL DEFAULT 0';
+        EXECUTE 'ALTER TABLE tenants ADD COLUMN IF NOT EXISTS rpm_limit BIGINT NOT NULL DEFAULT 0';
+        EXECUTE 'ALTER TABLE tenants ADD COLUMN IF NOT EXISTS tpm_limit BIGINT NOT NULL DEFAULT 0';
     END IF;
 END
 $mig$;
