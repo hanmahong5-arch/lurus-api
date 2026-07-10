@@ -28,9 +28,9 @@ type Tenant struct {
 	// all of its tokens (sliding window, enforced by
 	// middleware.BusinessRateLimit). 0 = unlimited (backward compat).
 	RateLimitRPM int `json:"rate_limit_rpm" gorm:"column:rpm_limit;default:0"`
-	// RateLimitTPM caps the tenant's aggregate LLM tokens per minute. The column
-	// exists (migration 023) but is NOT yet enforced — see the TPM TODO in
-	// middleware/business_rate_limit.go. 0 = unlimited.
+	// RateLimitTPM caps the tenant's aggregate settled LLM tokens per minute
+	// (sliding window read by middleware.BusinessRateLimit, fed by
+	// PostConsumeQuota — internal/app/business_tpm.go). 0 = unlimited.
 	RateLimitTPM int `json:"rate_limit_tpm" gorm:"column:tpm_limit;default:0"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`

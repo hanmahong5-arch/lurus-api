@@ -154,11 +154,12 @@ func TestIntegration021_ClosesGaps_AndIdempotent(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	// 20 baseline records + 021..025 executed = 25 (BaselineThrough=020, so
+	// 20 baseline records + 021..026 executed = 26 (BaselineThrough=020, so
 	// every version above it runs; 022 is a no-op here since 021 seeds
-	// id=default, and 023..025 skip absent tables via their to_regclass guards).
-	if got := countApplied(t, db); got != 25 {
-		t.Errorf("schema_migrations = %d, want 25 (20 baseline + 021..025)", got)
+	// id=default, 023..025 skip absent tables via their to_regclass guards,
+	// and 026 creates model_rate_limits).
+	if got := countApplied(t, db); got != 26 {
+		t.Errorf("schema_migrations = %d, want 26 (20 baseline + 021..026)", got)
 	}
 
 	// §1 tables now present.
@@ -208,8 +209,8 @@ func TestIntegration021_ClosesGaps_AndIdempotent(t *testing.T) {
 	if err := r.Run(context.Background()); err != nil {
 		t.Fatalf("second Run: %v", err)
 	}
-	if got := countApplied(t, db); got != 25 {
-		t.Errorf("after rerun schema_migrations = %d, want 25", got)
+	if got := countApplied(t, db); got != 26 {
+		t.Errorf("after rerun schema_migrations = %d, want 26", got)
 	}
 	if n := scalarInt(t, db, `SELECT count(*) FROM tenant_configs WHERE tenant_id = 'default'`); n != 16 {
 		t.Errorf("after rerun tenant_configs rows = %d, want 16 (seed must not duplicate)", n)

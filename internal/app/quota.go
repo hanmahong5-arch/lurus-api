@@ -690,8 +690,13 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 	if totalQuota > 0 && relayInfo.TokenId > 0 {
 		tpmTokenID := relayInfo.TokenId
 		tpmTenantID := bizTPMTenantOf(tpmTokenID)
+		// Model dimension keys on the CLIENT-requested name (OriginModelName)
+		// — the same value BusinessModelRateLimit reads from the gin context —
+		// not the upstream-mapped name, so limit and usage always agree.
+		tpmModel := relayInfo.OriginModelName
 		AsyncGo(func() {
 			RecordBusinessTPMUsage(tpmTokenID, tpmTenantID, totalQuota)
+			RecordBusinessTPMModelUsage(tpmTenantID, tpmModel, totalQuota)
 		})
 	}
 

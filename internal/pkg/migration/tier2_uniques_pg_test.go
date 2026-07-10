@@ -16,14 +16,15 @@ import (
 	"github.com/LurusTech/lurus-hub/migrations"
 )
 
-// baselineThrough024 makes the Runner execute ONLY 025.
+// baselineThrough024 makes the Runner execute only 025 and above (025 + 026;
+// 026 just creates its own unrelated model_rate_limits table).
 const baselineThrough024 = "024_audit_events_tamper_evidence"
 
 func runOnly025(t *testing.T, db *sql.DB) {
 	t.Helper()
 	r := &migration.Runner{DB: db, FS: migrations.FS, BaselineThrough: baselineThrough024}
 	if err := r.Run(context.Background()); err != nil {
-		t.Fatalf("Run (execute 025): %v", err)
+		t.Fatalf("Run (execute 025+): %v", err)
 	}
 }
 
@@ -71,9 +72,9 @@ func TestIntegration025_LegacyGlobalUnique_ConvergesToPerTenant(t *testing.T) {
 
 	runOnly025(t, db)
 
-	// 24 baselined (001-024) + 025 executed = 25.
-	if got := countApplied(t, db); got != 25 {
-		t.Errorf("schema_migrations = %d, want 25 (24 baseline + 025)", got)
+	// 24 baselined (001-024) + 025..026 executed = 26.
+	if got := countApplied(t, db); got != 26 {
+		t.Errorf("schema_migrations = %d, want 26 (24 baseline + 025..026)", got)
 	}
 
 	// Both legacy single-column uniques are gone; the composite exists.
@@ -103,8 +104,8 @@ func TestIntegration025_LegacyGlobalUnique_ConvergesToPerTenant(t *testing.T) {
 
 	// Idempotency 1 — a second Runner pass re-records and re-executes nothing.
 	runOnly025(t, db)
-	if got := countApplied(t, db); got != 25 {
-		t.Errorf("after rerun schema_migrations = %d, want 25", got)
+	if got := countApplied(t, db); got != 26 {
+		t.Errorf("after rerun schema_migrations = %d, want 26", got)
 	}
 
 	// Idempotency 2 — executing the SQL body itself again is a clean no-op
@@ -128,8 +129,8 @@ func TestIntegration025_EmptyDBGuard(t *testing.T) {
 	if tableExists(t, db, "users") {
 		t.Error("025 must not create users (AutoMigrate owns it)")
 	}
-	if got := countApplied(t, db); got != 25 {
-		t.Errorf("schema_migrations = %d, want 25", got)
+	if got := countApplied(t, db); got != 26 {
+		t.Errorf("schema_migrations = %d, want 26", got)
 	}
 }
 
@@ -149,7 +150,7 @@ func TestIntegration025_PartialUsersTable_ColumnGuardSkips(t *testing.T) {
 	if hasUniqueOnColumns(t, db, "users", "tenant_id", "username") {
 		t.Error("025 must skip a users table without a username column")
 	}
-	if got := countApplied(t, db); got != 25 {
-		t.Errorf("schema_migrations = %d, want 25", got)
+	if got := countApplied(t, db); got != 26 {
+		t.Errorf("schema_migrations = %d, want 26", got)
 	}
 }
