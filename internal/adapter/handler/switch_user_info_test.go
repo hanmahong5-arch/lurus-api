@@ -63,7 +63,7 @@ func setupSwitchUserInfoTest(t *testing.T) *switchUserInfoTestCtx {
 		common.UsingPostgreSQL = prevPG
 		common.RedisEnabled = prevRedis
 		if sqlDB, _ := db.DB(); sqlDB != nil {
-			sqlDB.Close()
+			_ = sqlDB.Close()
 		}
 	})
 
