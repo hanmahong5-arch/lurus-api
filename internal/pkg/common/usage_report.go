@@ -49,7 +49,7 @@ func ReportUsageEvent(ctx context.Context, accountID int64, productID, metric st
 	if err != nil {
 		return fmt.Errorf("usage report: billing service unreachable")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		reason := parseErrorResponse(resp.Body)

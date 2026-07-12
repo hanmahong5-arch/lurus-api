@@ -520,7 +520,7 @@ func TestV1Channel_DeleteBatchTenantScoped(t *testing.T) {
 	}
 
 	// (c) root batch-delete reaches every tenant.
-	c, w = v1Ctx(http.MethodPost, "/api/channel/batch",
+	c, _ = v1Ctx(http.MethodPost, "/api/channel/batch",
 		map[string]interface{}{"ids": []int{victim.Id}},
 		common.RoleRootUser, ctx.TenantID, ctx.RootUser.Id)
 	DeleteChannelBatch(c)
@@ -553,7 +553,7 @@ func TestV1Channel_BatchSetTagTenantScoped(t *testing.T) {
 	}
 
 	// (c) root retags every tenant.
-	c, w = v1Ctx(http.MethodPost, "/api/channel/batch/tag",
+	c, _ = v1Ctx(http.MethodPost, "/api/channel/batch/tag",
 		map[string]interface{}{"ids": []int{victim.Id}, "tag": "root-tag"},
 		common.RoleRootUser, ctx.TenantID, ctx.RootUser.Id)
 	BatchSetChannelTag(c)
@@ -587,7 +587,7 @@ func TestV1Channel_DisableEnableTagTenantScoped(t *testing.T) {
 	}
 
 	// (c) root disables every tenant's channel sharing the tag.
-	c, w = v1Ctx(http.MethodPost, "/api/channel/tag/disabled",
+	c, _ = v1Ctx(http.MethodPost, "/api/channel/tag/disabled",
 		map[string]interface{}{"tag": sharedTag},
 		common.RoleRootUser, ctx.TenantID, ctx.RootUser.Id)
 	DisableTagChannels(c)
@@ -637,7 +637,7 @@ func TestV1Channel_EditTagTenantScoped(t *testing.T) {
 	}
 
 	// (c) root renames every tenant's channel sharing the tag.
-	c, w = v1Ctx(http.MethodPut, "/api/channel/tag",
+	c, _ = v1Ctx(http.MethodPut, "/api/channel/tag",
 		map[string]interface{}{"tag": sharedTag, "new_tag": "root-tag"},
 		common.RoleRootUser, ctx.TenantID, ctx.RootUser.Id)
 	EditTagChannels(c)
@@ -673,7 +673,7 @@ func TestV1Channel_DeleteDisabledTenantScoped(t *testing.T) {
 	}
 
 	// (c) root prunes every tenant's disabled channels.
-	c, w = v1Ctx(http.MethodDelete, "/api/channel/disabled", nil,
+	c, _ = v1Ctx(http.MethodDelete, "/api/channel/disabled", nil,
 		common.RoleRootUser, ctx.TenantID, ctx.RootUser.Id)
 	DeleteDisabledChannel(c)
 	if got := v1ChannelCount(ctx, victimDisabled.Id); got != 0 {
