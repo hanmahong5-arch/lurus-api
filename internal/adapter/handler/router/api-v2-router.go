@@ -16,6 +16,11 @@ func SetApiV2Router(router *gin.Engine) {
 	// missing it, so browser cross-origin calls (console SPA, Switch app) had
 	// no Access-Control-* response headers and silently failed preflight.
 	apiV2.Use(middleware.CORS())
+	// Same rationale as api-router.go: DecompressRequestMiddleware only lands
+	// on the relay router, which main.go wires up AFTER this group already
+	// snapshotted its middleware chain, so it never reaches /api/v2. Cap the
+	// body directly on this group. See body_size_limit.go.
+	apiV2.Use(middleware.RequestBodySizeLimit())
 	// Non-blocking SDK identity injector: resolves the lurus_session cookie
 	// (set by the platform SDK bridge) into the context so middleware.UserAuth
 	// / AdminAuth can admit SDK-authenticated console users whose only
