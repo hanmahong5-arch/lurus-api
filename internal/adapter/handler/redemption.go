@@ -220,7 +220,16 @@ func UpdateRedemption(c *gin.Context) {
 }
 
 func DeleteInvalidRedemption(c *gin.Context) {
-	rows, err := repo.DeleteInvalidRedemptions()
+	// AdminAuth is satisfied by a per-tenant admin too, so a non-root prune must
+	// stay inside the caller's tenant; root keeps the global sweep. Without this
+	// split a role-10 tenant admin purged every tenant's spent/expired codes.
+	var rows int64
+	var err error
+	if c.GetInt("role") >= common.RoleRootUser {
+		rows, err = repo.DeleteInvalidRedemptions()
+	} else {
+		rows, err = repo.DeleteInvalidRedemptionsByTenant(c.GetString("tenant_id"))
+	}
 	if err != nil {
 		common.ApiError(c, err)
 		return
