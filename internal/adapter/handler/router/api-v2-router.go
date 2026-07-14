@@ -226,6 +226,10 @@ func SetApiV2Router(router *gin.Engine) {
 			// Quota/identity snapshot for the token owner (inline raw-token
 			// auth) — backs the Switch billing quota card.
 			switchGroup.GET("/user/info", handler.GetSwitchUserInfo)
+			// Redemption-code topup for the token owner (inline raw-token
+			// auth) — lets a Switch client credit its own account without
+			// an OIDC session (middleware.UserAuth() would reject it).
+			switchGroup.POST("/user/topup", handler.SwitchUserTopup)
 		}
 
 		// Admin-published relay recommendations for Switch clients (public,
