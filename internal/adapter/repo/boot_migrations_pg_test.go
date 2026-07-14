@@ -3,6 +3,7 @@ package repo
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"sync/atomic"
 	"testing"
@@ -79,7 +80,7 @@ func TestWithPGAdvisoryLock_ReleasesOnSameSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("conn: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	var free bool
 	if err := conn.QueryRowContext(context.Background(),
 		`SELECT pg_try_advisory_lock($1)`, key).Scan(&free); err != nil {
@@ -100,7 +101,7 @@ func TestWithPGAdvisoryLock_PropagatesFnError(t *testing.T) {
 	const key = int64(0x4C48627445727273) // "LHbtErrs" — test-only key
 
 	wantErr := os.ErrDeadlineExceeded
-	if err := withPGAdvisoryLock(context.Background(), db, key, func() error { return wantErr }); err != wantErr {
+	if err := withPGAdvisoryLock(context.Background(), db, key, func() error { return wantErr }); !errors.Is(err, wantErr) {
 		t.Fatalf("err=%v, want %v", err, wantErr)
 	}
 	var free bool

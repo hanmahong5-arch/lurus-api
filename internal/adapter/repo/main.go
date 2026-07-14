@@ -296,7 +296,7 @@ func withPGAdvisoryLock(ctx context.Context, sqlDB *sql.DB, key int64, fn func()
 	if err != nil {
 		return fmt.Errorf("advisory lock conn: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock($1)`, key); err != nil {
 		return fmt.Errorf("acquire advisory lock %d: %w", key, err)
 	}
