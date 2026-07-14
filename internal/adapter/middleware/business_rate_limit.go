@@ -238,8 +238,11 @@ func bizReject(c *gin.Context, scope, limitType string, limit int, retryAfter in
 	metrics.RecordRateLimited(scope, limitType)
 	setRateLimitResponseHeaders(c, limit, 0, retryAfter)
 	scopeLabel := "令牌"
-	if scope == "tenant" {
+	switch scope {
+	case "tenant":
 		scopeLabel = "租户"
+	case "model":
+		scopeLabel = "模型"
 	}
 	measure := "请求数"
 	if limitType == "tpm" {
@@ -310,6 +313,10 @@ func BusinessRateLimit() gin.HandlerFunc {
 			c.Next()
 			return
 		}
+		// Stash the resolved tenant for BusinessModelRateLimit (which runs
+		// after Distribute, further down the chain) so the model dimension
+		// doesn't repeat this token→tenant SELECT.
+		c.Set(bizTenantIDContextKey, tenantID)
 
 		if tokenLimits.RPM > 0 {
 			allowed, retryAfter := bizAllow(c, bizTokenKeyPrefix+strconv.Itoa(tokenID), tokenLimits.RPM)

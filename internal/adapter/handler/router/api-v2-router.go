@@ -269,6 +269,13 @@ func SetApiV2Router(router *gin.Engine) {
 				tenantMgmt.POST("/:id/suspend", handler.SuspendTenant)
 				tenantMgmt.GET("/:id/stats", handler.GetTenantStats)
 
+				// Per-model rate limits (migration 026). DELETE takes the
+				// model as ?model= — model names contain '/' (vendor/model),
+				// which a path parameter cannot carry.
+				tenantMgmt.GET("/:id/model-limits", handler.ListTenantModelLimits)
+				tenantMgmt.PUT("/:id/model-limits", handler.UpsertTenantModelLimit)
+				tenantMgmt.DELETE("/:id/model-limits", handler.DeleteTenantModelLimit)
+
 				// Reseller credit-pool admin (ADR 2026-05-18 §4.1)
 				tenantMgmt.POST("/:id/credit-pool", handler.CreateCreditPool)
 				tenantMgmt.GET("/:id/credit-pool", handler.GetCreditPool)

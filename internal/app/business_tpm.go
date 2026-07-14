@@ -44,6 +44,7 @@ const (
 
 	bizTPMTokenKeyPrefix  = "rl:biz:tpm:tok:"
 	bizTPMTenantKeyPrefix = "rl:biz:tpm:tenant:"
+	bizTPMModelKeyPrefix  = "rl:biz:tpm:model:"
 	// bizTPMTTL keeps idle Redis keys from lingering; slack past the window
 	// matches the middleware's RPM ZSET expiry.
 	bizTPMTTL = BizTPMWindow + 10*time.Second
@@ -187,6 +188,25 @@ func RecordBusinessTPMUsage(tokenID int, tenantID string, tokens int) {
 	}
 }
 
+// bizTPMModelKey builds the (tenant, model) window key. The model name is
+// used verbatim — it may itself contain ':' but the key is never parsed back,
+// only matched exactly, so no escaping is needed.
+func bizTPMModelKey(tenantID, model string) string {
+	return bizTPMModelKeyPrefix + tenantID + ":" + model
+}
+
+// RecordBusinessTPMModelUsage appends one settlement's usage to the
+// (tenant, model) TPM window — the model dimension counterpart of
+// RecordBusinessTPMUsage, same fire-and-forget fail-soft contract. Skips when
+// either dimension component is missing: without a tenant or a model name the
+// usage cannot be attributed to a (tenant, model) limit.
+func RecordBusinessTPMModelUsage(tenantID, model string, tokens int) {
+	if tokens <= 0 || tenantID == "" || model == "" {
+		return
+	}
+	bizTPMRecord(bizTPMModelKey(tenantID, model), int64(tokens), BizTPMNow())
+}
+
 // QueryBusinessTPMTokenWindow returns the token's settled usage inside the
 // last minute plus the oldest in-window record's unix-milli timestamp (0 when
 // the window is empty; callers derive Retry-After from it). A non-nil error
@@ -199,6 +219,12 @@ func QueryBusinessTPMTokenWindow(ctx context.Context, tokenID int) (total int64,
 // aggregate dimension.
 func QueryBusinessTPMTenantWindow(ctx context.Context, tenantID string) (total int64, oldestMs int64, err error) {
 	return bizTPMQuery(ctx, bizTPMTenantKeyPrefix+tenantID)
+}
+
+// QueryBusinessTPMModelWindow is QueryBusinessTPMTokenWindow for the
+// (tenant, model) dimension.
+func QueryBusinessTPMModelWindow(ctx context.Context, tenantID, model string) (total int64, oldestMs int64, err error) {
+	return bizTPMQuery(ctx, bizTPMModelKey(tenantID, model))
 }
 
 func bizTPMQuery(ctx context.Context, key string) (total int64, oldestMs int64, err error) {
