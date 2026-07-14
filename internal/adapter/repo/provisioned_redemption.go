@@ -100,12 +100,13 @@ func ProvisionRedemptionBatchIdempotent(
 		CreatedAt:    time.Now(),
 	}
 
-	// Feed the TenantPlugin's beforeCreate hook (as WithTenantID does, but
-	// carrying the caller ctx explicitly): `redemptions` is on the plugin's
-	// auto-scoped table list, and a Create without a tenant ID in context
-	// errors out ("tenant_id is required for create operations"). The batch
-	// table is not on that list, so the scoped handle is harmless there.
-	scoped := DB.WithContext(context.WithValue(ctx, TenantIDContextKey, tenantID))
+	// WithTenantID feeds the TenantPlugin's beforeCreate hook: `redemptions`
+	// is on the plugin's auto-scoped table list, and a Create without a tenant
+	// ID in context errors out ("tenant_id is required for create operations").
+	// The batch table is not on that list, so the scoped handle is harmless
+	// there. The caller ctx IS threaded — WithTenantID derives from
+	// Statement.Context, seeded by WithContext(ctx) below.
+	scoped := WithTenantID(DB.WithContext(ctx), tenantID) //nolint:contextcheck // ctx enters via WithContext; the helper reads Statement.Context
 	txErr := scoped.Transaction(func(tx *gorm.DB) error {
 		if insertErr := tx.Create(batch).Error; insertErr != nil {
 			// Unique-constraint violation from a concurrent replay: surface the
