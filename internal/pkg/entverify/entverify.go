@@ -1,5 +1,5 @@
 // Vendored from lurus-platform pkg/entverify (the source of truth and its
-// conformance suite live there) at platform master b020161. Update by
+// conformance suite live there) at platform master bc3d32a. Update by
 // re-copying the pair of files; do not edit here.
 //
 // Package entverify is the reference OFFLINE verifier for platform entitlement
@@ -191,7 +191,7 @@ func New(jwksURL string, opts ...Option) *Verifier {
 	if len(v.seed) > 0 {
 		if keys, err := parseJWKS(v.seed); err != nil {
 			if v.initErr == nil {
-				v.initErr = fmt.Errorf("%w: %v", ErrBadSeed, err)
+				v.initErr = fmt.Errorf("%w: %w", ErrBadSeed, err)
 			}
 		} else {
 			v.keys = keys
