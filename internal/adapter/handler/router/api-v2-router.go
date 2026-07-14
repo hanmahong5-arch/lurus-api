@@ -235,6 +235,10 @@ func SetApiV2Router(router *gin.Engine) {
 			// auth) — lets a Switch client credit its own account without
 			// an OIDC session (middleware.UserAuth() would reject it).
 			switchGroup.POST("/user/topup", handler.SwitchUserTopup)
+			// CN-survivable self-update mirror: latest Switch desktop release
+			// (admin-published via switch_app.* options; 404 = unpublished,
+			// client falls back to GitHub Releases).
+			switchGroup.GET("/app/releases/latest", handler.GetSwitchAppRelease)
 		}
 
 		// Admin-published relay recommendations for Switch clients (public,
