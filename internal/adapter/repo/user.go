@@ -249,6 +249,57 @@ func SearchUsers(keyword string, group string, startIdx int, num int) ([]*User, 
 	return users, total, nil
 }
 
+// GetUsersByTenant lists users belonging to a single tenant, for the v1 admin
+// console when the caller is a tenant admin rather than a platform root
+// operator. Mirrors GetAllUsers but constrains the result set to one tenant.
+func GetUsersByTenant(tenantID string, pageInfo *common.PageInfo) (users []*User, total int64, err error) {
+	db := DB.Unscoped().Model(&User{}).Where("tenant_id = ?", tenantID)
+	if err = db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if err = db.Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+	return users, total, nil
+}
+
+// SearchUsersByTenant is the tenant-scoped sibling of SearchUsers used by the
+// v1 admin console for tenant-admin callers.
+func SearchUsersByTenant(tenantID string, keyword string, group string, startIdx int, num int) ([]*User, int64, error) {
+	var users []*User
+	var total int64
+
+	query := DB.Unscoped().Model(&User{}).Where("tenant_id = ?", tenantID)
+
+	likeCondition := "username LIKE ? OR email LIKE ? OR display_name LIKE ?"
+	if keywordInt, convErr := strconv.Atoi(keyword); convErr == nil {
+		likeCondition = "id = ? OR " + likeCondition
+		if group != "" {
+			query = query.Where("("+likeCondition+") AND "+commonGroupCol+" = ?",
+				keywordInt, "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%", group)
+		} else {
+			query = query.Where(likeCondition,
+				keywordInt, "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
+		}
+	} else {
+		if group != "" {
+			query = query.Where("("+likeCondition+") AND "+commonGroupCol+" = ?",
+				"%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%", group)
+		} else {
+			query = query.Where(likeCondition,
+				"%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
+		}
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := query.Order("id desc").Limit(num).Offset(startIdx).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+	return users, total, nil
+}
+
 // GetUserById fetches a user by ID. The optional bool argument is accepted but ignored
 // (kept for backward compatibility while callers are updated).
 func GetUserById(id int, _ ...bool) (*User, error) {
@@ -510,6 +561,22 @@ func IsAdmin(userId int) bool {
 	return user.Role >= common.RoleAdminUser
 }
 
+// IsRoot reports whether the user holds the root (cross-tenant operator) role.
+// Mirrors IsAdmin; used to decide whether a specific-channel relay override may
+// target a channel owned by a different tenant.
+func IsRoot(userId int) bool {
+	if userId == 0 {
+		return false
+	}
+	var user User
+	err := DB.Where("id = ?", userId).Select("role").Find(&user).Error
+	if err != nil {
+		common.SysLog("no such user " + err.Error())
+		return false
+	}
+	return user.Role >= common.RoleRootUser
+}
+
 func ValidateAccessToken(token string) (user *User) {
 	if token == "" {
 		return nil
@@ -669,6 +736,46 @@ func decreaseUserQuota(id int, quota int) (err error) {
 		return err
 	}
 	return err
+}
+
+// DecreaseUserQuotaIfEnough atomically debits a user's quota ONLY when the row
+// still holds at least `quota` (WHERE quota >= ?), the symmetric counterpart of
+// DecreaseTokenQuotaIfEnough and DebitPoolInTx. It closes the pre-consume
+// user-gate TOCTOU: concurrent callers can no longer all pass the
+// read-then-compare check and all debit past zero.
+//
+// Returns ok=false (NOT err) on insufficient balance (RowsAffected == 0). Only
+// the NON-ADVISORY pre-consume path calls this; the advisory shadow ledger
+// deliberately keeps the unconditional DecreaseUserQuota so its balance may
+// still go negative (that drift is what the rollout measures). The general
+// DecreaseUserQuota likewise stays unconditional for post-consume
+// settlement/compensation.
+//
+// Cache / batch scope is identical to DecreaseTokenQuotaIfEnough: the
+// conditional UPDATE runs directly on the DB (never batch-buffered, which
+// cannot be guarded atomically); under Redis the cache is decremented on
+// success. The DB row is the authoritative guard.
+func DecreaseUserQuotaIfEnough(id int, quota int) (ok bool, err error) {
+	if quota < 0 {
+		return false, errors.New("quota 不能为负数！")
+	}
+	result := DB.Model(&User{}).
+		Where("id = ? AND quota >= ?", id, quota).
+		Update("quota", gorm.Expr("quota - ?", quota))
+	if result.Error != nil {
+		return false, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return false, nil
+	}
+	if common.RedisEnabled {
+		gopool.Go(func() {
+			if cErr := cacheDecrUserQuota(id, int64(quota)); cErr != nil {
+				common.SysLog("failed to decrease user quota cache: " + cErr.Error())
+			}
+		})
+	}
+	return true, nil
 }
 
 func DeltaUpdateUserQuota(id int, delta int) (err error) {

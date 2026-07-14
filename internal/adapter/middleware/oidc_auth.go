@@ -172,9 +172,9 @@ var (
 	oidcClientID        string
 	oidcEnabled         bool
 	jwksRefreshInterval time.Duration = 1 * time.Hour
-	// oidcAllowedAudiences holds the parsed set of accepted "aud" values
-	// (OIDC_ALLOWED_AUDIENCES, comma-separated). When empty, audience
-	// enforcement is skipped entirely (see checkAudience).
+	// oidcAllowedAudiences holds the parsed set of ADDITIONAL accepted "aud"
+	// values (OIDC_ALLOWED_AUDIENCES, comma-separated). oidcClientID is always
+	// an accepted audience regardless of this list (see checkAudience).
 	oidcAllowedAudiences []string
 )
 
@@ -217,12 +217,12 @@ func InitOIDCAuth() error {
 	oidcJwksURI = os.Getenv("OIDC_JWKS_URI")
 	oidcClientID = os.Getenv("OIDC_CLIENT_ID")
 
-	// OIDC_ALLOWED_AUDIENCES: optional comma-separated allow-list for the JWT
-	// "aud" claim. Audience enforcement is opt-in: when set, a token must carry
-	// at least one matching audience; when unset/empty, no aud check is done
-	// (many IdPs mint tokens whose "aud" is a project/resource id rather than
-	// the client_id, so requiring the client_id by default would reject valid
-	// tokens — operators opt in explicitly via this var).
+	// OIDC_ALLOWED_AUDIENCES: optional comma-separated ADDITIONAL allow-list for
+	// the JWT "aud" claim. This service's own OIDC_CLIENT_ID is ALWAYS an
+	// accepted audience (see checkAudience), so a legitimately-issued newhub
+	// token passes without any extra configuration. This var only widens the
+	// accepted set for deploys whose IdP additionally stamps tokens with a
+	// project/resource id distinct from the client_id.
 	oidcAllowedAudiences = nil
 	rawAudiences := os.Getenv("OIDC_ALLOWED_AUDIENCES")
 	for _, part := range strings.Split(rawAudiences, ",") {
@@ -813,18 +813,26 @@ func OIDCAuth() gin.HandlerFunc {
 	}
 }
 
-// checkAudience validates a token's "aud" claim against the accepted set.
-// Enforcement is opt-in: it applies only when OIDC_ALLOWED_AUDIENCES is
-// configured (oidcAllowedAudiences non-empty), in which case the token must
-// carry at least one matching audience. When unset, no audience check is
-// performed — many IdPs mint tokens whose "aud" is a project/resource id
-// rather than the client_id, so requiring the client_id as audience by
-// default would reject otherwise-valid tokens.
+// checkAudience validates a token's "aud" claim against the audiences this
+// service accepts. A token passes when at least one of its audiences is either:
+//   - oidcClientID (OIDC_CLIENT_ID) — this service's own client identifier, the
+//     audience a legitimately-issued newhub token always carries (mirrors the
+//     OAuth handler's validateIDTokenClaims, which requires OIDC_CLIENT_ID); or
+//   - an entry in OIDC_ALLOWED_AUDIENCES — an optional extra allow-list for
+//     deploys whose IdP additionally stamps tokens with a project/resource id.
+//
+// Enforcement is NOT opt-in: a token whose "aud" matches neither is rejected,
+// so a token minted for a different client under the same issuer cannot be
+// replayed against this service. When oidcClientID is empty (startup normally
+// fast-fails first — OIDC_CLIENT_ID is required) the check fails closed rather
+// than silently accepting every audience.
 func checkAudience(aud jwt.ClaimStrings) bool {
-	if len(oidcAllowedAudiences) == 0 {
-		return true
-	}
 	for _, a := range aud {
+		// This service's own client_id is always an accepted audience.
+		if oidcClientID != "" && a == oidcClientID {
+			return true
+		}
+		// Any explicitly allow-listed audience is also accepted.
 		for _, want := range oidcAllowedAudiences {
 			if a == want {
 				return true
@@ -859,6 +867,16 @@ func applyConfigurableClaims(tokenString string, claims *OIDCClaims) {
 // mapOIDCUserToLurus maps an OIDC user to a lurus user and tenant.
 // Auto-creates tenant and user if they don't exist.
 func mapOIDCUserToLurus(claims *OIDCClaims) (tenantID string, lurusUserID int, err error) {
+	// SECURITY (cross-tenant isolation): a blank org_id must never resolve to a
+	// tenant. Without this guard the first user carrying no org_id would create
+	// a tenant keyed on zitadel_org_id='' and every later org_id-less user from
+	// any unrelated IdP would be folded into that same tenant, sharing its
+	// channels/tokens/credit pool/logs. Reject the mapping so the request fails
+	// authentication instead of silently cross-wiring tenants.
+	if strings.TrimSpace(claims.OrgID) == "" {
+		return "", 0, errors.New("OIDC token has empty org_id; cannot resolve tenant")
+	}
+
 	// Step 1: Map tenant (OIDC Org ID → lurus Tenant ID)
 	tenant, err := repo.GetTenantByIDPOrgID(claims.OrgID)
 	if err != nil {
