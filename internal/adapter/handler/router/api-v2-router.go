@@ -228,7 +228,18 @@ func SetApiV2Router(router *gin.Engine) {
 			switchGroup.GET("/pricing", handler.GetSwitchPricing)
 			// Wave 1 W1.2: usage reconciliation (inline raw-token auth).
 			switchGroup.POST("/reconciliation", handler.SwitchReconciliation)
+			// Quota/identity snapshot for the token owner (inline raw-token
+			// auth) — backs the Switch billing quota card.
+			switchGroup.GET("/user/info", handler.GetSwitchUserInfo)
+			// Redemption-code topup for the token owner (inline raw-token
+			// auth) — lets a Switch client credit its own account without
+			// an OIDC session (middleware.UserAuth() would reject it).
+			switchGroup.POST("/user/topup", handler.SwitchUserTopup)
 		}
+
+		// Admin-published relay recommendations for Switch clients (public,
+		// options-driven; bare-array contract, see GetRecommendedRelays).
+		apiV2.GET("/relays/recommended", handler.GetRecommendedRelays)
 
 		// Phase D Track 2.2: tenant-scoped heartbeat — sibling of /:tenant_slug/user/me.
 		// No middleware: UserHeartbeat does inline raw-token (Token.Key) auth,
