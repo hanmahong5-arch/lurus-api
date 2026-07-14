@@ -158,6 +158,13 @@ func SetApiV2Router(router *gin.Engine) {
 		}
 		apiV2.POST("/:tenant_slug/redeem", middleware.UserAuth(), middleware.TenantSlugGuard(), handler.RedeemCodeV2)
 
+		// P4 unified provisioning: exchange a platform entitlement token
+		// (verified OFFLINE against the platform JWKS) for a bounded relay
+		// token. Public — the entitlement token is the credential; same
+		// rate-limit bucket as zita-bootstrap (structurally identical
+		// credential exchange).
+		apiV2.POST("/:tenant_slug/provision", middleware.BootstrapRateLimit(), handler.ProvisionV2)
+
 		tenantSessions := apiV2.Group("/:tenant_slug/sessions")
 		tenantSessions.Use(middleware.UserAuth())
 		tenantSessions.Use(middleware.TenantSlugGuard())

@@ -366,6 +366,8 @@ func migrateDB() error {
 		// was missing here, so a fresh PG never created the table; migration 021
 		// also creates it IF NOT EXISTS for DR restores that skip AutoMigrate.
 		&entity.CreditPoolFundEvent{},
+		// Distributor batch redemption issuance ledger (idempotency, migration 027)
+		&entity.ProvisionedRedemptionBatch{},
 		// Playground named presets (Wave 3 Phase 1)
 		&PlaygroundPreset{},
 		// HA leader-election lease (H1.3)
