@@ -234,6 +234,15 @@ const NAV_SECTIONS = [
         key: 'console.nav.model_performance',
         badge: '',
       },
+      // Per-(tenant, model) RPM/TPM rate-limit config (migration 026).
+      {
+        id: 'admin-model-limits',
+        href: '/console/v2/admin/model-limits',
+        glyph: '⏲',
+        label: 'Model limits',
+        key: 'console.nav.model_limits',
+        badge: '',
+      },
       // Admin surfaces (deferred backlog round 2) — now wired.
       {
         id: 'admin-users',
