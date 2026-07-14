@@ -674,6 +674,27 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 	// because the pre-auth was created under the flag state at request start.
 	// This prevents orphaned pre-auths when the flag is toggled mid-flight.
 	totalQuota := quota + preConsumedQuota
+
+	// Business TPM window recording — the usage side of
+	// middleware.BusinessRateLimit's tokens-per-minute dimension
+	// (business_tpm.go). Deliberately OUTSIDE the platform-wallet gate below:
+	// tpm_limit must bite for local-quota tenants too, not only
+	// wallet-bridged accounts. Same fire-and-forget fail-soft contract as
+	// RecordCostSpikeWindow: recording never fails or slows the settlement.
+	// The recorded measure is the settled quota (ratio-weighted token
+	// equivalents) — the settled dto.Usage never reaches this funnel (the
+	// relay pipeline converts it to quota before calling here), and it is the
+	// same per-request usage measure the cost-spike window records. The
+	// tenant is resolved synchronously (one PK SELECT, the weight class
+	// debitTenantPool already pays above) so the async closure stays DB-free.
+	if totalQuota > 0 && relayInfo.TokenId > 0 {
+		tpmTokenID := relayInfo.TokenId
+		tpmTenantID := bizTPMTenantOf(tpmTokenID)
+		AsyncGo(func() {
+			RecordBusinessTPMUsage(tpmTokenID, tpmTenantID, totalQuota)
+		})
+	}
+
 	if relayInfo.IdentityAccountID > 0 && totalQuota > 0 {
 		accountID := relayInfo.IdentityAccountID
 		amountLB := float64(totalQuota) / common.QuotaPerUnit

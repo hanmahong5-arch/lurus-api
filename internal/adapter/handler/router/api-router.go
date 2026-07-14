@@ -60,6 +60,14 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.POST("/verify", middleware.UserAuth(), handler.UniversalVerify)
 		apiRouter.GET("/verify/status", middleware.UserAuth(), handler.GetVerificationStatus)
 
+		// -- TOTP step-up factor management --
+		// Enrolled users must present a valid TOTP code to POST /api/verify;
+		// disable is itself gated behind a fresh step-up verification.
+		apiRouter.GET("/user/totp/status", middleware.UserAuth(), handler.GetTotpStatus)
+		apiRouter.POST("/user/totp/enroll", middleware.UserAuth(), middleware.CriticalRateLimit(), handler.TotpEnroll)
+		apiRouter.POST("/user/totp/confirm", middleware.UserAuth(), middleware.CriticalRateLimit(), handler.TotpConfirm)
+		apiRouter.POST("/user/totp/disable", middleware.UserAuth(), middleware.CriticalRateLimit(), middleware.SecureVerificationRequired(), handler.TotpDisable)
+
 		// -- Platform wallet integration --
 		apiRouter.GET("/wallet/info", middleware.UserAuth(), handler.GetWalletInfo)
 		apiRouter.GET("/wallet/transactions", middleware.UserAuth(), handler.GetWalletTransactions)
