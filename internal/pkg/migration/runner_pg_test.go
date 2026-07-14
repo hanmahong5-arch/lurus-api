@@ -114,10 +114,10 @@ func TestIntegrationRun_EmptyDB_BaselinesWithoutExecuting(t *testing.T) {
 	if err := r.Run(context.Background()); err != nil {
 		t.Fatalf("Run on empty DB: %v", err)
 	}
-	// 22 baseline records + 023/024 executed above the baseline (their
+	// 22 baseline records + 023..025 executed above the baseline (their
 	// to_regclass guards skip absent tables on an empty DB but still record).
-	if got := countApplied(t, db); got != 24 {
-		t.Errorf("schema_migrations rows = %d, want exactly 24 (22 baseline + 023/024)", got)
+	if got := countApplied(t, db); got != 25 {
+		t.Errorf("schema_migrations rows = %d, want exactly 25 (22 baseline + 023..025)", got)
 	}
 	if tableExists(t, db, "releases") {
 		t.Error("releases table exists — a baseline migration was EXECUTED, not just recorded")
@@ -129,8 +129,8 @@ func TestIntegrationRun_EmptyDB_BaselinesWithoutExecuting(t *testing.T) {
 	if err := r.Run(context.Background()); err != nil {
 		t.Fatalf("second Run: %v", err)
 	}
-	if got := countApplied(t, db); got != 24 {
-		t.Errorf("after rerun schema_migrations rows = %d, want 24", got)
+	if got := countApplied(t, db); got != 25 {
+		t.Errorf("after rerun schema_migrations rows = %d, want 25", got)
 	}
 }
 

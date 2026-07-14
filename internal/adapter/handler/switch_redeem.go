@@ -243,7 +243,11 @@ func findRedemptionByKey(key string) (*repo.Redemption, error) {
 // in the given tenant, creating it on first sight. The username is
 // derived deterministically from the fingerprint so repeated redeems by
 // the same machine accumulate on one account (subject to the 20-char
-// username cap; we truncate the fingerprint to fit).
+// username cap; we truncate the fingerprint to fit). The lookup is
+// tenant-scoped — username is per-tenant unique since migration 025, so the
+// same fingerprint redeeming codes of two different tenants gets one
+// account per tenant (previously the cross-tenant redeem failed on the
+// global unique + repo.Redeem's tenant-ownership check).
 func findOrCreateSwitchEndUser(fingerprint, tenantID string) (*repo.User, error) {
 	// Username layout: "sw-eu-" + first 14 hex chars of fingerprint.
 	// Total 20 chars — matches User.Username validate:"max=20".
@@ -254,7 +258,7 @@ func findOrCreateSwitchEndUser(fingerprint, tenantID string) (*repo.User, error)
 	username := switchEndUserUsernamePrefix + fpTrim
 
 	var existing repo.User
-	err := repo.WithoutTenantIsolation(repo.DB).Where("username = ?", username).First(&existing).Error
+	err := repo.WithoutTenantIsolation(repo.DB).Where("username = ? AND tenant_id = ?", username, tenantID).First(&existing).Error
 	if err == nil {
 		return &existing, nil
 	}
@@ -277,7 +281,7 @@ func findOrCreateSwitchEndUser(fingerprint, tenantID string) (*repo.User, error)
 	// Insert() resolves Id via gorm's RETURNING / LastInsertId. Re-fetch by
 	// username just in case Insert() didn't repopulate the receiver.
 	if user.Id == 0 {
-		if err := repo.WithoutTenantIsolation(repo.DB).Where("username = ?", username).First(user).Error; err != nil {
+		if err := repo.WithoutTenantIsolation(repo.DB).Where("username = ? AND tenant_id = ?", username, tenantID).First(user).Error; err != nil {
 			return nil, fmt.Errorf("refetch user: %w", err)
 		}
 	}
