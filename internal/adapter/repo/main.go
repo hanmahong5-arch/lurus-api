@@ -372,6 +372,9 @@ func migrateDB() error {
 		&entity.LeaderElection{},
 		// PIPL §47 erasure intent / progress / evidence (migration 020)
 		&entity.PrivacyErasureRequest{},
+		// Per-model rate limits (migration 026) — model dimension of the
+		// business rate limiter (middleware.BusinessModelRateLimit)
+		&entity.ModelRateLimit{},
 	)
 	if err != nil {
 		return err
