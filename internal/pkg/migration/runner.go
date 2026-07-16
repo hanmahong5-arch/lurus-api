@@ -85,12 +85,22 @@ func (r *Runner) Run(ctx context.Context) error {
 		logger = slog.Default()
 	}
 
-	if err := r.lock(ctx); err != nil {
+	// One dedicated connection for the whole run: the advisory lock is
+	// session-scoped, so lock and unlock through the pool can land on
+	// different connections — the unlock silently no-ops and the lock
+	// stays stranded until the owning connection is recycled.
+	conn, err := r.DB.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("migration: acquire connection: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	if err := r.lock(ctx, conn); err != nil {
 		return err
 	}
-	defer r.unlock(ctx, logger)
+	defer r.unlock(ctx, conn, logger)
 
-	if err := r.ensureTracker(ctx); err != nil {
+	if err := r.ensureTracker(ctx, conn); err != nil {
 		return err
 	}
 
@@ -106,12 +116,12 @@ func (r *Runner) Run(ctx context.Context) error {
 				baseline = append(baseline, v)
 			}
 		}
-		if err := r.markApplied(ctx, logger, baseline); err != nil {
+		if err := r.markApplied(ctx, logger, conn, baseline); err != nil {
 			return fmt.Errorf("seed baseline through %s: %w", r.BaselineThrough, err)
 		}
 	}
 
-	applied, err := r.loadApplied(ctx)
+	applied, err := r.loadApplied(ctx, conn)
 	if err != nil {
 		return err
 	}
@@ -121,7 +131,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		if applied[v] {
 			continue
 		}
-		if err := r.applyOne(ctx, logger, v); err != nil {
+		if err := r.applyOne(ctx, logger, conn, v); err != nil {
 			return fmt.Errorf("apply %s: %w", v, err)
 		}
 		pending++
@@ -147,24 +157,29 @@ func (r *Runner) MarkApplied(ctx context.Context, versions []string) error {
 	if r.DB == nil {
 		return errors.New("migration: Runner.DB is nil")
 	}
-	if err := r.lock(ctx); err != nil {
+	conn, err := r.DB.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("migration: acquire connection: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+	if err := r.lock(ctx, conn); err != nil {
 		return err
 	}
 	logger := r.Logger
 	if logger == nil {
 		logger = slog.Default()
 	}
-	defer r.unlock(ctx, logger)
-	if err := r.ensureTracker(ctx); err != nil {
+	defer r.unlock(ctx, conn, logger)
+	if err := r.ensureTracker(ctx, conn); err != nil {
 		return err
 	}
-	return r.markApplied(ctx, logger, versions)
+	return r.markApplied(ctx, logger, conn, versions)
 }
 
 // markApplied is the lock-already-held core of MarkApplied.
-func (r *Runner) markApplied(ctx context.Context, logger *slog.Logger, versions []string) error {
+func (r *Runner) markApplied(ctx context.Context, logger *slog.Logger, conn *sql.Conn, versions []string) error {
 	for _, v := range versions {
-		if _, err := r.DB.ExecContext(ctx,
+		if _, err := conn.ExecContext(ctx,
 			`INSERT INTO public.schema_migrations (version) VALUES ($1)
              ON CONFLICT (version) DO NOTHING`, v); err != nil {
 			return fmt.Errorf("seed %s: %w", v, err)
@@ -200,35 +215,57 @@ func DiscoverVersions(fsys fs.FS) ([]string, error) {
 	return versions, nil
 }
 
-func (r *Runner) lock(ctx context.Context) error {
-	if _, err := r.DB.ExecContext(ctx, `SELECT pg_advisory_lock($1)`, AdvisoryLockID); err != nil {
+// lock takes the runner's advisory lock on conn. The wait runs inside a
+// transaction with SET LOCAL statement_timeout/lock_timeout = 0: the boot
+// DSN injects a statement_timeout on every pooled connection (P1-1), and a
+// multi-replica rolling boot routinely waits on this lock longer than that
+// cap — Postgres then cancels the wait and the pod dies FATAL (STAGE
+// crash-loop 2026-07-15). SET LOCAL reverts at commit while the
+// session-scoped advisory lock survives it, so the connection keeps its
+// DSN-injected caps for everything after the wait.
+func (r *Runner) lock(ctx context.Context, conn *sql.Conn) error {
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin lock tx: %w", err)
+	}
+	for _, q := range []string{`SET LOCAL statement_timeout = 0`, `SET LOCAL lock_timeout = 0`} {
+		if _, err := tx.ExecContext(ctx, q); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("%s: %w", q, err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_lock($1)`, AdvisoryLockID); err != nil {
+		_ = tx.Rollback()
 		return fmt.Errorf("acquire advisory lock: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit lock acquire: %w", err)
 	}
 	return nil
 }
 
-func (r *Runner) unlock(ctx context.Context, logger *slog.Logger) {
+func (r *Runner) unlock(ctx context.Context, conn *sql.Conn, logger *slog.Logger) {
 	// WithoutCancel: unlock must proceed even when the caller's ctx is
 	// already cancelled (e.g. shutdown mid-migration).
-	if _, err := r.DB.ExecContext(context.WithoutCancel(ctx),
+	if _, err := conn.ExecContext(context.WithoutCancel(ctx),
 		`SELECT pg_advisory_unlock($1)`, AdvisoryLockID); err != nil {
 		logger.Warn("migration: advisory unlock failed", "err", err)
 	}
 }
 
-func (r *Runner) ensureTracker(ctx context.Context) error {
+func (r *Runner) ensureTracker(ctx context.Context, conn *sql.Conn) error {
 	const ddl = `CREATE TABLE IF NOT EXISTS public.schema_migrations (
         version    VARCHAR(255) PRIMARY KEY,
         applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`
-	if _, err := r.DB.ExecContext(ctx, ddl); err != nil {
+	if _, err := conn.ExecContext(ctx, ddl); err != nil {
 		return fmt.Errorf("ensure schema_migrations: %w", err)
 	}
 	return nil
 }
 
-func (r *Runner) loadApplied(ctx context.Context) (map[string]bool, error) {
-	rows, err := r.DB.QueryContext(ctx, `SELECT version FROM public.schema_migrations`)
+func (r *Runner) loadApplied(ctx context.Context, conn *sql.Conn) (map[string]bool, error) {
+	rows, err := conn.QueryContext(ctx, `SELECT version FROM public.schema_migrations`)
 	if err != nil {
 		return nil, fmt.Errorf("query schema_migrations: %w", err)
 	}
@@ -247,18 +284,26 @@ func (r *Runner) loadApplied(ctx context.Context) (map[string]bool, error) {
 	return out, nil
 }
 
-func (r *Runner) applyOne(ctx context.Context, logger *slog.Logger, version string) error {
+func (r *Runner) applyOne(ctx context.Context, logger *slog.Logger, conn *sql.Conn, version string) error {
 	started := time.Now()
 	body, err := fs.ReadFile(r.FS, version+".sql")
 	if err != nil {
 		return fmt.Errorf("read %s.sql: %w", version, err)
 	}
 
-	tx, err := r.DB.BeginTx(ctx, nil)
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+
+	// Migration DDL is exempted from the DSN-injected statement_timeout for
+	// this transaction only: a legitimate heavy migration (e.g. an
+	// int→BIGINT table rewrite) can exceed the cap, and a cancelled DDL
+	// here means a crash-looping rollout.
+	if _, err := tx.ExecContext(ctx, `SET LOCAL statement_timeout = 0`); err != nil {
+		return fmt.Errorf("lift statement_timeout: %w", err)
+	}
 
 	if _, err := tx.ExecContext(ctx, string(body)); err != nil {
 		return fmt.Errorf("exec sql: %w", err)
